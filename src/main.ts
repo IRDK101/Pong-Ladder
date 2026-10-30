@@ -9,7 +9,7 @@ import { Keyboard } from './input/keyboard';
 import { cupAt, drawField, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
 import { Menu, drawEndScreen, drawMenu, menuRowRect } from './ui/menu';
-import { MatchStore, newMatchRecord, type MatchRecord } from './data/storage';
+import { MatchStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -19,7 +19,34 @@ canvas.width = view.width;
 canvas.height = view.height;
 
 const keyboard = new Keyboard(baseCfg);
-const store = new MatchStore(window.localStorage);
+/** localStorage when the browser allows it; otherwise logs last only for this visit. */
+function browserStore(): KeyValueStore {
+  try {
+    const ls = window.localStorage;
+    const probe = 'dartmouth-pong/probe';
+    ls.setItem(probe, '1');
+    ls.removeItem(probe);
+    return {
+      getItem: (k) => {
+        try {
+          return ls.getItem(k);
+        } catch {
+          return null;
+        }
+      },
+      setItem: (k, v) => {
+        try {
+          ls.setItem(k, v);
+        } catch {
+          /* storage full or blocked: keep playing */
+        }
+      },
+    };
+  } catch {
+    return memoryStore();
+  }
+}
+const store = new MatchStore(browserStore());
 const menu = new Menu();
 
 type Screen = 'menu' | 'playing' | 'gameEnd' | 'matchEnd';
@@ -112,7 +139,7 @@ function frame(dt: number): void {
     }
     const cfg = menu.config(baseCfg);
     drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
-    drawMenu(ctx, theme, view, menu, menuNote);
+    drawMenu(ctx, theme, view, menu, document.hasFocus() ? menuNote : 'Click the game first so it can hear your keyboard.');
     return;
   }
 
