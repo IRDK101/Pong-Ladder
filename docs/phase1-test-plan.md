@@ -1,6 +1,6 @@
 # Phase 1, step 2: rules-engine test plan
 
-Status: **waiting for review.** Per DESIGN.md, the rules engine is not built until this list (and the open questions below) are signed off.
+Status: **approved with the proposed defaults** for Q1–Q13. Implemented in `src/core/rules.ts`, tests in `tests/rules.test.ts`. A few extra scenarios (e.g. 7.10b, 8.6b, 8.8) were added during implementation.
 
 The engine is pure: tests feed it scripted events (`serve`, `bounce(x,y)`, `cupContact(cup)`, `sink(cup)`, `hit(player, predictedPeak)`, `ballOut`, `penaltyCupChosen(cup)`). They then assert on the resulting state (cups, server, expected hitter, miss counter, phase, winner) and on the referee call text. Player names below: A-L, A-R, B-L, B-R. Diagonals: A-L↔B-R, A-R↔B-L.
 
@@ -129,3 +129,10 @@ Tests that depend on an open question are tagged **[Qn]**.
 **Q12. Multiple cups in one shot.** *Proposed:* the first cup touched is the one at risk, and later cup contacts are ignored. If the ball then sinks in any opponent cup, the sink wins: that cup is removed and the first cup is undamaged.
 
 **Q13. Best of 3.** *Proposed:* each game draws a fresh random first server, uses the same formation, and keeps teams at the same ends.
+
+### Decisions made during implementation (not covered by Q1–Q13)
+
+- **D1. Sinking in your own cup** (a hit that drops into the hitter's own cups) is treated as the hit missing the table: no cup effect, the hitter serves. (Test 8.8.)
+- **D2. Auto penalty selection** takes the front-most remaining cup (the point of the pyramid first), whatever its state.
+- **D3. A ball that touches a defender cup has reached the defender.** If it then deflects back across or off the table, the save fails; it is not the hitter's fault. (Test 7.9.)
+- **D4. A save is confirmed when the return reaches the other side** (a table bounce, cup contact, or sink there). Until then, a return fault fails the save. (Tests 7.10, 7.10b, 8.6b.)
