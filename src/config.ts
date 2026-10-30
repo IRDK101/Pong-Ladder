@@ -1,5 +1,6 @@
 // All house-rule values and tuning live here. See DESIGN.md "Config".
 
+import type { StatEffects } from './core/stats';
 import type { Formation } from './core/types';
 
 export type MatchFormat = 'single' | 'bestOf3';
@@ -11,6 +12,9 @@ export interface TeamControls {
   left: string;
   right: string;
   hit: string;
+  /** Hold while pressing hit to use the character's 2nd / 3rd style. */
+  style2: string;
+  style3: string;
 }
 
 export interface GameConfig {
@@ -41,6 +45,8 @@ export interface GameConfig {
   };
   physics: PhysicsTuning;
   hitting: HitTuning;
+  /** How character stats scale shots: multipliers at stat 1 and stat 10 (5.5 = no effect). */
+  statEffects: StatEffects;
 }
 
 export interface PhysicsTuning {
@@ -61,6 +67,14 @@ export interface PhysicsTuning {
   skiHeight: number;
   /** Simulation speed relative to real time (lower = easier). */
   timeScale: number;
+  /** Bounce height lost per unit of topspin (backspin gains it). */
+  topspinBounceLoss: number;
+  /** Horizontal speed gained per unit of topspin at the bounce (backspin loses it). */
+  topspinKick: number;
+  /** Sideways acceleration in flight per unit of sidespin (m/s^2). */
+  sideCurve: number;
+  /** Sideways speed added at the first bounce per unit of sidespin (m/s). */
+  sideKick: number;
 }
 
 export interface HitTuning {
@@ -94,8 +108,8 @@ export const defaultConfig: GameConfig = {
   penaltyCupSelection: 'choose',
   skiCollision: false,
   controls: {
-    A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space' },
-    B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter' },
+    A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
+    B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },
   },
   // Placeholder dimensions (8 ft x 4 ft); adjust to the real basement table.
   table: { length: 2.44, width: 1.22 },
@@ -111,6 +125,10 @@ export const defaultConfig: GameConfig = {
     tableHeight: 0.76,
     skiHeight: 0.03,
     timeScale: 0.55,
+    topspinBounceLoss: 0.3,
+    topspinKick: 0.18,
+    sideCurve: 1.6,
+    sideKick: 0.45,
   },
   hitting: {
     timingWindow: 0.22,
@@ -124,6 +142,16 @@ export const defaultConfig: GameConfig = {
     tossSpeed: 2.4,
     tossHeight: 0.1,
     standOff: 0.25,
+  },
+  statEffects: {
+    accuracyScatter: [1.35, 0.65],
+    powerPeak: [1.08, 0.92],
+    powerScatter: [0.92, 1.08],
+    powerIncomingWindow: [1.1, 0.9],
+    spinAmount: [0.4, 1.6],
+    serveScatter: [1.4, 0.6],
+    serveWindow: [0.84, 1.16],
+    saveWindow: [0.75, 1.25],
   },
 };
 

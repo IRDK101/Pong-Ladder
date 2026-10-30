@@ -2,7 +2,7 @@ import { makeConfig, type GameConfig } from '../src/config';
 import type { Call } from '../src/core/rules';
 import { getStyle } from '../src/core/styles';
 import type { TeamId } from '../src/core/types';
-import { Game, idleInput, type TeamInput } from '../src/game/game';
+import { Game, genericRoster, idleInput, type TeamInput } from '../src/game/game';
 import { apexOffset, computeHit, timingQuality } from '../src/game/shot';
 
 function mulberry32(seed: number) {
@@ -176,6 +176,29 @@ describe('game loop (physics + rules + input)', () => {
     expect(seen!.offset).toBeLessThan(0); // just bounced: still rising, early
     expect(seen!.window).toBeCloseTo(g.cfg.hitting.timingWindow);
     expect(g.aiming(recv)).toBe(true);
+  });
+
+  it('uses the roster: names in calls, the style key picks the character’s 2nd style, logged per hit', () => {
+    const roster = genericRoster();
+    roster['A-left'] = { ...roster['A-left'], name: 'Ari', hitStyles: ['standardHit', 'lob'] };
+    roster['A-right'] = { ...roster['A-right'], name: 'Jo', hitStyles: ['standardHit', 'lob'] };
+    roster['B-left'].name = 'Sam';
+    roster['B-right'].name = 'Kit';
+    const g = new Game(cfgWith(), mulberry32(12), roster);
+    const calls = play(g, { A: timedBot(0, { style: 1 }), B: timedBot(0) }, 20, () => g.engine.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').length >= 4);
+    const hits = g.engine.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').map((e) => e.data as { player: { team: string }; style: string });
+    for (const h of hits.slice(1)) expect(h.style).toBe(h.player.team === 'A' ? 'lob' : 'standardHit');
+    expect(g.serverName()).toMatch(/Ari|Jo|Sam|Kit/);
+    expect(calls[0].text).toMatch(/Good serve by (Ari|Jo|Sam|Kit)/);
+    expect((g.engine.log[0].data as { names: Record<string, string> }).names['A-left']).toBe('Ari');
+  });
+
+  it('a character with 2 styles falls back to its last style for the 3rd style key', () => {
+    const roster = genericRoster();
+    roster['A-left'].hitStyles = ['standardHit', 'flatFast'];
+    const g = new Game(cfgWith(), mulberry32(13), roster);
+    expect(g.styleFor({ team: 'A', side: 'left' }, 'hit', 2).id).toBe('flatFast');
+    expect(g.styleFor({ team: 'A', side: 'left' }, 'serve', 2).id).toBe('standardServe');
   });
 
   it('penalty cups can be chosen with the keyboard cursor', () => {

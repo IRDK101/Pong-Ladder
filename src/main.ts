@@ -71,13 +71,8 @@ if (location.hash === '#debug') {
 function startMatch(cfg: GameConfig): void {
   game = new Game(cfg);
   record = newMatchRecord(cfg);
-  game.messages.push({ text: `${serverName()} serves first (random draw)`, time: 0 });
+  game.messages.push({ text: `${game.serverName()} serves first (random draw)`, time: 0 });
   screen = 'playing';
-}
-
-function serverName(): string {
-  const s = game!.engine.peek().server;
-  return `${s.team}-${s.side === 'left' ? 'L' : 'R'}`;
 }
 
 /** Persist the finished game (and match, if decided). */

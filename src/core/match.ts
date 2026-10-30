@@ -11,10 +11,13 @@ export class Match {
   readonly games: RulesEngine[] = [];
   readonly wins: Record<TeamId, number> = { A: 0, B: 0 };
 
-  constructor(cfg: GameConfig, rng: () => number = Math.random) {
+  private names: Record<string, string>;
+
+  constructor(cfg: GameConfig, rng: () => number = Math.random, names: Record<string, string> = {}) {
     this.cfg = cfg;
     this.rng = rng;
-    this.games.push(new RulesEngine(cfg, { rng }));
+    this.names = names;
+    this.games.push(new RulesEngine(cfg, { rng, names }));
   }
 
   get current(): RulesEngine {
@@ -39,7 +42,7 @@ export class Match {
     const w = this.current.state.winner;
     if (!w) throw new Error('current game is not over');
     if (this.games.length > this.wins.A + this.wins.B) this.wins[w]++;
-    if (!this.winner) this.games.push(new RulesEngine(this.cfg, { rng: this.rng }));
+    if (!this.winner) this.games.push(new RulesEngine(this.cfg, { rng: this.rng, names: this.names }));
     return this.winner;
   }
 }

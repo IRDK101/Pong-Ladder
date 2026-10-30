@@ -7,7 +7,7 @@
 import type { GameConfig } from '../config';
 import { buildFormation } from './formation';
 import { diagonalOf, quarterOf, type Quarter } from './table';
-import { otherTeam, type Cup, type PlayerId, type Side, type TeamId } from './types';
+import { otherTeam, playerKey, type Cup, type PlayerId, type Side, type TeamId } from './types';
 
 // ---------------------------------------------------------------- events in
 
@@ -138,9 +138,12 @@ export class RulesEngine {
   readonly cfg: GameConfig;
   private s: GameState;
   private _log: LogEntry[] = [];
+  /** Display names by player key ("A-left"), for referee messages. Defaults to "A-L" etc. */
+  private names: Record<string, string>;
 
-  constructor(cfg: GameConfig, opts: { firstServer?: PlayerId; rng?: () => number } = {}) {
+  constructor(cfg: GameConfig, opts: { firstServer?: PlayerId; rng?: () => number; names?: Record<string, string> } = {}) {
     this.cfg = cfg;
+    this.names = { ...(opts.names ?? {}) };
     const server = opts.firstServer ?? randomPlayer(opts.rng ?? Math.random);
     this.s = {
       phase: 'awaitServe',
@@ -153,13 +156,17 @@ export class RulesEngine {
       sinkChain: null,
       winner: null,
     };
-    this.record('start', { firstServer: server, formation: cfg.formation });
+    this.record('start', { firstServer: server, formation: cfg.formation, names: this.names });
+  }
+
+  name(p: PlayerId): string {
+    return this.names[playerKey(p)] ?? playerName(p);
   }
 
   /** Rebuild an engine by replaying a recorded log. */
   static replay(cfg: GameConfig, log: LogEntry[]): RulesEngine {
-    const start = log.find((e) => e.kind === 'start')!.data as { firstServer: PlayerId };
-    const eng = new RulesEngine(cfg, { firstServer: start.firstServer });
+    const start = log.find((e) => e.kind === 'start')!.data as { firstServer: PlayerId; names?: Record<string, string> };
+    const eng = new RulesEngine(cfg, { firstServer: start.firstServer, names: start.names });
     for (const e of log) if (e.kind === 'input') eng.dispatch(e.data as RulesEvent);
     return eng;
   }
@@ -203,7 +210,7 @@ export class RulesEngine {
       if (st === undefined || st === 'removed') return reject('cup is not on the table');
     }
     if (phase === 'awaitServe' && ev.type === 'hit' && !samePlayer(ev.player, this.s.server)) {
-      return reject(`only ${playerName(this.s.server)} may serve`);
+      return reject(`only ${this.name(this.s.server)} may serve`);
     }
 
     this.record('input', ev);
@@ -265,7 +272,7 @@ export class RulesEngine {
           const r = this.s.rally!;
           r.targetBounces = 1;
           r.serveReturnPending = true;
-          calls.push({ kind: 'goodServe', player: server, text: `Good serve by ${playerName(server)}` });
+          calls.push({ kind: 'goodServe', player: server, text: `Good serve by ${this.name(server)}` });
           return;
         }
         const why =
@@ -295,7 +302,7 @@ export class RulesEngine {
     const server = this.s.server;
     this.s.phase = 'awaitServe';
     this.s.rally = null;
-    calls.push({ kind: 'reServe', player: server, nextServer: server, text: `Bad serve (${why}) — ${playerName(server)} re-serves` });
+    calls.push({ kind: 'reServe', player: server, nextServer: server, text: `Bad serve (${why}) — ${this.name(server)} re-serves` });
   }
 
   private tableMiss(calls: Call[]): void {
@@ -310,7 +317,7 @@ export class RulesEngine {
         player: server,
         team: server.team,
         nextServer: server,
-        text: `Table miss ${this.s.missCount}/${limit} by ${playerName(server)} — Team ${server.team} loses half a cup, ${playerName(server)} serves`,
+        text: `Table miss ${this.s.missCount}/${limit} by ${this.name(server)} — Team ${server.team} loses half a cup, ${this.name(server)} serves`,
       });
       this.s.missCount = 0;
       this.enterPenalty(server.team, 'tableMisses', calls);
@@ -319,7 +326,7 @@ export class RulesEngine {
         kind: 'tableMiss',
         player: server,
         nextServer: server,
-        text: `Table miss ${this.s.missCount}/${limit} by ${playerName(server)} — ${playerName(server)} serves again`,
+        text: `Table miss ${this.s.missCount}/${limit} by ${this.name(server)} — ${this.name(server)} serves again`,
       });
     }
   }
@@ -335,7 +342,7 @@ export class RulesEngine {
       team: server.team,
       cup: { team, cupId },
       nextServer: server,
-      text: `Serve hit a cup — no damage, Team ${server.team} loses half a cup, ${playerName(server)} re-serves`,
+      text: `Serve hit a cup — no damage, Team ${server.team} loses half a cup, ${this.name(server)} re-serves`,
     });
     this.enterPenalty(server.team, 'serveHitCup', calls);
   }
@@ -357,7 +364,7 @@ export class RulesEngine {
           if (r.targetBounces >= 2) {
             const due = this.due();
             if (r.cupAtRisk) return this.saveFailed(due, 'double bounce', calls);
-            return this.endRally('doubleBounce', due, due, `Double bounce on ${playerName(due)}'s side — ${playerName(due)} serves`, calls);
+            return this.endRally('doubleBounce', due, due, `Double bounce on ${this.name(due)}'s side — ${this.name(due)} serves`, calls);
           }
           return;
         }
@@ -378,7 +385,7 @@ export class RulesEngine {
         if (r.cupAtRisk) return; // only the first cup touched is at risk [Q12]
         if (this.cupState(ev.team, ev.cupId) === 'removed') return;
         r.cupAtRisk = { team: ev.team, cupId: ev.cupId };
-        calls.push({ kind: 'cupHit', player: r.lastHitter, cup: r.cupAtRisk, text: `Cup hit by ${playerName(r.lastHitter)} — Team ${ev.team} can save` });
+        calls.push({ kind: 'cupHit', player: r.lastHitter, cup: r.cupAtRisk, text: `Cup hit by ${this.name(r.lastHitter)} — Team ${ev.team} can save` });
         return;
       }
 
@@ -409,20 +416,20 @@ export class RulesEngine {
     const saving = r.cupAtRisk !== null;
     const inFlightServe = this.s.phase === 'serveInFlight';
 
-    const volley = () => this.fault('volley', p, p, `${playerName(p)} hit before the bounce — ${playerName(p)} serves`, calls);
+    const volley = () => this.fault('volley', p, p, `${this.name(p)} hit before the bounce — ${this.name(p)} serves`, calls);
     // The ball is not on this player's side at all (e.g. their own team's shot).
     if (p.team !== r.target) return volley();
     // Fault precedence: wrong teammate → volley → low. [Q8]
     if (!saving && p.side !== r.nextSide[p.team]) {
       const due = this.due();
-      return this.fault('wrongTeammate', p, due, `Wrong teammate: ${playerName(p)} hit, ${playerName(due)}'s turn — ${playerName(due)} serves`, calls);
+      return this.fault('wrongTeammate', p, due, `Wrong teammate: ${this.name(p)} hit, ${this.name(due)}'s turn — ${this.name(due)} serves`, calls);
     }
     if (inFlightServe || (!saving && r.targetBounces === 0)) {
       return volley();
     }
     const exempt = saving || r.exemptNext;
     if (!exempt && ev.peak < this.cfg.shoulderHeight) {
-      return this.fault('lowHit', p, p, `Low hit by ${playerName(p)} — ${playerName(p)} serves`, calls);
+      return this.fault('lowHit', p, p, `Low hit by ${this.name(p)} — ${this.name(p)} serves`, calls);
     }
 
     // Legal hit.
@@ -448,7 +455,7 @@ export class RulesEngine {
     const r = this.s.rally!;
     const ps = r.pendingSave!;
     r.pendingSave = null;
-    calls.push({ kind: 'saveMade', player: ps.saver, cup: { team: ps.team, cupId: ps.cupId }, text: `Save by ${playerName(ps.saver)}!` });
+    calls.push({ kind: 'saveMade', player: ps.saver, cup: { team: ps.team, cupId: ps.cupId }, text: `Save by ${this.name(ps.saver)}!` });
   }
 
   /** The last hit failed to land on the other side. */
@@ -462,7 +469,7 @@ export class RulesEngine {
       r.cupAtRisk = { team: ps.team, cupId: ps.cupId };
       return this.saveFailed(hitter, `save return ${why}`, calls);
     }
-    this.fault(kind, hitter, hitter, `${playerName(hitter)}'s hit ${why} — ${playerName(hitter)} serves`, calls);
+    this.fault(kind, hitter, hitter, `${this.name(hitter)}'s hit ${why} — ${this.name(hitter)} serves`, calls);
   }
 
   /** Ball left the target side after landing there, without being returned. */
@@ -470,7 +477,7 @@ export class RulesEngine {
     const r = this.s.rally!;
     const due = this.due();
     if (r.cupAtRisk) return this.saveFailed(due, 'ball not returned', calls);
-    this.endRally('missedReturn', due, due, `${playerName(due)} missed the return — ${playerName(due)} serves`, calls); // [Q5]
+    this.endRally('missedReturn', due, due, `${this.name(due)} missed the return — ${this.name(due)} serves`, calls); // [Q5]
   }
 
   private fault(kind: CallKind, player: PlayerId, nextServer: PlayerId, text: string, calls: Call[]): void {
@@ -483,7 +490,7 @@ export class RulesEngine {
     const before = this.cupState(cup.team, cup.cupId);
     this.damage(cup.team, cup.cupId);
     const effect = before === 'full' ? 'cup down to half' : 'cup removed';
-    this.endRally('saveFailed', nextServer, nextServer, `Save failed (${why}) — ${effect}, ${playerName(nextServer)} serves`, calls, cup);
+    this.endRally('saveFailed', nextServer, nextServer, `Save failed (${why}) — ${effect}, ${this.name(nextServer)} serves`, calls, cup);
   }
 
   private sink(team: TeamId, cupId: string, calls: Call[]): void {
@@ -493,7 +500,7 @@ export class RulesEngine {
     const next = diagonalOf(sinker);
     const chain = this.s.sinkChain;
     const length = chain && samePlayer(chain.player, sinker) ? chain.length + 1 : 1;
-    const text = `SINK by ${playerName(sinker)}${length > 1 ? ` (x${length})` : ''} — ${playerName(next)} serves to ${playerName(sinker)}`;
+    const text = `SINK by ${this.name(sinker)}${length > 1 ? ` (x${length})` : ''} — ${this.name(next)} serves to ${this.name(sinker)}`;
     this.endRally('sink', sinker, next, text, calls, { team, cupId });
     if (this.s.phase !== 'gameOver') this.s.sinkChain = { player: sinker, length };
   }
@@ -536,7 +543,7 @@ export class RulesEngine {
       team,
       cup: { team, cupId },
       nextServer: this.s.server,
-      text: `Team ${team} penalty: cup ${before === 'full' ? 'down to half' : 'removed'} — ${playerName(this.s.server)} serves`,
+      text: `Team ${team} penalty: cup ${before === 'full' ? 'down to half' : 'removed'} — ${this.name(this.s.server)} serves`,
     });
     this.checkGameOver(calls);
   }

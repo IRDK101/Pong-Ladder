@@ -40,6 +40,7 @@ export class Keyboard {
       left: this.held.has(c.left),
       right: this.held.has(c.right),
       hit: this.pressed.has(c.hit),
+      style: this.held.has(c.style3) ? 2 : this.held.has(c.style2) ? 1 : 0,
       nav,
     };
   }

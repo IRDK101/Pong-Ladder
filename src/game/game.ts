@@ -6,10 +6,45 @@ import type { GameConfig } from '../config';
 import { Match } from '../core/match';
 import { BallPhysics, type PhysicsEvent, type Vec3 } from '../core/physics';
 import type { Call, RulesEvent } from '../core/rules';
-import { getStyle, type ShotStyle } from '../core/styles';
+import type { Sprite } from '../core/character';
+import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
+import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, getStyle, type ShotStyle } from '../core/styles';
 import { diagonalOf, laneOf, quarterOf, quarterRect } from '../core/table';
-import { otherTeam, type Cup, type PlayerId, type TeamId } from '../core/types';
-import { apexOffset, computeHit, computeServe, timingLabel, timingQuality, type Aim } from './shot';
+import { otherTeam, playerKey, type Cup, type PlayerId, type Side, type TeamId } from '../core/types';
+import { apexOffset, computeHit, computeServe, timingLabel, timingQuality, timingWindow, type Aim, type SwingContext } from './shot';
+
+/** Who is playing a position this game: a character (or a generic player) and the human behind it. */
+export interface Participant {
+  name: string;
+  stats: Stats;
+  /** First entry is the default; the style keys pick the 2nd and 3rd. */
+  hitStyles: string[];
+  serveStyles: string[];
+  master: boolean;
+  sprite: Sprite | null;
+  characterId: string | null;
+  profileId: string | null;
+}
+
+export type PositionKey = 'A-left' | 'A-right' | 'B-left' | 'B-right';
+export type Roster = Record<PositionKey, Participant>;
+
+export const POSITIONS: PositionKey[] = ['A-left', 'A-right', 'B-left', 'B-right'];
+
+/** Generic players for a quick match: neutral stats, the placeholder styles, named by position. */
+export function genericRoster(): Roster {
+  const make = (team: TeamId, side: Side): Participant => ({
+    name: `${team}-${side === 'left' ? 'L' : 'R'}`,
+    stats: { ...NEUTRAL_STATS },
+    hitStyles: [...DEFAULT_HIT_STYLES],
+    serveStyles: [...DEFAULT_SERVE_STYLES],
+    master: false,
+    sprite: null,
+    characterId: null,
+    profileId: null,
+  });
+  return { 'A-left': make('A', 'left'), 'A-right': make('A', 'right'), 'B-left': make('B', 'left'), 'B-right': make('B', 'right') };
+}
 
 export interface TeamInput {
   /** Held aim directions, in screen/table axes. */
@@ -19,11 +54,13 @@ export interface TeamInput {
   right: boolean;
   /** Hit key went down this frame. */
   hit: boolean;
+  /** Which of the player's styles the hit uses: 0 = default, 1/2 = style keys held. */
+  style: 0 | 1 | 2;
   /** Direction pressed this frame, for menus / cup selection: -1 prev, +1 next. */
   nav: -1 | 0 | 1;
 }
 
-export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, nav: 0 });
+export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, style: 0, nav: 0 });
 
 export interface Message {
   text: string;
@@ -55,19 +92,26 @@ export class Game {
   tossing = false;
   /** Each team's crosshair, in [-1, 1] per axis. Sticky: it stays where the player leaves it. */
   aim: Record<TeamId, Aim> = { A: { x: 0, y: 0 }, B: { x: 0, y: 0 } };
+  /** Style index each team currently has selected (held style key). */
+  selectedStyle: Record<TeamId, 0 | 1 | 2> = { A: 0, B: 0 };
+  readonly roster: Roster;
 
   private rng: () => number;
   private resumeAt: number | null = null;
   private swung: Record<TeamId, boolean> = { A: false, B: false };
   private bounced: Record<TeamId, boolean> = { A: false, B: false };
   private tossSwung = false;
+  /** Power stat of whoever hit the ball in play (faster balls are harder to return). */
+  private incomingPower: number | undefined;
   /** Listeners for engine calls (HUD, sound later, stats). */
   onCall: ((c: Call) => void) | null = null;
 
-  constructor(cfg: GameConfig, rng: () => number = Math.random) {
+  constructor(cfg: GameConfig, rng: () => number = Math.random, roster: Roster = genericRoster()) {
     this.cfg = cfg;
     this.rng = rng;
-    this.match = new Match(cfg, rng);
+    this.roster = roster;
+    const names = Object.fromEntries(POSITIONS.map((k) => [k, roster[k].name]));
+    this.match = new Match(cfg, rng, names);
     this.ball = new BallPhysics(cfg);
     this.placeBallWithServer();
   }
@@ -79,6 +123,33 @@ export class Game {
   get cups(): Cup[] {
     const c = this.engine.peek().cups;
     return [...c.A, ...c.B];
+  }
+
+  participant(p: PlayerId): Participant {
+    return this.roster[playerKey(p) as PositionKey];
+  }
+
+  nameOf(p: PlayerId): string {
+    return this.participant(p).name;
+  }
+
+  /** Effective stats for a player right now (base stats through the modifier pipeline). */
+  statsOf(p: PlayerId): Stats {
+    return effectiveStats(this.participant(p).stats);
+  }
+
+  /** The style `p` would use with style index `i` (falls back to the default style). */
+  styleFor(p: PlayerId, kind: 'hit' | 'serve', i: number): ShotStyle {
+    const list = kind === 'hit' ? this.participant(p).hitStyles : this.participant(p).serveStyles;
+    return getStyle(list[Math.min(i, list.length - 1)] ?? (kind === 'hit' ? 'standardHit' : 'standardServe'));
+  }
+
+  /** Style `team`'s controlled player would hit with right now (for the HUD and crosshair). */
+  currentStyle(team: TeamId): ShotStyle | null {
+    const p = this.activePlayer(team);
+    if (!p) return null;
+    const serving = this.engine.peek().phase === 'awaitServe';
+    return this.styleFor(p, serving ? 'serve' : 'hit', this.selectedStyle[team]);
   }
 
   /** Where a player stands: behind their end of the table, in their lane. */
@@ -146,13 +217,16 @@ export class Game {
     const st = this.engine.peek();
     const tossing = st.phase === 'awaitServe' && st.server.team === team && this.tossing && !this.tossSwung;
     if (!tossing && !this.canSwing(team)) return null;
-    const style = getStyle(tossing ? 'standardServe' : 'standardHit');
-    const saving = !tossing && st.rally!.cupAtRisk !== null;
-    const h = this.cfg.hitting;
+    const p = this.activePlayer(team)!;
+    const style = this.styleFor(p, tossing ? 'serve' : 'hit', this.selectedStyle[team]);
     return {
       offset: apexOffset(this.ball.vel, this.cfg.physics.gravity),
-      window: h.timingWindow * style.timing.windowScale * (saving ? h.saveWindowScale : 1),
+      window: timingWindow(this.cfg, style, this.swingContext(p, !tossing && st.rally!.cupAtRisk !== null)),
     };
+  }
+
+  private swingContext(p: PlayerId, save: boolean): SwingContext {
+    return { stats: this.statsOf(p), save, incomingPower: this.incomingPower };
   }
 
   /** Whether `team` should see its crosshair: it is serving, or the ball is coming to it. */
@@ -177,6 +251,7 @@ export class Game {
     this.time += dt;
     const st = this.engine.peek();
     if (st.phase !== 'penalty') this.moveAim(realDt, inputs);
+    for (const t of ['A', 'B'] as TeamId[]) this.selectedStyle[t] = inputs[t].style;
 
     if (st.phase === 'gameOver') {
       this.ball.step(dt, []);
@@ -202,7 +277,7 @@ export class Game {
     }
 
     // Live ball.
-    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team);
+    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style);
     if (this.resumeAt !== null) return; // that swing ended the rally (e.g. low hit)
     const events = this.ball.step(dt, this.cups);
     for (const e of events) {
@@ -239,9 +314,8 @@ export class Game {
 
   // ----------------------------------------------------------- internals
 
-  private serverName(): string {
-    const s = this.engine.peek().server;
-    return `${s.team}-${s.side === 'left' ? 'L' : 'R'}`;
+  serverName(): string {
+    return this.nameOf(this.engine.peek().server);
   }
 
   private placeBallWithServer(): void {
@@ -252,7 +326,7 @@ export class Game {
 
   private serveInput(inp: TeamInput, dt: number): void {
     const server = this.engine.peek().server;
-    const style = getStyle('standardServe');
+    const style = this.styleFor(server, 'serve', inp.style);
     if (!this.tossing) {
       if (inp.hit) {
         this.tossing = true;
@@ -264,7 +338,7 @@ export class Game {
     if (inp.hit && !this.tossSwung) {
       this.tossSwung = true;
       const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
-      const q = timingQuality(this.cfg, style, off);
+      const q = timingQuality(this.cfg, style, off, this.swingContext(server, false));
       this.feedback = { team: server.team, label: timingLabel(q, off), quality: q, time: this.time };
       if (q !== null) return this.serve(server, style, q, this.aim[server.team]);
     }
@@ -275,28 +349,32 @@ export class Game {
 
   private serve(server: PlayerId, style: ShotStyle, q: number, aim: Aim): void {
     const from = { ...this.ball.pos };
-    const shot = computeServe(this.cfg, style, from, this.aimTarget(server.team, aim, style), q, this.rng);
+    const stats = this.statsOf(server);
+    const shot = computeServe(this.cfg, style, from, this.aimTarget(server.team, aim, style), q, this.rng, stats);
     this.tossing = false;
     this.resetBallTracking();
+    this.incomingPower = stats.power;
     this.dispatch({ type: 'hit', player: server, peak: shot.peak, style: style.id, timing: q });
-    this.ball.launch(from, shot.vel);
+    this.ball.launch(from, shot.vel, shot.fx);
   }
 
-  private trySwing(team: TeamId): void {
+  private trySwing(team: TeamId, styleIndex: number): void {
     if (!this.canSwing(team)) return;
     const player = this.activePlayer(team)!;
-    const style = getStyle('standardHit');
+    const style = this.styleFor(player, 'hit', styleIndex);
     const saving = this.engine.peek().rally!.cupAtRisk !== null;
     this.swung[team] = true;
     const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
-    const q = timingQuality(this.cfg, style, off, saving);
+    const q = timingQuality(this.cfg, style, off, this.swingContext(player, saving));
     this.feedback = { team, label: timingLabel(q, off), quality: q, time: this.time };
     if (q === null) return; // whiff
     const from = { ...this.ball.pos };
-    const shot = computeHit(this.cfg, style, from, this.aimTarget(team, this.aim[team], style), q, this.rng);
+    const stats = this.statsOf(player);
+    const shot = computeHit(this.cfg, style, from, this.aimTarget(team, this.aim[team], style), q, this.rng, stats);
     this.resetBallTracking();
+    this.incomingPower = stats.power;
     this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
-    this.ball.launch(from, shot.vel);
+    this.ball.launch(from, shot.vel, shot.fx);
   }
 
   private resetBallTracking(): void {

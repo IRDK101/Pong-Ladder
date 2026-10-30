@@ -22,6 +22,20 @@ export type PhysicsEvent =
 
 export type BallStatus = 'flying' | 'sunk' | 'out' | 'held' | 'dead';
 
+/** Spin and bounce behaviour of the current shot. They act until its first bounce. */
+export interface BallEffects {
+  /** Sideways acceleration in flight (m/s^2, along y). */
+  curve: number;
+  /** Sideways speed added at the first bounce (m/s). */
+  sideKick: number;
+  /** +1 full topspin … -1 full backspin. */
+  topspin: number;
+  restitutionScale: number;
+  frictionScale: number;
+}
+
+export const NO_EFFECTS: BallEffects = { curve: 0, sideKick: 0, topspin: 0, restitutionScale: 1, frictionScale: 1 };
+
 const SUBSTEP = 1 / 600;
 
 export class BallPhysics {
@@ -31,6 +45,7 @@ export class BallPhysics {
   status: BallStatus = 'held';
   /** Seconds since the last table bounce (Infinity before the first). */
   sinceBounce = Infinity;
+  fx: BallEffects = NO_EFFECTS;
   /** Cups the ball is currently touching, so one touch emits one event. */
   private touching = new Set<string>();
 
@@ -45,11 +60,13 @@ export class BallPhysics {
     this.status = 'held';
     this.touching.clear();
     this.sinceBounce = Infinity;
+    this.fx = NO_EFFECTS;
   }
 
-  launch(pos: Vec3, vel: Vec3): void {
+  launch(pos: Vec3, vel: Vec3, fx: BallEffects = NO_EFFECTS): void {
     this.pos = { ...pos };
     this.vel = { ...vel };
+    this.fx = fx;
     this.status = 'flying';
     this.touching.clear();
     this.sinceBounce = Infinity;
@@ -78,6 +95,7 @@ export class BallPhysics {
     const prev = { ...p };
 
     v.z -= ph.gravity * h;
+    v.y += this.fx.curve * h;
     p.x += v.x * h;
     p.y += v.y * h;
     p.z += v.z * h;
@@ -87,9 +105,12 @@ export class BallPhysics {
     // a ball already below table level (off the edge) keeps falling.
     if (p.z <= 0 && prev.z > 0 && v.z < 0 && this.onTable(p.x, p.y)) {
       p.z = 0;
-      v.z = -v.z * ph.restitution;
-      v.x *= ph.tableFriction;
-      v.y *= ph.tableFriction;
+      const fx = this.fx;
+      const kick = 1 + ph.topspinKick * fx.topspin;
+      v.z = -v.z * ph.restitution * fx.restitutionScale * (1 - ph.topspinBounceLoss * fx.topspin);
+      v.x *= ph.tableFriction * fx.frictionScale * kick;
+      v.y = v.y * ph.tableFriction * fx.frictionScale * kick + fx.sideKick;
+      this.fx = NO_EFFECTS; // spin is spent on the first bounce
       this.sinceBounce = 0;
       events.push({ type: 'bounce', x: p.x, y: p.y });
       // A ball that has stopped bouncing is rolling; call it dead (it has
