@@ -66,6 +66,8 @@ export interface PhysicsTuning {
 export interface HitTuning {
   /** Seconds either side of the ideal moment in which a swing connects. */
   timingWindow: number;
+  /** Window multiplier for saves (a cup was hit, react fast). Phase 2's Saves stat widens it. */
+  saveWindowScale: number;
   /** Landing scatter (m, max radius) for a perfectly timed / worst-timed hit. */
   scatterPerfect: number;
   scatterWorst: number;
@@ -110,6 +112,7 @@ export const defaultConfig: GameConfig = {
   },
   hitting: {
     timingWindow: 0.22,
+    saveWindowScale: 0.55,
     scatterPerfect: 0.03,
     scatterWorst: 0.45,
     peakLossWorst: 0.6,
@@ -121,6 +124,7 @@ export const defaultConfig: GameConfig = {
   },
 };
 
+/** A fresh, independent config (never shares nested objects with defaultConfig). */
 export function makeConfig(overrides: Partial<GameConfig> = {}): GameConfig {
-  return { ...defaultConfig, ...overrides };
+  return structuredClone({ ...defaultConfig, ...overrides });
 }

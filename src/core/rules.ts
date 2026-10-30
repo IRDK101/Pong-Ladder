@@ -168,6 +168,11 @@ export class RulesEngine {
     return structuredClone(this.s);
   }
 
+  /** Live, read-only view of the state (no copy). Do not mutate. */
+  peek(): Readonly<GameState> {
+    return this.s;
+  }
+
   get log(): LogEntry[] {
     return this._log.slice();
   }

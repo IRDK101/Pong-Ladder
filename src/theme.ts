@@ -18,6 +18,17 @@ export const theme = {
     textDim: '#a89a85',
     teamA: '#ff6a5c',
     teamB: '#6aa0ff',
+    ball: '#fffaf0',
+    ballOutline: '#c8b89a',
+    shadow: 'rgba(0, 0, 0, 0.35)',
+    activeRing: '#ffe066',
+    penaltyCursor: '#ffe066',
+    hudPanel: 'rgba(20, 14, 10, 0.85)',
+    good: '#8fe388',
+    bad: '#ff7b6b',
+    overlay: 'rgba(10, 7, 5, 0.78)',
+    button: '#3d2a18',
+    buttonActive: '#6b4a2b',
   },
   fonts: {
     hud: '14px monospace',
@@ -26,8 +37,12 @@ export const theme = {
   },
   /** Screen pixels per table meter. */
   pixelsPerMeter: 320,
-  /** Padding around the table in screen pixels. */
-  tablePadding: 80,
+  /** Padding around the table in screen pixels (left/right, top, bottom). */
+  tablePadding: 175,
+  hudTop: 70,
+  hudBottom: 120,
+  ballPixelRadius: 6,
+  playerPixelRadius: 13,
   lineWidth: 2,
   sprites: {},
 } as const;

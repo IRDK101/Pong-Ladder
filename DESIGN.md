@@ -222,3 +222,19 @@ Build in phases. Do not start a phase until the previous one is playable and its
 - mid-game stat changes (momentum, pressure)
 - sound
 - achievements implementation
+
+---
+
+# Decisions log
+
+Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/phase1-test-plan.md](docs/phase1-test-plan.md) (all accepted with the proposed defaults). Other Phase 1 choices:
+
+- **Coordinates:** x along the table length (Team A end at x = 0), y across the width, z = height of the ball above the table surface. Players are labelled left/right from one shared viewpoint (as seen from Team A's end), so A-left ↔ B-right is the physical diagonal (Q1).
+- **Shoulder height** default: 0.6 m above the table surface (config `shoulderHeight`).
+- **Table** placeholder: 8 ft × 4 ft; replace with the real basement table's measurements in config.
+- **Hitting:** the timing window is centered on the ball's apex after it bounces on your side. Pressing outside the window is a whiff, with one swing per incoming ball. Timing quality controls landing scatter and peak height (badly timed hits can come out low).
+- **Saves** use a tighter timing window (`hitting.saveWindowScale`, default 0.55). Without it, good players saved almost every cup hit and games did not end. Phase 2's Saves stat is the intended way to widen it per character.
+- **Serving:** press hit to toss, press again near the top of the toss. A dropped toss is caught with no penalty.
+- **Aim:** the direction keys move the target in screen space (up/down = across the table, left/right = deeper/shorter). Not yet implemented: hold/release for power and arc.
+- **Control switching:** the keyboard always drives the teammate who is due to hit. During a save (either teammate may hit), it drives the teammate on the side the ball is on. A human therefore cannot commit a wrong-teammate fault in local play; the rules engine still enforces it for future AI/online input.
+- **Event log tagging:** each match record stores a roster (player position → character id + human profile id; empty until Phase 2), and every logged event names the player position. So every event resolves to the character and the human involved.

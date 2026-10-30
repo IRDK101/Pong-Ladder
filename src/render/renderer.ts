@@ -1,9 +1,11 @@
-// Canvas 2D renderer. Reads state, never mutates it.
+// Canvas 2D renderer for the table, cups, ball and players. Reads state, never mutates it.
 
 import type { GameConfig } from '../config';
 import type { Theme } from '../theme';
-import type { Cup, PlayerId } from '../core/types';
-import { laneOf } from '../core/table';
+import type { Cup, PlayerId, TeamId } from '../core/types';
+import { playerName } from '../core/rules';
+import { getStyle } from '../core/styles';
+import { Game, type TeamInput } from '../game/game';
 
 export interface View {
   /** Screen pixels per meter. */
@@ -21,9 +23,9 @@ export function makeView(cfg: GameConfig, theme: Theme): View {
   return {
     scale,
     ox: pad,
-    oy: pad,
+    oy: theme.hudTop + 40,
     width: Math.round(cfg.table.length * scale + pad * 2),
-    height: Math.round(cfg.table.width * scale + pad * 2),
+    height: Math.round(cfg.table.width * scale + theme.hudTop + 40 + theme.hudBottom + 40),
   };
 }
 
@@ -31,27 +33,79 @@ export const toScreen = (v: View, x: number, y: number): [number, number] => [v.
 
 export const toTable = (v: View, sx: number, sy: number): [number, number] => [(sx - v.ox) / v.scale, (sy - v.oy) / v.scale];
 
-export interface Scene {
-  cups: Cup[];
-  players: PlayerId[];
-  caption: string;
+const teamColor = (theme: Theme, t: TeamId) => (t === 'A' ? theme.colors.teamA : theme.colors.teamB);
+
+/** Cup under a screen point, if any. */
+export function cupAt(cfg: GameConfig, v: View, cups: Cup[], sx: number, sy: number): Cup | undefined {
+  const [x, y] = toTable(v, sx, sy);
+  const r = cfg.cups.diameter / 2;
+  return cups.find((c) => c.state !== 'removed' && Math.hypot(c.x - x, c.y - y) <= r * 1.2);
 }
 
-export function render(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, scene: Scene): void {
-  const c = theme.colors;
-  ctx.fillStyle = c.floor;
+export function drawField(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, cups: Cup[]): void {
+  ctx.fillStyle = theme.colors.floor;
   ctx.fillRect(0, 0, v.width, v.height);
-
   drawTable(ctx, cfg, theme, v);
   drawSki(ctx, cfg, theme, v);
-  for (const cup of scene.cups) drawCup(ctx, cfg, theme, v, cup);
-  for (const p of scene.players) drawPlayerMarker(ctx, cfg, theme, v, p);
+  for (const cup of cups) drawCup(ctx, cfg, theme, v, cup);
+}
 
-  ctx.fillStyle = c.textDim;
-  ctx.font = theme.fonts.hud;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(scene.caption, v.width / 2, v.height - theme.tablePadding / 3);
+export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, inputs: Record<TeamId, TeamInput>): void {
+  const cfg = game.cfg;
+  const st = game.engine.peek();
+  drawField(ctx, cfg, theme, v, game.cups);
+
+  // Penalty cursor.
+  if (st.phase === 'penalty') {
+    const cups = game.penaltyCups();
+    const cup = cups[Math.min(game.penaltyCursor, cups.length - 1)];
+    if (cup) {
+      const [sx, sy] = toScreen(v, cup.x, cup.y);
+      const pulse = 0.5 + 0.5 * Math.sin(game.time * 10);
+      ctx.strokeStyle = theme.colors.penaltyCursor;
+      ctx.lineWidth = 2 + pulse * 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, (cfg.cups.diameter / 2) * v.scale + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // Players.
+  const players: PlayerId[] = [
+    { team: 'A', side: 'left' },
+    { team: 'A', side: 'right' },
+    { team: 'B', side: 'left' },
+    { team: 'B', side: 'right' },
+  ];
+  const active = [game.activePlayer('A'), game.activePlayer('B')].filter(Boolean) as PlayerId[];
+  for (const p of players) {
+    const isActive = active.some((a) => a.team === p.team && a.side === p.side);
+    drawPlayer(ctx, theme, v, game, p, isActive, st.server.team === p.team && st.server.side === p.side);
+  }
+
+  // Aim reticle for whoever is about to hit.
+  for (const team of ['A', 'B'] as TeamId[]) {
+    const serving = st.phase === 'awaitServe' && st.server.team === team;
+    if (!serving && !game.canSwing(team)) continue;
+    const t = game.aimTarget(team, Game.aimOf(inputs[team]), getStyle(serving ? 'standardServe' : 'standardHit'));
+    drawReticle(ctx, v, t.x, t.y, teamColor(theme, team));
+  }
+
+  drawBall(ctx, cfg, theme, v, game);
+
+  // Timing feedback near the hitter.
+  const fb = game.feedback;
+  if (fb && game.time - fb.time < 0.9) {
+    const p = active.find((a) => a.team === fb.team) ?? { team: fb.team, side: 'left' as const };
+    const spot = game.playerSpot(p);
+    const [sx, sy] = toScreen(v, spot.x, spot.y);
+    ctx.globalAlpha = 1 - (game.time - fb.time) / 0.9;
+    ctx.fillStyle = fb.quality === null ? theme.colors.bad : fb.quality > 0.55 ? theme.colors.good : theme.colors.text;
+    ctx.font = theme.fonts.title;
+    ctx.textAlign = 'center';
+    ctx.fillText(fb.label, sx, sy - 28 - (game.time - fb.time) * 30);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawTable(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View): void {
@@ -115,16 +169,69 @@ function drawCup(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v
   ctx.stroke();
 }
 
-function drawPlayerMarker(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, p: PlayerId): void {
-  const c = theme.colors;
-  const lane = laneOf(p);
-  const y = cfg.table.width * (lane === 'low' ? 0.25 : 0.75);
-  const x = p.team === 'A' ? 0 : cfg.table.length;
-  const [sx, sy] = toScreen(v, x, y);
-  const dx = p.team === 'A' ? -theme.tablePadding / 2 : theme.tablePadding / 2;
-  ctx.fillStyle = p.team === 'A' ? c.teamA : c.teamB;
+function drawPlayer(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, p: PlayerId, active: boolean, server: boolean): void {
+  const spot = game.playerSpot(p);
+  const [sx, sy] = toScreen(v, spot.x + (p.team === 'A' ? -0.12 : 0.12), spot.y);
+  const r = theme.playerPixelRadius;
+  if (active) {
+    ctx.strokeStyle = theme.colors.activeRing;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = teamColor(theme, p.team);
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = theme.colors.background;
   ctx.font = theme.fonts.label;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${p.team}-${p.side}`, sx + dx, sy);
+  ctx.fillText(p.side === 'left' ? 'L' : 'R', sx, sy + 1);
+  ctx.fillStyle = theme.colors.textDim;
+  ctx.fillText(playerName(p) + (server ? ' ●' : ''), sx, sy + r + 12);
+}
+
+function drawReticle(ctx: CanvasRenderingContext2D, v: View, x: number, y: number, color: string): void {
+  const [sx, sy] = toScreen(v, x, y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+  ctx.moveTo(sx - 14, sy);
+  ctx.lineTo(sx - 4, sy);
+  ctx.moveTo(sx + 4, sy);
+  ctx.lineTo(sx + 14, sy);
+  ctx.moveTo(sx, sy - 14);
+  ctx.lineTo(sx, sy - 4);
+  ctx.moveTo(sx, sy + 4);
+  ctx.lineTo(sx, sy + 14);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawBall(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, game: Game): void {
+  const b = game.ball;
+  const z = b.pos.z;
+  if (b.status === 'sunk') return; // it's in the cup
+  const [sx, sy] = toScreen(v, b.pos.x, b.pos.y);
+  // Shadow: on the table (or the floor when off the table / below it), offset by height.
+  const surface = b.onTable(b.pos.x, b.pos.y) && z >= 0 ? 0 : -cfg.physics.tableHeight;
+  const h = Math.max(0, z - surface);
+  const shadowOff = h * 22;
+  ctx.fillStyle = theme.colors.shadow;
+  ctx.beginPath();
+  ctx.ellipse(sx + shadowOff, sy + shadowOff * 0.6, theme.ballPixelRadius * (1 + h * 0.3), theme.ballPixelRadius * 0.7 * (1 + h * 0.3), 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Ball: bigger the higher it is.
+  const r = theme.ballPixelRadius * (1 + Math.max(z, -0.5) * 0.9);
+  ctx.fillStyle = theme.colors.ball;
+  ctx.strokeStyle = theme.colors.ballOutline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(sx, sy, Math.max(2, r), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 }
