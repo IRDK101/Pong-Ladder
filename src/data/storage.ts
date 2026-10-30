@@ -7,10 +7,12 @@
 // player position) resolves to the character and the human involved.
 
 import type { GameConfig } from '../config';
+import { validateCharacter, type Character, type Profile } from '../core/character';
 import type { LogEntry } from '../core/rules';
 import type { TeamId } from '../core/types';
 
-export const SCHEMA_VERSION = 1;
+/** v1 files hold matches only; v2 adds characters and profiles. */
+export const SCHEMA_VERSION = 2;
 
 export interface RosterSlot {
   characterId: string | null;
@@ -38,6 +40,16 @@ export interface ExportFile {
   schemaVersion: number;
   exportedAt: string;
   matches: MatchRecord[];
+  characters?: Character[];
+  profiles?: Profile[];
+}
+
+export interface ImportResult {
+  matches: number;
+  characters: number;
+  profiles: number;
+  /** Plain-language reasons for anything skipped. */
+  skipped: string[];
 }
 
 /** Minimal key/value interface so tests can use memory and the app can use localStorage. */
@@ -51,7 +63,6 @@ export function memoryStore(): KeyValueStore {
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) };
 }
 
-const KEY = 'dartmouth-pong/matches/v1';
 
 export function emptyRoster(): MatchRecord['roster'] {
   const slot = (): RosterSlot => ({ characterId: null, profileId: null });
@@ -71,42 +82,106 @@ export function newMatchRecord(cfg: GameConfig, now = new Date(), id = `m-${now.
   };
 }
 
-export class MatchStore {
-  constructor(private kv: KeyValueStore) {}
+/** A list of records with ids, stored as one JSON value. */
+export class Collection<T extends { id: string }> {
+  constructor(
+    private kv: KeyValueStore,
+    private key: string,
+  ) {}
 
-  list(): MatchRecord[] {
+  list(): T[] {
     try {
-      const raw = this.kv.getItem(KEY);
-      return raw ? (JSON.parse(raw) as MatchRecord[]) : [];
+      const raw = this.kv.getItem(this.key);
+      const v = raw ? JSON.parse(raw) : [];
+      return Array.isArray(v) ? (v as T[]) : [];
     } catch {
       return [];
     }
   }
 
-  /** Insert or replace by id. */
-  save(rec: MatchRecord): void {
-    const all = this.list().filter((m) => m.id !== rec.id);
-    all.push(rec);
-    this.kv.setItem(KEY, JSON.stringify(all));
+  get(id: string): T | undefined {
+    return this.list().find((x) => x.id === id);
+  }
+
+  /** Insert or replace by id (keeps list order for replacements). */
+  save(item: T): void {
+    const all = this.list();
+    const i = all.findIndex((x) => x.id === item.id);
+    if (i >= 0) all[i] = item;
+    else all.push(item);
+    this.kv.setItem(this.key, JSON.stringify(all));
+  }
+
+  remove(id: string): void {
+    this.kv.setItem(this.key, JSON.stringify(this.list().filter((x) => x.id !== id)));
+  }
+}
+
+export const STORAGE_KEYS = {
+  matches: 'dartmouth-pong/matches/v1',
+  characters: 'dartmouth-pong/characters/v1',
+  profiles: 'dartmouth-pong/profiles/v1',
+};
+
+/** Everything the game keeps locally, with one backup file for all of it. */
+export class AppStore {
+  readonly matches: Collection<MatchRecord>;
+  readonly characters: Collection<Character>;
+  readonly profiles: Collection<Profile>;
+
+  constructor(kv: KeyValueStore) {
+    this.matches = new Collection(kv, STORAGE_KEYS.matches);
+    this.characters = new Collection(kv, STORAGE_KEYS.characters);
+    this.profiles = new Collection(kv, STORAGE_KEYS.profiles);
   }
 
   exportJson(now = new Date()): string {
-    const file: ExportFile = { app: 'dartmouth-pong', schemaVersion: SCHEMA_VERSION, exportedAt: now.toISOString(), matches: this.list() };
+    const file: ExportFile = {
+      app: 'dartmouth-pong',
+      schemaVersion: SCHEMA_VERSION,
+      exportedAt: now.toISOString(),
+      matches: this.matches.list(),
+      characters: this.characters.list(),
+      profiles: this.profiles.list(),
+    };
     return JSON.stringify(file, null, 2);
   }
 
-  /** Merge matches from an export file. Returns how many were new. Throws on a bad file. */
-  importJson(json: string): number {
-    const file = JSON.parse(json) as Partial<ExportFile>;
-    if (file.app !== 'dartmouth-pong' || !Array.isArray(file.matches)) throw new Error('not a Dartmouth Pong export file');
-    if ((file.schemaVersion ?? 0) > SCHEMA_VERSION) throw new Error('export file is from a newer version');
-    const existing = new Set(this.list().map((m) => m.id));
-    let added = 0;
-    for (const m of file.matches) {
-      if (!m || typeof m.id !== 'string' || !Array.isArray(m.games)) throw new Error('malformed match record');
-      if (!existing.has(m.id)) added++;
-      this.save(m);
+  /** Merge a backup file (v1 or v2). Throws on a file that is not a backup at all. */
+  importJson(json: string): ImportResult {
+    let file: Partial<ExportFile>;
+    try {
+      file = JSON.parse(json) as Partial<ExportFile>;
+    } catch {
+      throw new Error('That is not valid JSON. Paste the whole backup file.');
     }
-    return added;
+    if (!file || file.app !== 'dartmouth-pong') throw new Error('That is not a Dartmouth Pong backup file.');
+    if ((file.schemaVersion ?? 0) > SCHEMA_VERSION) throw new Error('This backup is from a newer version of the game.');
+    const res: ImportResult = { matches: 0, characters: 0, profiles: 0, skipped: [] };
+    const merge = <T extends { id: string }>(col: Collection<T>, items: unknown, kind: keyof Omit<ImportResult, 'skipped'>, check: (x: T) => string[]) => {
+      if (items === undefined) return;
+      if (!Array.isArray(items)) throw new Error(`The backup's ${kind} list is malformed.`);
+      const have = new Set(col.list().map((x) => x.id));
+      for (const raw of items as T[]) {
+        if (!raw || typeof raw.id !== 'string') throw new Error(`A record in ${kind} is malformed.`);
+        const errs = check(raw);
+        if (errs.length) {
+          res.skipped.push(`${kind.slice(0, -1)} ${raw.id}: ${errs[0]}`);
+          continue;
+        }
+        if (!have.has(raw.id)) res[kind]++;
+        col.save(raw);
+      }
+    };
+    merge(this.matches, file.matches ?? [], 'matches', (m) => (Array.isArray(m.games) ? [] : ['missing games']));
+    merge(this.characters, file.characters, 'characters', (c) => {
+      try {
+        return validateCharacter(c);
+      } catch {
+        return ['malformed character'];
+      }
+    });
+    merge(this.profiles, file.profiles, 'profiles', (p) => (typeof p.name === 'string' && p.name.trim() ? [] : ['missing name']));
+    return res;
   }
 }

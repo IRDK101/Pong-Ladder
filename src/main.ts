@@ -1,15 +1,20 @@
-// App shell: menu → match (one or more games) → win screen. Owns the DOM.
+// App shell: menu → (draft) → match (one or more games) → win screen. Owns the DOM.
 
 import { makeConfig, type GameConfig } from './config';
 import { theme } from './theme';
 import { buildFormation } from './core/formation';
 import type { TeamId } from './core/types';
-import { Game, idleInput, type TeamInput } from './game/game';
+import { Game, genericRoster, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
 import { Keyboard } from './input/keyboard';
 import { cupAt, drawField, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
-import { Menu, drawEndScreen, drawHelp, drawMenu, menuRowRect } from './ui/menu';
-import { MatchStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
+import { Menu, drawEndScreen, drawHelp, drawMenu, menuRowRect, type MenuAction } from './ui/menu';
+import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
+import { injectStyles, Overlay } from './ui/dom';
+import { CharactersScreen } from './ui/characters';
+import { ProfilesScreen } from './ui/profiles';
+import { PrematchFlow } from './ui/prematch';
+import { showBackup } from './ui/backup';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -19,7 +24,8 @@ canvas.width = view.width;
 canvas.height = view.height;
 
 const keyboard = new Keyboard(baseCfg);
-/** localStorage when the browser allows it; otherwise logs last only for this visit. */
+
+/** localStorage when the browser allows it; otherwise data lasts only for this visit. */
 function browserStore(): KeyValueStore {
   try {
     const ls = window.localStorage;
@@ -46,16 +52,18 @@ function browserStore(): KeyValueStore {
     return memoryStore();
   }
 }
-const store = new MatchStore(browserStore());
+const store = new AppStore(browserStore());
 const menu = new Menu();
+injectStyles(theme);
+const overlay = new Overlay();
 
-type Screen = 'menu' | 'help' | 'playing' | 'gameEnd' | 'matchEnd';
+/** 'panel' = an HTML screen (characters, players, draft, backup) is open over the canvas. */
+type Screen = 'menu' | 'help' | 'panel' | 'playing' | 'gameEnd' | 'matchEnd';
 let screen: Screen = 'menu';
 let game: Game | null = null;
 let record: MatchRecord | null = null;
 let menuNote = '';
 let gameOverAt = 0;
-let lastInputs: Record<TeamId, TeamInput> = { A: idleInput(), B: idleInput() };
 
 // Debug hook (open the page with #debug): lets scripted bots drive the game for automated checks.
 let debugInputs: ((g: Game) => Record<TeamId, TeamInput>) | null = null;
@@ -68,63 +76,81 @@ if (location.hash === '#debug') {
   };
 }
 
-function startMatch(cfg: GameConfig): void {
-  game = new Game(cfg);
+function toMenu(note = ''): void {
+  overlay.hide();
+  menuNote = note;
+  screen = 'menu';
+  canvas.focus();
+}
+
+function openPanel(show: () => void): void {
+  screen = 'panel';
+  show();
+}
+
+function startMatch(cfg: GameConfig, roster: Roster): void {
+  overlay.hide();
+  game = new Game(cfg, Math.random, roster);
   record = newMatchRecord(cfg);
+  for (const k of POSITIONS) record.roster[k] = { characterId: roster[k].characterId, profileId: roster[k].profileId };
   game.messages.push({ text: `${game.serverName()} serves first (random draw)`, time: 0 });
   screen = 'playing';
+  canvas.focus();
 }
 
 /** Persist the finished game (and match, if decided). */
 function recordGame(): void {
   if (!game || !record) return;
   record.games.push({ winner: game.engine.peek().winner, log: game.engine.log });
-  store.save(record);
+  store.matches.save(record);
 }
 
 function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
   return (['A', 'B'] as TeamId[]).some((t) => codes.some((k) => keyboard.wasPressed(baseCfg.controls[t][k])));
 }
 
-function exportLogs(): void {
-  const blob = new Blob([store.exportJson()], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `dartmouth-pong-matches-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  menuNote = `Exported ${store.list().length} match(es).`;
+const characters = new CharactersScreen(overlay, store, () => toMenu());
+const profiles = new ProfilesScreen(overlay, store, () => toMenu());
+
+function runMenuAction(action: MenuAction): void {
+  const cfg = menu.config(baseCfg);
+  switch (action) {
+    case 'quick':
+      return startMatch(cfg, genericRoster());
+    case 'draft':
+      return openPanel(() =>
+        new PrematchFlow(overlay, store, cfg, Math.random, {
+          start: ({ roster }) => startMatch(cfg, roster),
+          cancel: () => toMenu(),
+          editCharacters: () => characters.showList(),
+          quickMatch: () => startMatch(cfg, genericRoster()),
+        }).begin(),
+      );
+    case 'characters':
+      return openPanel(() => characters.showList());
+    case 'profiles':
+      return openPanel(() => profiles.show());
+    case 'backup':
+      return openPanel(() => showBackup(overlay, store, () => toMenu()));
+    case 'help':
+      screen = 'help';
+      return;
+  }
 }
 
-function importLogs(): void {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/json,.json';
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-      const added = store.importJson(await file.text());
-      menuNote = `Imported ${added} new match(es).`;
-    } catch (e) {
-      menuNote = `Import failed: ${(e as Error).message}`;
-    }
-  };
-  input.click();
-}
-
-function runMenuAction(action: ReturnType<Menu['activate']>): void {
-  if (action === 'start') startMatch(menu.config(baseCfg));
-  else if (action === 'help') screen = 'help';
-  else if (action === 'export') exportLogs();
-  else if (action === 'import') importLogs();
+function drawBackdrop(): void {
+  const cfg = menu.config(baseCfg);
+  drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
 }
 
 function frame(dt: number): void {
+  if (screen === 'panel') {
+    drawBackdrop();
+    return;
+  }
   if (screen === 'help') {
     if (keyboard.presses().length) screen = 'menu';
-    const cfg = menu.config(baseCfg);
-    drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
+    drawBackdrop();
     drawHelp(ctx, theme, view);
     return;
   }
@@ -140,16 +166,15 @@ function frame(dt: number): void {
       else if (role === 'right') menu.move(0, 1);
       else if (role === 'hit') runMenuAction(menu.activate());
     }
-    const cfg = menu.config(baseCfg);
-    drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
+    if (screen !== 'menu') return;
+    drawBackdrop();
     drawMenu(ctx, theme, view, menu, document.hasFocus() ? menuNote : 'Click the game first so it can hear your keyboard.');
     return;
   }
 
   const g = game!;
   if (screen === 'playing') {
-    lastInputs = debugInputs ? debugInputs(g) : { A: keyboard.team('A'), B: keyboard.team('B') };
-    g.update(dt, lastInputs);
+    g.update(dt, debugInputs ? debugInputs(g) : { A: keyboard.team('A'), B: keyboard.team('B') });
     if (g.engine.peek().phase === 'gameOver') {
       recordGame();
       gameOverAt = performance.now();
@@ -167,7 +192,7 @@ function frame(dt: number): void {
   if (screen === 'gameEnd') {
     const st = g.engine.peek();
     const matchWinner = g.match.wins[st.winner!] + 1 >= g.match.gamesToWin;
-    const lines = [`${g.cupsLeftLine()}`];
+    const lines = [g.teamLine(st.winner!), g.cupsLeftLine()];
     if (g.cfg.matchFormat === 'bestOf3') lines.push(`Games: A ${g.match.wins.A + (st.winner === 'A' ? 1 : 0)} – ${g.match.wins.B + (st.winner === 'B' ? 1 : 0)} B`);
     drawEndScreen(ctx, theme, view, matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`, lines, ready ? 'Press Space / Enter' : '');
     if (ready && anyPressed(['hit'])) {
@@ -175,21 +200,20 @@ function frame(dt: number): void {
       if (w) {
         record!.winner = w;
         record!.finishedAt = new Date().toISOString();
-        store.save(record!);
+        store.matches.save(record!);
         screen = 'matchEnd';
       } else screen = 'playing';
     }
   } else if (screen === 'matchEnd') {
-    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [`Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, 'Match log saved'], 'Press Space / Enter for the menu');
-    if (anyPressed(['hit'])) screen = 'menu';
+    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, 'Match log saved'], 'Press Space / Enter for the menu');
+    if (anyPressed(['hit'])) toMenu();
   }
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && screen !== 'menu') {
-    screen = 'menu';
-    menuNote = 'Match abandoned.';
-  }
+  if (e.code !== 'Escape') return;
+  if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') toMenu('Match abandoned.');
+  else if (screen === 'panel' || screen === 'help') toMenu();
 });
 
 canvas.addEventListener('click', (e) => {

@@ -9,7 +9,11 @@ npm test        # unit tests (Vitest)
 npm run build
 ```
 
-Status: **Phase 1 complete** (rules engine, physics, timing-based hitting and serving, HUD, menu, win screens, saved match logs with JSON import/export). Rule decisions: [docs/phase1-test-plan.md](docs/phase1-test-plan.md) and the decisions log at the end of DESIGN.md.
+Status: **Phases 1 and 2 complete.**
+- Phase 1: rules engine, physics, timing-based hitting and serving, HUD, menu, win screens, and saved match logs.
+- Phase 2: characters with stats, styles and pixel sprites, a character editor, player profiles, a snake draft, and JSON backups.
+
+Rule decisions are in [docs/phase1-test-plan.md](docs/phase1-test-plan.md) and the decisions log at the end of DESIGN.md.
 
 ## Controls
 
@@ -17,6 +21,7 @@ Status: **Phase 1 complete** (rules engine, physics, timing-based hitting and se
 |---|---|---|
 | Aim | W A S D | Arrow keys |
 | Hit / toss / confirm | Space | Enter |
+| Hold for 2nd / 3rd hit style | Q / E | . / / |
 
 Serve: press hit to toss, then hit again at the top of the toss. Rally: hit as the ball peaks after it bounces on your side. Esc returns to the menu.
 

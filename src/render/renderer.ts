@@ -2,8 +2,8 @@
 
 import type { GameConfig } from '../config';
 import type { Theme } from '../theme';
+import type { Sprite } from '../core/character';
 import type { Cup, PlayerId, TeamId } from '../core/types';
-import { playerName } from '../core/rules';
 import { getStyle } from '../core/styles';
 import type { Game } from '../game/game';
 
@@ -170,7 +170,27 @@ function drawCup(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v
   ctx.stroke();
 }
 
+const spriteCache = new WeakMap<Sprite, HTMLCanvasElement>();
+
+function spriteBitmap(sprite: Sprite): HTMLCanvasElement {
+  let c = spriteCache.get(sprite);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = sprite.w;
+    c.height = sprite.h;
+    const sctx = c.getContext('2d')!;
+    sprite.pixels.forEach((col, i) => {
+      if (!col) return;
+      sctx.fillStyle = col;
+      sctx.fillRect(i % sprite.w, Math.floor(i / sprite.w), 1, 1);
+    });
+    spriteCache.set(sprite, c);
+  }
+  return c;
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, p: PlayerId, active: boolean, server: boolean): void {
+  const who = game.participant(p);
   const spot = game.playerSpot(p);
   const [sx, sy] = toScreen(v, spot.x + (p.team === 'A' ? -0.12 : 0.12), spot.y);
   const r = theme.playerPixelRadius;
@@ -178,20 +198,55 @@ function drawPlayer(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: 
     ctx.strokeStyle = theme.colors.activeRing;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+    ctx.arc(sx, sy, r + 9, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.fillStyle = teamColor(theme, p.team);
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = theme.colors.background;
+  if (who.sprite) {
+    const scale = theme.spriteScale;
+    const w = who.sprite.w * scale;
+    const hgt = who.sprite.h * scale;
+    // Team-colored base under the figure.
+    ctx.fillStyle = teamColor(theme, p.team);
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + hgt / 2 - 2, w / 2, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(spriteBitmap(who.sprite), sx - w / 2, sy - hgt / 2, w, hgt);
+  } else {
+    ctx.fillStyle = teamColor(theme, p.team);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = theme.colors.background;
+    ctx.font = theme.fonts.label;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.side === 'left' ? 'L' : 'R', sx, sy + 1);
+  }
   ctx.font = theme.fonts.label;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(p.side === 'left' ? 'L' : 'R', sx, sy + 1);
-  ctx.fillStyle = theme.colors.textDim;
-  ctx.fillText(playerName(p) + (server ? ' ●' : ''), sx, sy + r + 12);
+  const labelY = sy + (who.sprite ? (who.sprite.h * theme.spriteScale) / 2 + 10 : r + 12);
+  const label = (who.master ? '★ ' : '') + who.name + (server ? ' ●' : '');
+  if (who.master) {
+    ctx.save();
+    ctx.shadowColor = theme.colors.masterGlow;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = theme.colors.master;
+    ctx.fillText(label, sx, labelY);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = theme.colors.textDim;
+    ctx.fillText(label, sx, labelY);
+  }
+  // The style this player would hit with right now.
+  if (active) {
+    const style = game.currentStyle(p.team);
+    if (style) {
+      ctx.fillStyle = game.selectedStyle[p.team] ? theme.colors.activeRing : theme.colors.textDim;
+      ctx.fillText(style.name, sx, labelY + 15);
+    }
+  }
 }
 
 function drawReticle(ctx: CanvasRenderingContext2D, v: View, x: number, y: number, color: string): void {

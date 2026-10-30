@@ -1,5 +1,6 @@
 // All house-rule values and tuning live here. See DESIGN.md "Config".
 
+import type { FirstPick } from './core/draft';
 import type { StatEffects } from './core/stats';
 import type { Formation } from './core/types';
 
@@ -26,6 +27,8 @@ export interface GameConfig {
   matchFormat: MatchFormat;
   penaltyCupSelection: PenaltyCupSelection;
   skiCollision: boolean;
+  /** Who picks first in the draft. */
+  draftFirstPick: FirstPick;
   controls: { A: TeamControls; B: TeamControls };
   table: {
     /** Length along the x axis, Team A end at x = 0 (meters). */
@@ -107,6 +110,7 @@ export const defaultConfig: GameConfig = {
   matchFormat: 'single',
   penaltyCupSelection: 'choose',
   skiCollision: false,
+  draftFirstPick: 'coinFlip',
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },

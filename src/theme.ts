@@ -29,6 +29,8 @@ export const theme = {
     overlay: 'rgba(10, 7, 5, 0.78)',
     button: '#3d2a18',
     buttonActive: '#6b4a2b',
+    master: '#ffd76a',
+    masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
   fonts: {
     hud: '14px monospace',
@@ -43,6 +45,8 @@ export const theme = {
   hudBottom: 120,
   ballPixelRadius: 6,
   playerPixelRadius: 13,
+  /** Screen pixels per sprite pixel for characters on the table. */
+  spriteScale: 2,
   lineWidth: 2,
   sprites: {},
 } as const;

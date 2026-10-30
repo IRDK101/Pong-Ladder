@@ -2,7 +2,6 @@
 
 import type { Theme } from '../theme';
 import { diagonalOf } from '../core/table';
-import { playerName } from '../core/rules';
 import type { Cup, TeamId } from '../core/types';
 import type { Game } from '../game/game';
 import type { View } from './renderer';
@@ -27,12 +26,12 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   let status: string;
   switch (st.phase) {
     case 'awaitServe':
-      status = `${playerName(st.server)} serves to ${playerName(diagonalOf(st.server))}`;
+      status = `${game.nameOf(st.server)} serves to ${game.nameOf(diagonalOf(st.server))}`;
       break;
     case 'serveInFlight':
     case 'rally': {
       const due = game.activePlayer(st.rally!.target);
-      status = st.rally!.cupAtRisk ? `SAVE IT, Team ${st.rally!.target}!` : `${due ? playerName(due) : ''} to hit`;
+      status = st.rally!.cupAtRisk ? `SAVE IT, Team ${st.rally!.target}!` : `${due ? game.nameOf(due) : ''} to hit`;
       break;
     }
     case 'penalty':
@@ -46,9 +45,9 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
 
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  const bits = [`Server: ${playerName(st.server)}`, `Table misses: ${st.missCount}/${game.cfg.serveTableMissLimit}`];
+  const bits = [`Server: ${game.nameOf(st.server)}`, `Table misses: ${st.missCount}/${game.cfg.serveTableMissLimit}`];
   if (game.cfg.matchFormat === 'bestOf3') bits.push(`Games  A ${game.match.wins.A} – ${game.match.wins.B} B  (game ${game.match.games.length})`);
-  if (st.sinkChain && st.sinkChain.length > 1) bits.push(`Sink chain: ${playerName(st.sinkChain.player)} x${st.sinkChain.length}`);
+  if (st.sinkChain && st.sinkChain.length > 1) bits.push(`Sink chain: ${game.nameOf(st.sinkChain.player)} x${st.sinkChain.length}`);
   ctx.fillText(bits.join('    ·    '), W / 2, 50);
 
   // --- Bottom: referee messages ---

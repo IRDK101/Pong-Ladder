@@ -133,6 +133,11 @@ export class Game {
     return this.participant(p).name;
   }
 
+  /** "Ari & Jo" (left & right) for a team. */
+  teamLine(team: TeamId): string {
+    return `${this.nameOf({ team, side: 'left' })} & ${this.nameOf({ team, side: 'right' })}`;
+  }
+
   /** Effective stats for a player right now (base stats through the modifier pipeline). */
   statsOf(p: PlayerId): Stats {
     return effectiveStats(this.participant(p).stats);

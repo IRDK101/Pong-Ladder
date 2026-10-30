@@ -240,3 +240,21 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
 - **Game speed (revised after playtest):** the default is 0.55× real time (it was 0.8×). The menu offers Relaxed / Normal / Quick.
 - **Control switching:** the keyboard always drives the teammate who is due to hit. During a save (either teammate may hit), it drives the teammate on the side the ball is on. A human therefore cannot commit a wrong-teammate fault in local play; the rules engine still enforces it for future AI/online input.
 - **Event log tagging:** each match record stores a roster (player position → character id + human profile id; empty until Phase 2), and every logged event names the player position. So every event resolves to the character and the human involved.
+
+## Phase 2 decisions
+
+- **Stats → effects:** each stat scales its effects through ranges in `config.statEffects`, given as the multiplier at stat 1 and at stat 10. Stat 5.5 is exactly neutral, which is what the generic quick-match players use. A test enforces the skill-beats-stats target: a perfectly timed hit by an Accuracy-2 character lands under half as far off target, on average, as a badly timed hit by an Accuracy-10 one.
+  - Accuracy: landing scatter on rally hits.
+  - Power: lower and faster arcs, slightly more scatter, and a smaller timing window for whoever returns that ball.
+  - Spin: scales the style's spin amount.
+  - Serve: serve scatter and a wider serve timing window.
+  - Saves: a wider timing window on saves. There's no player movement, so "reach" is folded into this window.
+- **Effective stats pipeline:** `effectiveStats(base, modifiers)` is the only way gameplay reads stats. It has no modifiers yet.
+- **Spin physics:** topspin bounces lower and kicks forward; backspin bounces higher and checks up. Sidespin curves the ball in flight and kicks it sideways at the bounce. Spin is used up at the first bounce. The solvers compensate for the curve, so a shot still lands where it was aimed and the surprise comes after the bounce.
+- **Placeholder styles:** Standard hit, Lob (high, forgiving timing, backspin), Flat fast hit (just above shoulder height, tight and punishing timing, topspin), Standard serve. A style is data (`STYLES`, or `registerStyle()` for imported JSON).
+- **Style selection keys:** the plain hit key uses a character's 1st style. Holding the style-2 or style-3 key while pressing hit uses the 2nd or 3rd style: Q / E for Team A, `.` / `/` for Team B. These are in `config.controls`. A character with only 2 styles uses its 2nd style for the style-3 key too.
+- **Sprites:** 16×24 pixel figures built from parts (skin, hair, hair color, shirt, shirt color, pants, build, accessory). The pixel editor and image upload both store a full pixel grid that replaces the parts drawing. "Discard drawing" goes back to the parts. Uploads are fit into 16×24 and reduced to a 4-bit-per-channel palette.
+- **Draft:** snake order A B B A or B A A B. `config.draftFirstPick` defaults to a coin flip. The team's first pick plays left and its second plays right; each team can swap them on the lineup screen before starting. A draft needs at least 4 valid characters; otherwise the game offers to create characters or play a quick match with generic players.
+- **Match record roster:** each position stores the character id and the human profile id (null for Guest).
+- **Backups:** one JSON file holds characters, players and matches (schema v2; v1 matches-only files still restore). Copy and paste works everywhere, including the hosted page where downloads are blocked. Restoring merges by id and skips invalid characters with a reason.
+- **Career stats on profile screens:** Phase 2 shows matches played and won, read from saved matches. The full list of career stats, levels and Elo is Phase 3.

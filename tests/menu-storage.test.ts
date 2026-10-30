@@ -1,6 +1,7 @@
 import { makeConfig } from '../src/config';
 import { RulesEngine } from '../src/core/rules';
-import { MatchStore, memoryStore, newMatchRecord } from '../src/data/storage';
+import { newCharacter, newProfile } from '../src/core/character';
+import { AppStore, memoryStore, newMatchRecord } from '../src/data/storage';
 import { Menu } from '../src/ui/menu';
 import { AL, Script } from './helpers';
 
@@ -36,14 +37,16 @@ describe('pre-game menu', () => {
 
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
+    const actions: string[] = [];
+    m.move(5, 0); // first action row, after the 5 option rows
+    for (let i = 0; i < 6; i++) {
+      actions.push(m.activate()!);
+      m.move(1, 0);
+    }
+    expect(actions).toEqual(['draft', 'quick', 'characters', 'profiles', 'help', 'backup']);
+    expect(m.cursor).toBe(0); // wrapped
     m.move(-1, 0);
-    expect(m.activate()).toBe('import');
-    m.move(-2, 0);
-    expect(m.activate()).toBe('help');
-    m.move(-1, 0);
-    expect(m.activate()).toBe('start');
-    m.move(4, 0);
-    expect(m.cursor).toBe(0);
+    expect(m.activate()).toBe('backup');
   });
 
   it('builds an independent config each time', () => {
@@ -54,7 +57,7 @@ describe('pre-game menu', () => {
   });
 });
 
-describe('match storage', () => {
+describe('local storage and backups', () => {
   function playedRecord() {
     const s = new Script(AL);
     s.goodServe();
@@ -65,42 +68,67 @@ describe('match storage', () => {
     return { rec, s };
   }
 
-  it('saves, lists and replaces records by id', () => {
-    const store = new MatchStore(memoryStore());
+  it('saves, lists, replaces and removes records by id', () => {
+    const store = new AppStore(memoryStore());
     const { rec } = playedRecord();
-    store.save(rec);
-    store.save({ ...rec, winner: 'A' });
-    expect(store.list()).toHaveLength(1);
-    expect(store.list()[0].winner).toBe('A');
-    expect(store.list()[0].rules).toMatchObject({ formation: 'tree', serveTableMissLimit: 3 });
-    expect(Object.keys(store.list()[0].roster)).toEqual(['A-left', 'A-right', 'B-left', 'B-right']);
+    store.matches.save(rec);
+    store.matches.save({ ...rec, winner: 'A' });
+    expect(store.matches.list()).toHaveLength(1);
+    expect(store.matches.list()[0].winner).toBe('A');
+    expect(store.matches.list()[0].rules).toMatchObject({ formation: 'tree', serveTableMissLimit: 3 });
+    expect(Object.keys(store.matches.list()[0].roster)).toEqual(['A-left', 'A-right', 'B-left', 'B-right']);
+    store.matches.remove('m-1');
+    expect(store.matches.list()).toEqual([]);
   });
 
   it('a stored log replays to the same final state', () => {
-    const store = new MatchStore(memoryStore());
+    const store = new AppStore(memoryStore());
     const { rec, s } = playedRecord();
-    store.save(rec);
-    const log = store.list()[0].games[0].log;
+    store.matches.save(rec);
+    const log = store.matches.list()[0].games[0].log;
     expect(RulesEngine.replay(makeConfig(), log).state).toEqual(s.eng.state);
   });
 
-  it('export → import round-trips and merges without duplicates', () => {
-    const a = new MatchStore(memoryStore());
+  it('backup → restore round-trips matches, characters and profiles, merging without duplicates', () => {
+    const a = new AppStore(memoryStore());
     const { rec } = playedRecord();
-    a.save(rec);
+    a.matches.save(rec);
+    const ari = newCharacter('Ari');
+    ari.master = true;
+    a.characters.save(ari);
+    a.profiles.save(newProfile('Ari R.'));
     const json = a.exportJson();
-    const b = new MatchStore(memoryStore());
-    b.save({ ...rec, id: 'm-2' });
-    expect(b.importJson(json)).toBe(1);
-    expect(b.importJson(json)).toBe(0);
-    expect(b.list().map((m) => m.id).sort()).toEqual(['m-1', 'm-2']);
-    expect(b.list().find((m) => m.id === 'm-1')).toEqual(rec);
+    const b = new AppStore(memoryStore());
+    b.matches.save({ ...rec, id: 'm-2' });
+    expect(b.importJson(json)).toEqual({ matches: 1, characters: 1, profiles: 1, skipped: [] });
+    expect(b.importJson(json)).toMatchObject({ matches: 0, characters: 0, profiles: 0 });
+    expect(b.matches.list().map((m) => m.id).sort()).toEqual(['m-1', 'm-2']);
+    expect(b.matches.get('m-1')).toEqual(rec);
+    expect(b.characters.get(ari.id)).toEqual(ari);
   });
 
-  it('rejects files that are not exports', () => {
-    const store = new MatchStore(memoryStore());
-    expect(() => store.importJson('{"foo":1}')).toThrow();
-    expect(() => store.importJson('not json')).toThrow();
+  it('restores an older matches-only (v1) backup', () => {
+    const { rec } = playedRecord();
+    const v1 = JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 1, exportedAt: '', matches: [rec] });
+    const store = new AppStore(memoryStore());
+    expect(store.importJson(v1).matches).toBe(1);
+  });
+
+  it('skips invalid characters with a reason, keeping the rest', () => {
+    const good = newCharacter('Good');
+    const bad = { ...newCharacter('Bad'), hitStyles: ['standardHit'] };
+    const json = JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 2, matches: [], characters: [good, bad] });
+    const store = new AppStore(memoryStore());
+    const res = store.importJson(json);
+    expect(res.characters).toBe(1);
+    expect(res.skipped).toHaveLength(1);
+    expect(res.skipped[0]).toMatch(/hit styles/);
+  });
+
+  it('rejects files that are not backups', () => {
+    const store = new AppStore(memoryStore());
+    expect(() => store.importJson('{"foo":1}')).toThrow(/not a Dartmouth Pong backup/);
+    expect(() => store.importJson('not json')).toThrow(/not valid JSON/);
     expect(() => store.importJson(JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 99, matches: [] }))).toThrow(/newer/);
     expect(() => store.importJson(JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 1, matches: [{ nope: 1 }] }))).toThrow(/malformed/);
   });
@@ -108,6 +136,9 @@ describe('match storage', () => {
   it('survives corrupted storage', () => {
     const kv = memoryStore();
     kv.setItem('dartmouth-pong/matches/v1', '{broken');
-    expect(new MatchStore(kv).list()).toEqual([]);
+    kv.setItem('dartmouth-pong/characters/v1', '{"not":"a list"}');
+    const store = new AppStore(kv);
+    expect(store.matches.list()).toEqual([]);
+    expect(store.characters.list()).toEqual([]);
   });
 });

@@ -26,7 +26,7 @@ const CHOICES: Choice[] = [
   { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
-export type MenuAction = 'start' | 'help' | 'export' | 'import' | null;
+export type MenuAction = 'draft' | 'quick' | 'characters' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   label: string;
@@ -41,10 +41,12 @@ export class Menu {
   rows(): MenuRow[] {
     return [
       ...CHOICES.map((c, i) => ({ label: c.label, value: c.values[this.picks[i]].label })),
-      { label: 'Start match', action: 'start' as const },
+      { label: 'Draft match', action: 'draft' as const },
+      { label: 'Quick match (generic players)', action: 'quick' as const },
+      { label: 'Characters', action: 'characters' as const },
+      { label: 'Players', action: 'profiles' as const },
       { label: 'How to play', action: 'help' as const },
-      { label: 'Export match logs (JSON)', action: 'export' as const },
-      { label: 'Import match logs (JSON)', action: 'import' as const },
+      { label: 'Back up / restore', action: 'backup' as const },
     ];
   }
 
@@ -73,11 +75,11 @@ export class Menu {
   }
 }
 
-const ROW_H = 38;
+const ROW_H = 33;
 
 export function menuRowRect(v: View, i: number) {
   const w = 460;
-  return { x: v.width / 2 - w / 2, y: 170 + i * ROW_H, w, h: ROW_H - 6 };
+  return { x: v.width / 2 - w / 2, y: 150 + i * ROW_H, w, h: ROW_H - 5 };
 }
 
 export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
@@ -88,10 +90,10 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, m
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
   ctx.font = 'bold 40px monospace';
-  ctx.fillText('DARTMOUTH PONG', v.width / 2, 80);
+  ctx.fillText('DARTMOUTH PONG', v.width / 2, 70);
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('Zeta Psi basement rules', v.width / 2, 120);
+  ctx.fillText('Zeta Psi basement rules', v.width / 2, 108);
 
   menu.rows().forEach((row, i) => {
     const r = menuRowRect(v, i);
@@ -106,7 +108,7 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, m
       ctx.fillText(`◀ ${row.value} ▶`, r.x + r.w - 16, r.y + r.h / 2);
     } else {
       ctx.textAlign = 'center';
-      ctx.font = row.action === 'start' ? theme.fonts.title : theme.fonts.hud;
+      ctx.font = row.action === 'draft' ? theme.fonts.title : theme.fonts.hud;
       ctx.fillText(row.label, r.x + r.w / 2, r.y + r.h / 2);
     }
   });
@@ -114,7 +116,7 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, m
   ctx.textAlign = 'center';
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  const y = menuRowRect(v, menu.rows().length).y + 20;
+  const y = menuRowRect(v, menu.rows().length).y + 14;
   ctx.fillText('Up/down: move · Left/right: change · Space/Enter: select · or use the mouse', v.width / 2, y);
   ctx.fillText('Team A: WASD + Space    ·    Team B: Arrows + Enter', v.width / 2, y + 24);
   if (note) {
