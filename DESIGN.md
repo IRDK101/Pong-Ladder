@@ -235,6 +235,8 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
 - **Hitting:** the timing window is centered on the ball's apex after it bounces on your side. Pressing outside the window is a whiff, with one swing per incoming ball. Timing quality controls landing scatter and peak height (badly timed hits can come out low).
 - **Saves** use a tighter timing window (`hitting.saveWindowScale`, default 0.55). Without it, good players saved almost every cup hit and games did not end. Phase 2's Saves stat is the intended way to widen it per character.
 - **Serving:** press hit to toss, press again near the top of the toss. A dropped toss is caught with no penalty.
-- **Aim:** the direction keys move the target in screen space (up/down = across the table, left/right = deeper/shorter). Not yet implemented: hold/release for power and arc.
+- **Aim (revised after playtest):** sticky crosshair. Holding a direction key slides it in screen space (up/down = across the table, left/right = deeper/shorter) and it stays where it is left, so aiming is separate from timing. Not yet implemented: hold/release for power and arc.
+- **Timing cue (added after playtest):** a ring closes in on the ball and turns green at the ideal moment. There is also a How to play screen.
+- **Game speed (revised after playtest):** the default is 0.55× real time (it was 0.8×). The menu offers Relaxed / Normal / Quick.
 - **Control switching:** the keyboard always drives the teammate who is due to hit. During a save (either teammate may hit), it drives the teammate on the side the ball is on. A human therefore cannot commit a wrong-teammate fault in local play; the rules engine still enforces it for future AI/online input.
 - **Event log tagging:** each match record stores a roster (player position → character id + human profile id; empty until Phase 2), and every logged event names the player position. So every event resolves to the character and the human involved.

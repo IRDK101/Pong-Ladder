@@ -8,7 +8,7 @@ import { Game, idleInput, type TeamInput } from './game/game';
 import { Keyboard } from './input/keyboard';
 import { cupAt, drawField, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
-import { Menu, drawEndScreen, drawMenu, menuRowRect } from './ui/menu';
+import { Menu, drawEndScreen, drawHelp, drawMenu, menuRowRect } from './ui/menu';
 import { MatchStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -49,7 +49,7 @@ function browserStore(): KeyValueStore {
 const store = new MatchStore(browserStore());
 const menu = new Menu();
 
-type Screen = 'menu' | 'playing' | 'gameEnd' | 'matchEnd';
+type Screen = 'menu' | 'help' | 'playing' | 'gameEnd' | 'matchEnd';
 let screen: Screen = 'menu';
 let game: Game | null = null;
 let record: MatchRecord | null = null;
@@ -120,11 +120,19 @@ function importLogs(): void {
 
 function runMenuAction(action: ReturnType<Menu['activate']>): void {
   if (action === 'start') startMatch(menu.config(baseCfg));
+  else if (action === 'help') screen = 'help';
   else if (action === 'export') exportLogs();
   else if (action === 'import') importLogs();
 }
 
 function frame(dt: number): void {
+  if (screen === 'help') {
+    if (keyboard.presses().length) screen = 'menu';
+    const cfg = menu.config(baseCfg);
+    drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
+    drawHelp(ctx, theme, view);
+    return;
+  }
   if (screen === 'menu') {
     for (const code of keyboard.presses()) {
       if (screen !== 'menu') break;
@@ -156,7 +164,7 @@ function frame(dt: number): void {
     g.update(dt, { A: idleInput(), B: idleInput() });
   }
 
-  renderGame(ctx, theme, view, g, lastInputs);
+  renderGame(ctx, theme, view, g);
   renderHud(ctx, theme, view, g);
 
   // Short pause so the final call is readable before the overlay accepts input.
@@ -193,6 +201,10 @@ canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const sx = ((e.clientX - rect.left) * canvas.width) / rect.width;
   const sy = ((e.clientY - rect.top) * canvas.height) / rect.height;
+  if (screen === 'help') {
+    screen = 'menu';
+    return;
+  }
   if (screen === 'menu') {
     menu.rows().forEach((_, i) => {
       const r = menuRowRect(view, i);

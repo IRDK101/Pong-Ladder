@@ -76,6 +76,8 @@ export interface HitTuning {
   /** How far the aim keys move the target from its default (m). */
   aimRangeLateral: number;
   aimRangeDepth: number;
+  /** How fast a held aim key moves the crosshair (full range per second, real time). */
+  aimSpeed: number;
   /** Server toss: launch speed (m/s) and start height above the table (m). */
   tossSpeed: number;
   tossHeight: number;
@@ -108,7 +110,7 @@ export const defaultConfig: GameConfig = {
     cupRestitution: 0.45,
     tableHeight: 0.76,
     skiHeight: 0.03,
-    timeScale: 0.8,
+    timeScale: 0.55,
   },
   hitting: {
     timingWindow: 0.22,
@@ -118,6 +120,7 @@ export const defaultConfig: GameConfig = {
     peakLossWorst: 0.6,
     aimRangeLateral: 0.22,
     aimRangeDepth: 0.35,
+    aimSpeed: 1.6,
     tossSpeed: 2.4,
     tossHeight: 0.1,
     standOff: 0.25,

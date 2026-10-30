@@ -16,10 +16,22 @@ describe('pre-game menu', () => {
     m.move(1, 0);
     m.move(0, -1); // match → best of 3 (wraps backwards)
     m.move(1, 0);
+    m.move(0, -1); // speed → relaxed (wraps backwards)
+    m.move(1, 0);
     m.activate(); // penalty → auto (activate cycles an option row)
     m.move(1, 0);
     m.move(0, 1); // ski → on
-    expect(m.config()).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'auto', skiCollision: true });
+    const cfg = m.config();
+    expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'auto', skiCollision: true });
+    expect(cfg.physics.timeScale).toBeLessThan(makeConfig().physics.timeScale);
+  });
+
+  it('game speed: normal is the default, quick is faster', () => {
+    const m = new Menu();
+    expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
+    m.move(2, 0);
+    m.move(0, 1);
+    expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
   });
 
   it('action rows return their action; the cursor wraps', () => {
@@ -27,8 +39,10 @@ describe('pre-game menu', () => {
     m.move(-1, 0);
     expect(m.activate()).toBe('import');
     m.move(-2, 0);
+    expect(m.activate()).toBe('help');
+    m.move(-1, 0);
     expect(m.activate()).toBe('start');
-    m.move(3, 0);
+    m.move(4, 0);
     expect(m.cursor).toBe(0);
   });
 

@@ -53,6 +53,8 @@ export class Game {
   penaltyCursor = 0;
   /** Set while the server's toss is in the air. */
   tossing = false;
+  /** Each team's crosshair, in [-1, 1] per axis. Sticky: it stays where the player leaves it. */
+  aim: Record<TeamId, Aim> = { A: { x: 0, y: 0 }, B: { x: 0, y: 0 } };
 
   private rng: () => number;
   private resumeAt: number | null = null;
@@ -131,14 +133,50 @@ export class Game {
     return { x: x + aim.x * hitting.aimRangeDepth, y: y + aim.y * lat };
   }
 
+  /** Direction the held aim keys point, per axis in {-1, 0, 1}. */
   static aimOf(inp: TeamInput): Aim {
     return { x: (inp.right ? 1 : 0) - (inp.left ? 1 : 0), y: (inp.down ? 1 : 0) - (inp.up ? 1 : 0) };
+  }
+
+  /**
+   * Timing cue for `team`, when its player can swing (or is mid-toss): seconds
+   * from the ideal moment (negative = still early) and the window half-width.
+   */
+  timingCue(team: TeamId): { offset: number; window: number } | null {
+    const st = this.engine.peek();
+    const tossing = st.phase === 'awaitServe' && st.server.team === team && this.tossing && !this.tossSwung;
+    if (!tossing && !this.canSwing(team)) return null;
+    const style = getStyle(tossing ? 'standardServe' : 'standardHit');
+    const saving = !tossing && st.rally!.cupAtRisk !== null;
+    const h = this.cfg.hitting;
+    return {
+      offset: apexOffset(this.ball.vel, this.cfg.physics.gravity),
+      window: h.timingWindow * style.timing.windowScale * (saving ? h.saveWindowScale : 1),
+    };
+  }
+
+  /** Whether `team` should see its crosshair: it is serving, or the ball is coming to it. */
+  aiming(team: TeamId): boolean {
+    const st = this.engine.peek();
+    if (st.phase === 'awaitServe') return st.server.team === team;
+    return (st.phase === 'rally' || st.phase === 'serveInFlight') && st.rally?.target === team;
+  }
+
+  private moveAim(realDt: number, inputs: Record<TeamId, TeamInput>): void {
+    const step = this.cfg.hitting.aimSpeed * realDt;
+    for (const team of ['A', 'B'] as TeamId[]) {
+      const d = Game.aimOf(inputs[team]);
+      const a = this.aim[team];
+      a.x = Math.max(-1, Math.min(1, a.x + d.x * step));
+      a.y = Math.max(-1, Math.min(1, a.y + d.y * step));
+    }
   }
 
   update(realDt: number, inputs: Record<TeamId, TeamInput>): void {
     const dt = realDt * this.cfg.physics.timeScale;
     this.time += dt;
     const st = this.engine.peek();
+    if (st.phase !== 'penalty') this.moveAim(realDt, inputs);
 
     if (st.phase === 'gameOver') {
       this.ball.step(dt, []);
@@ -164,7 +202,7 @@ export class Game {
     }
 
     // Live ball.
-    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team]);
+    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team);
     if (this.resumeAt !== null) return; // that swing ended the rally (e.g. low hit)
     const events = this.ball.step(dt, this.cups);
     for (const e of events) {
@@ -228,7 +266,7 @@ export class Game {
       const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
       const q = timingQuality(this.cfg, style, off);
       this.feedback = { team: server.team, label: timingLabel(q, off), quality: q, time: this.time };
-      if (q !== null) return this.serve(server, style, q, Game.aimOf(inp));
+      if (q !== null) return this.serve(server, style, q, this.aim[server.team]);
     }
     this.ball.step(dt, []);
     // Catch the toss on the way down; no penalty for a dropped toss.
@@ -244,7 +282,7 @@ export class Game {
     this.ball.launch(from, shot.vel);
   }
 
-  private trySwing(team: TeamId, inp: TeamInput): void {
+  private trySwing(team: TeamId): void {
     if (!this.canSwing(team)) return;
     const player = this.activePlayer(team)!;
     const style = getStyle('standardHit');
@@ -255,7 +293,7 @@ export class Game {
     this.feedback = { team, label: timingLabel(q, off), quality: q, time: this.time };
     if (q === null) return; // whiff
     const from = { ...this.ball.pos };
-    const shot = computeHit(this.cfg, style, from, this.aimTarget(team, Game.aimOf(inp), style), q, this.rng);
+    const shot = computeHit(this.cfg, style, from, this.aimTarget(team, this.aim[team], style), q, this.rng);
     this.resetBallTracking();
     this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
     this.ball.launch(from, shot.vel);

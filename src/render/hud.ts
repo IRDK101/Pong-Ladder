@@ -79,7 +79,10 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
     ctx.fillText(`Team ${st.penalty!.team}: aim keys to pick, hit key to confirm, or click a cup`, W / 2, top + 14);
   } else if (st.phase === 'awaitServe') {
     ctx.textAlign = 'center';
-    ctx.fillText('Serve: hit key to toss, hit again at the top of the toss', W / 2, top + 14);
+    ctx.fillText('Serve: hit to toss, hit again when the ring turns green', W / 2, top + 14);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.fillText('Hold aim keys to move your crosshair · hit when the ring meets the ball', W / 2, top + 14);
   }
 }
 

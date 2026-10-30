@@ -148,6 +148,36 @@ describe('game loop (physics + rules + input)', () => {
     }
   });
 
+  it('aim is sticky: holding a key slides the crosshair, releasing leaves it there, and it clamps', () => {
+    const g = new Game(cfgWith(), mulberry32(10));
+    const hold = (inp: Partial<TeamInput>) => g.update(0.1, { A: { ...idleInput(), ...inp }, B: idleInput() });
+    hold({ right: true });
+    expect(g.aim.A.x).toBeCloseTo(g.cfg.hitting.aimSpeed * 0.1);
+    hold({});
+    expect(g.aim.A.x).toBeCloseTo(g.cfg.hitting.aimSpeed * 0.1);
+    for (let i = 0; i < 30; i++) hold({ right: true, up: true });
+    expect(g.aim.A).toEqual({ x: 1, y: -1 });
+    expect(g.aim.B).toEqual({ x: 0, y: 0 });
+  });
+
+  it('the timing cue appears once the ball is hittable and reads zero at the apex', () => {
+    const g = new Game(cfgWith(), mulberry32(11));
+    const server = g.engine.peek().server.team;
+    const recv = server === 'A' ? 'B' : 'A';
+    expect(g.timingCue(recv)).toBeNull();
+    const bots = { A: idleBot, B: idleBot };
+    bots[server] = timedBot(0);
+    let seen: { offset: number; window: number } | null = null;
+    for (let t = 0; t < 4 && !seen; t += DT) {
+      g.update(DT, { A: bots.A(g, 'A'), B: bots.B(g, 'B') });
+      seen = g.timingCue(recv);
+    }
+    expect(seen).not.toBeNull();
+    expect(seen!.offset).toBeLessThan(0); // just bounced: still rising, early
+    expect(seen!.window).toBeCloseTo(g.cfg.hitting.timingWindow);
+    expect(g.aiming(recv)).toBe(true);
+  });
+
   it('penalty cups can be chosen with the keyboard cursor', () => {
     const g = new Game(cfgWith(), mulberry32(9));
     const team = g.engine.peek().server.team;

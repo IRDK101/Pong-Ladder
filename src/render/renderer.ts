@@ -5,7 +5,7 @@ import type { Theme } from '../theme';
 import type { Cup, PlayerId, TeamId } from '../core/types';
 import { playerName } from '../core/rules';
 import { getStyle } from '../core/styles';
-import { Game, type TeamInput } from '../game/game';
+import type { Game } from '../game/game';
 
 export interface View {
   /** Screen pixels per meter. */
@@ -50,7 +50,7 @@ export function drawField(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme:
   for (const cup of cups) drawCup(ctx, cfg, theme, v, cup);
 }
 
-export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, inputs: Record<TeamId, TeamInput>): void {
+export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game): void {
   const cfg = game.cfg;
   const st = game.engine.peek();
   drawField(ctx, cfg, theme, v, game.cups);
@@ -83,15 +83,16 @@ export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View,
     drawPlayer(ctx, theme, v, game, p, isActive, st.server.team === p.team && st.server.side === p.side);
   }
 
-  // Aim reticle for whoever is about to hit.
+  // Crosshair for the team that hits next (sticky: it stays where it was left).
   for (const team of ['A', 'B'] as TeamId[]) {
-    const serving = st.phase === 'awaitServe' && st.server.team === team;
-    if (!serving && !game.canSwing(team)) continue;
-    const t = game.aimTarget(team, Game.aimOf(inputs[team]), getStyle(serving ? 'standardServe' : 'standardHit'));
+    if (!game.aiming(team)) continue;
+    const serving = st.phase === 'awaitServe';
+    const t = game.aimTarget(team, game.aim[team], getStyle(serving ? 'standardServe' : 'standardHit'));
     drawReticle(ctx, v, t.x, t.y, teamColor(theme, team));
   }
 
   drawBall(ctx, cfg, theme, v, game);
+  for (const team of ['A', 'B'] as TeamId[]) drawTimingRing(ctx, theme, v, game, team);
 
   // Timing feedback near the hitter.
   const fb = game.feedback;
@@ -234,4 +235,34 @@ function drawBall(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, 
   ctx.arc(sx, sy, Math.max(2, r), 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+}
+
+/**
+ * Timing cue: a ring that closes in on the ball and is smallest (and green) at
+ * the ideal moment to hit. After the ideal moment it reddens until the window shuts.
+ */
+function drawTimingRing(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, team: TeamId): void {
+  const cue = game.timingCue(team);
+  if (!cue) return;
+  const { offset, window: w } = cue;
+  if (offset > w) return;
+  const [sx, sy] = toScreen(v, game.ball.pos.x, game.ball.pos.y);
+  const base = theme.ballPixelRadius * (1 + Math.max(game.ball.pos.z, 0) * 0.9) + 5;
+  const early = Math.max(0, -offset);
+  const radius = base + Math.min(1, early / (w * 2.5)) * 40;
+  const c = theme.colors;
+  const color = Math.abs(offset) <= w * 0.25 ? c.good : offset > 0 ? c.bad : Math.abs(offset) <= w ? c.activeRing : c.textDim;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  // Fixed target ring the closing ring should meet.
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = c.good;
+  ctx.beginPath();
+  ctx.arc(sx, sy, base, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }

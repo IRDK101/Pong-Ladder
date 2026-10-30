@@ -4,22 +4,29 @@ import { makeConfig, type GameConfig } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
 
-interface Choice<K extends keyof GameConfig> {
-  key: K;
+interface Choice {
   label: string;
-  values: { value: GameConfig[K]; label: string }[];
+  values: { label: string; apply: (cfg: GameConfig) => void }[];
 }
 
-type AnyChoice = { [K in keyof GameConfig]: Choice<K> }[keyof GameConfig];
+const set =
+  <K extends keyof GameConfig>(key: K, value: GameConfig[K]) =>
+  (cfg: GameConfig) => {
+    cfg[key] = value;
+  };
+const speed = (timeScale: number) => (cfg: GameConfig) => {
+  cfg.physics.timeScale = timeScale;
+};
 
-const CHOICES: AnyChoice[] = [
-  { key: 'formation', label: 'Formation', values: [{ value: 'tree', label: 'Tree (11 cups)' }, { value: 'shrub', label: 'Shrub (7 cups)' }] },
-  { key: 'matchFormat', label: 'Match', values: [{ value: 'single', label: 'Single game' }, { value: 'bestOf3', label: 'Best of 3' }] },
-  { key: 'penaltyCupSelection', label: 'Penalty cup', values: [{ value: 'choose', label: 'Team chooses' }, { value: 'auto', label: 'Automatic' }] },
-  { key: 'skiCollision', label: 'Ski collision', values: [{ value: false, label: 'Off' }, { value: true, label: 'On' }] },
+const CHOICES: Choice[] = [
+  { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
+  { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
+  { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.55) }, { label: 'Quick', apply: speed(0.7) }, { label: 'Relaxed', apply: speed(0.42) }] },
+  { label: 'Penalty cup', values: [{ label: 'Team chooses', apply: set('penaltyCupSelection', 'choose') }, { label: 'Automatic', apply: set('penaltyCupSelection', 'auto') }] },
+  { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
-export type MenuAction = 'start' | 'export' | 'import' | null;
+export type MenuAction = 'start' | 'help' | 'export' | 'import' | null;
 
 export interface MenuRow {
   label: string;
@@ -35,6 +42,7 @@ export class Menu {
     return [
       ...CHOICES.map((c, i) => ({ label: c.label, value: c.values[this.picks[i]].label })),
       { label: 'Start match', action: 'start' as const },
+      { label: 'How to play', action: 'help' as const },
       { label: 'Export match logs (JSON)', action: 'export' as const },
       { label: 'Import match logs (JSON)', action: 'import' as const },
     ];
@@ -59,9 +67,9 @@ export class Menu {
   }
 
   config(base: GameConfig = makeConfig()): GameConfig {
-    const cfg = structuredClone(base) as unknown as Record<string, unknown>;
-    CHOICES.forEach((c, i) => (cfg[c.key] = c.values[this.picks[i]].value));
-    return cfg as unknown as GameConfig;
+    const cfg = structuredClone(base);
+    CHOICES.forEach((c, i) => c.values[this.picks[i]].apply(cfg));
+    return cfg;
   }
 }
 
@@ -69,7 +77,7 @@ const ROW_H = 38;
 
 export function menuRowRect(v: View, i: number) {
   const w = 460;
-  return { x: v.width / 2 - w / 2, y: 190 + i * ROW_H, w, h: ROW_H - 6 };
+  return { x: v.width / 2 - w / 2, y: 170 + i * ROW_H, w, h: ROW_H - 6 };
 }
 
 export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
@@ -80,10 +88,10 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, m
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
   ctx.font = 'bold 40px monospace';
-  ctx.fillText('DARTMOUTH PONG', v.width / 2, 90);
+  ctx.fillText('DARTMOUTH PONG', v.width / 2, 80);
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('Zeta Psi basement rules', v.width / 2, 130);
+  ctx.fillText('Zeta Psi basement rules', v.width / 2, 120);
 
   menu.rows().forEach((row, i) => {
     const r = menuRowRect(v, i);
@@ -130,4 +138,61 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, v: Vi
   ctx.fillStyle = c.activeRing;
   ctx.font = theme.fonts.hud;
   ctx.fillText(prompt, v.width / 2, v.height / 2 + 30 + lines.length * 30);
+}
+
+const HELP: [string, string][] = [
+  ['Keys', 'Team A: WASD to aim, Space to hit.   Team B: arrow keys to aim, Enter to hit.'],
+  ['Aim', 'Your crosshair shows where your shot will land. Hold an aim key to slide it; it stays where you leave it.'],
+  ['Hit', 'After the ball bounces on your side, a ring closes in on it. Hit when the ring meets the ball and turns green. Early or late hits land wide and fly lower; below shoulder height is a low hit and loses the rally.'],
+  ['Serve', 'Press hit to toss the ball, then hit again as the ring closes at the top of the toss. It must bounce once on your side, then land in the diagonal quarter. Three serves off the table cost half a cup.'],
+  ['Saves', 'When a ball hits your cup, return it before it bounces twice. The ring closes faster: react quickly.'],
+  ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again.'],
+  ['Turns', 'Teammates alternate hits. The yellow ring marks whose turn it is; control switches automatically.'],
+];
+
+/** Split text into lines no wider than maxWidth with the current font. */
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+export function drawHelp(ctx: CanvasRenderingContext2D, theme: Theme, v: View): void {
+  const c = theme.colors;
+  ctx.fillStyle = c.overlay;
+  ctx.fillRect(0, 0, v.width, v.height);
+  ctx.fillRect(0, 0, v.width, v.height);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c.text;
+  ctx.font = 'bold 32px monospace';
+  ctx.fillText('HOW TO PLAY', v.width / 2, 80);
+  const x = Math.max(40, v.width / 2 - 440);
+  const textX = x + 90;
+  const maxW = v.width - textX - 40;
+  let y = 150;
+  for (const [k, text] of HELP) {
+    ctx.textAlign = 'left';
+    ctx.font = theme.fonts.title;
+    ctx.fillStyle = c.activeRing;
+    ctx.fillText(k, x, y);
+    ctx.font = theme.fonts.hud;
+    ctx.fillStyle = c.text;
+    for (const line of wrap(ctx, text, maxW)) {
+      ctx.fillText(line, textX, y);
+      y += 20;
+    }
+    y += 16;
+  }
+  ctx.textAlign = 'center';
+  ctx.fillStyle = c.textDim;
+  ctx.fillText('Press any key or click to go back', v.width / 2, y + 10);
 }
