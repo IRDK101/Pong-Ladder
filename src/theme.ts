@@ -32,6 +32,20 @@ export const theme = {
     master: '#ffd76a',
     masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
+  /**
+   * Basement scenery (placeholder until reference photos of the Zeta Psi
+   * basement arrive): concrete floor, brick walls, a hanging light.
+   */
+  basement: {
+    floor: '#2b2420',
+    floorSeam: '#241e1a',
+    stain: 'rgba(12, 8, 6, 0.28)',
+    brick: '#5a2e22',
+    brickDark: '#4a251b',
+    mortar: '#2e1f19',
+    lightGlow: 'rgba(255, 214, 150, 0.16)',
+    wallDepth: 26,
+  },
   /** Unlockable name colors (cosmetic rewards). */
   nameColors: {
     dartmouthGreen: '#2fb36b',

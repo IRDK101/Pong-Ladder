@@ -258,3 +258,28 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
 - **Match record roster:** each position stores the character id and the human profile id (null for Guest).
 - **Backups:** one JSON file holds characters, players and matches (schema v2; v1 matches-only files still restore). Copy and paste works everywhere, including the hosted page where downloads are blocked. Restoring merges by id and skips invalid characters with a reason.
 - **Career stats on profile screens:** Phase 2 shows matches played and won, read from saved matches. The full list of career stats, levels and Elo is Phase 3.
+
+## Phase 3 decisions
+
+- **Everything is derived from match logs; nothing is stored.** `deriveCareers` replays each saved game's log through a fresh rules engine and credits each call to the character and the human in that position. Levels, XP, Elo and achievements are all computed from the result. Adding a stat later applies it to every past game.
+- **Who gets credit:**
+  - Faults go to the player the referee names.
+  - A failed save goes to the defender whose turn it was (Q10), or to the saver if their return went out (Q11).
+  - "Cups downed" goes to the hitter whose ball touched the cup.
+  - The longest rally goes to all four players.
+  - A human playing both positions on a team counts once per game and once per match.
+- **Extra stats beyond the spec:**
+  - Cup hits.
+  - Last-cup saves: saves made while your team had one cup left.
+  - Aces: serves the receiver never returned.
+  - Good-serve rate.
+  - Perfect hits (timing quality of 0.85 or better) and average timing quality.
+  - Biggest comeback: the largest cup deficit overcome in a game you won.
+  - Favorite style (most-used).
+  - Match and game win rates, and save rate.
+- **XP:** weights are in `config.progression.xp`: game played 20, game won 15, match won 25, sink 8, cup downed 4, save 5, last-cup save 10, ace 3, perfect hit 1. Level n → n+1 costs 100 × n XP (level 2 at 100 XP, level 3 at 300, level 4 at 600, …).
+- **Rewards (cosmetic only):** a data table in `src/progress/rewards.ts`. It holds name colors, badges, sprite items (Big Green cap, gold chain, crown) and sink celebrations (confetti, green flare, fireworks), unlocked at levels 2–20. A character profile lets you equip what's unlocked. Colors live in the theme.
+- **Elo:** one human per team, starting at 1000 with K = 32 (`config.progression.elo`). It's recomputed from finished matches in finish order. Matches against a Guest, or with the same human on both sides, aren't rated.
+- **Achievements:** a framework only, as the spec asks. An achievement is a rule over career stats plus the attributed event stream. It ships with the spec's two examples ("sink 3 in a row" and "save your last cup") and a `newlyEarned` check. The post-match summary already shows newly earned ones, which is a minimal unlock notification. The full set and the achievements screen come later.
+- **Post-match summary:** shows XP gained, level-ups, rewards unlocked, Elo changes and new achievements for this match only (progress with the match compared to progress without it).
+- **Theme:** a placeholder basement (concrete slab floor with seams and stains, brick walls, a pool of light over the table) drawn from `theme.basement`. It's meant to be replaced once the Zeta Psi reference photos arrive.

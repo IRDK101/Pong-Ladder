@@ -88,6 +88,9 @@ export function injectStyles(theme: Theme): void {
   #ui .teamB { color: ${c.teamB}; }
   #ui .badge.teamA { background: ${c.teamA}; color: ${c.background}; }
   #ui .badge.teamB { background: ${c.teamB}; color: ${c.background}; }
+  #ui .badge.reward { border: 1px solid ${c.master}; color: ${c.master}; }
+  #ui .kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-variant-numeric: tabular-nums; }
+  #ui .kv > span:last-child { text-align: right; }
   #ui button, #ui select, #ui input[type=text], #ui textarea {
     font: inherit; color: ${c.text}; background: ${c.tableEdge}; border: 1px solid ${c.buttonActive}; border-radius: 4px; padding: 6px 10px; }
   #ui button { cursor: pointer; }

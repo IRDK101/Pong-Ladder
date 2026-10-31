@@ -22,6 +22,9 @@ export interface Participant {
   serveStyles: string[];
   master: boolean;
   sprite: Sprite | null;
+  /** Equipped cosmetics: a CSS name color and a celebration id (theme.celebrations). */
+  nameColor: string | null;
+  celebration: string | null;
   characterId: string | null;
   profileId: string | null;
 }
@@ -40,6 +43,8 @@ export function genericRoster(): Roster {
     serveStyles: [...DEFAULT_SERVE_STYLES],
     master: false,
     sprite: null,
+    nameColor: null,
+    celebration: null,
     characterId: null,
     profileId: null,
   });
@@ -95,6 +100,8 @@ export class Game {
   /** Style index each team currently has selected (held style key). */
   selectedStyle: Record<TeamId, 0 | 1 | 2> = { A: 0, B: 0 };
   readonly roster: Roster;
+  /** Active sink celebrations (cosmetic), drawn by the renderer. */
+  celebrations: { x: number; y: number; time: number; palette: string; seed: number }[] = [];
 
   private rng: () => number;
   private resumeAt: number | null = null;
@@ -407,6 +414,12 @@ export class Game {
   }
 
   private handleCall(c: Call): void {
+    if (c.kind === 'sink' && c.player && c.cup) {
+      const who = this.participant(c.player);
+      const cup = this.engine.peek().cups[c.cup.team].find((x) => x.id === c.cup!.cupId);
+      if (who.celebration && cup) this.celebrations.push({ x: cup.x, y: cup.y, time: this.time, palette: who.celebration, seed: Math.floor(this.rng() * 1e6) });
+    }
+    this.celebrations = this.celebrations.filter((k) => this.time - k.time < 2);
     this.messages.push({ text: c.text, time: this.time });
     if (this.messages.length > 50) this.messages.shift();
     this.onCall?.(c);

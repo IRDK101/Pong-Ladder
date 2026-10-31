@@ -15,6 +15,7 @@ import { CharactersScreen } from './ui/characters';
 import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow } from './ui/prematch';
 import { showBackup } from './ui/backup';
+import { hasTrackedPlayers, showSummary } from './ui/summary';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -109,8 +110,8 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
   return (['A', 'B'] as TeamId[]).some((t) => codes.some((k) => keyboard.wasPressed(baseCfg.controls[t][k])));
 }
 
-const characters = new CharactersScreen(overlay, store, () => toMenu());
-const profiles = new ProfilesScreen(overlay, store, () => toMenu());
+const characters = new CharactersScreen(overlay, store, baseCfg, () => toMenu());
+const profiles = new ProfilesScreen(overlay, store, baseCfg, () => toMenu());
 
 function runMenuAction(action: MenuAction): void {
   const cfg = menu.config(baseCfg);
@@ -206,7 +207,12 @@ function frame(dt: number): void {
     }
   } else if (screen === 'matchEnd') {
     drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, 'Match log saved'], 'Press Space / Enter for the menu');
-    if (anyPressed(['hit'])) toMenu();
+    if (anyPressed(['hit'])) {
+      if (record && hasTrackedPlayers(record)) {
+        const rec = record;
+        openPanel(() => showSummary(overlay, store, baseCfg, rec, () => toMenu()));
+      } else toMenu();
+    }
   }
 }
 

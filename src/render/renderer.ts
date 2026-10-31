@@ -43,8 +43,7 @@ export function cupAt(cfg: GameConfig, v: View, cups: Cup[], sx: number, sy: num
 }
 
 export function drawField(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, cups: Cup[]): void {
-  ctx.fillStyle = theme.colors.floor;
-  ctx.fillRect(0, 0, v.width, v.height);
+  drawBasement(ctx, cfg, theme, v);
   drawTable(ctx, cfg, theme, v);
   drawSki(ctx, cfg, theme, v);
   for (const cup of cups) drawCup(ctx, cfg, theme, v, cup);
@@ -93,6 +92,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View,
 
   drawBall(ctx, cfg, theme, v, game);
   for (const team of ['A', 'B'] as TeamId[]) drawTimingRing(ctx, theme, v, game, team);
+  drawCelebrations(ctx, theme, v, game);
 
   // Timing feedback near the hitter.
   const fb = game.feedback;
@@ -232,11 +232,11 @@ function drawPlayer(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: 
     ctx.save();
     ctx.shadowColor = theme.colors.masterGlow;
     ctx.shadowBlur = 8;
-    ctx.fillStyle = theme.colors.master;
+    ctx.fillStyle = who.nameColor ?? theme.colors.master;
     ctx.fillText(label, sx, labelY);
     ctx.restore();
   } else {
-    ctx.fillStyle = theme.colors.textDim;
+    ctx.fillStyle = who.nameColor ?? theme.colors.textDim;
     ctx.fillText(label, sx, labelY);
   }
   // The style this player would hit with right now.
@@ -320,4 +320,82 @@ function drawTimingRing(ctx: CanvasRenderingContext2D, theme: Theme, v: View, ga
   ctx.arc(sx, sy, base, 0, Math.PI * 2);
   ctx.stroke();
   ctx.globalAlpha = 1;
+}
+
+/** Cosmetic sink celebrations: a burst of particles from the sunk cup. */
+function drawCelebrations(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game): void {
+  for (const k of game.celebrations) {
+    const t = game.time - k.time;
+    if (t < 0 || t > 1.6) continue;
+    const colors = theme.celebrations[k.palette];
+    if (!colors) continue;
+    const [sx, sy] = toScreen(v, k.x, k.y);
+    let seed = k.seed;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    ctx.globalAlpha = Math.max(0, 1 - t / 1.6);
+    for (let i = 0; i < 36; i++) {
+      const ang = rnd() * Math.PI * 2;
+      const speed = 60 + rnd() * 140;
+      const px = sx + Math.cos(ang) * speed * t;
+      const py = sy + Math.sin(ang) * speed * t + 60 * t * t;
+      ctx.fillStyle = colors[i % colors.length];
+      const size = 3 + (i % 3);
+      ctx.fillRect(Math.round(px), Math.round(py), size, size);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+const basementCache = new Map<string, HTMLCanvasElement>();
+
+/** Placeholder pixel-art basement: concrete floor with seams and stains, brick walls, light pool over the table. */
+function drawBasement(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View): void {
+  const key = `${v.width}x${v.height}`;
+  let bg = basementCache.get(key);
+  if (!bg) {
+    bg = document.createElement('canvas');
+    bg.width = v.width;
+    bg.height = v.height;
+    const b = bg.getContext('2d')!;
+    const B = theme.basement;
+    b.fillStyle = B.floor;
+    b.fillRect(0, 0, v.width, v.height);
+    // Poured-concrete slab seams.
+    b.fillStyle = B.floorSeam;
+    for (let x = 0; x < v.width; x += 96) b.fillRect(x, 0, 2, v.height);
+    for (let y = 0; y < v.height; y += 96) b.fillRect(0, y, v.width, 2);
+    // Stains (deterministic).
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    b.fillStyle = B.stain;
+    for (let i = 0; i < 26; i++) {
+      const x = rnd() * v.width;
+      const y = rnd() * v.height;
+      const r = 6 + rnd() * 26;
+      for (let k = 0; k < 5; k++) b.fillRect(Math.round(x + (rnd() - 0.5) * r), Math.round(y + (rnd() - 0.5) * r * 0.6), Math.round(r * (0.4 + rnd() * 0.6)), Math.round(4 + rnd() * 6));
+    }
+    // Brick walls along the top and bottom edges.
+    const brickW = 24;
+    const brickH = 10;
+    const wall = (y0: number) => {
+      b.fillStyle = B.mortar;
+      b.fillRect(0, y0, v.width, B.wallDepth);
+      for (let row = 0; row * brickH < B.wallDepth; row++)
+        for (let x = (row % 2) * -(brickW / 2); x < v.width; x += brickW) {
+          b.fillStyle = (row + Math.floor(x / brickW)) % 3 === 0 ? B.brickDark : B.brick;
+          b.fillRect(Math.round(x) + 1, y0 + row * brickH + 1, brickW - 2, brickH - 2);
+        }
+    };
+    wall(0);
+    wall(v.height - B.wallDepth);
+    basementCache.set(key, bg);
+  }
+  ctx.drawImage(bg, 0, 0);
+  // The hanging light over the table.
+  const [cx, cy] = toScreen(v, cfg.table.length / 2, cfg.table.width / 2);
+  const g = ctx.createRadialGradient(cx, cy, 20, cx, cy, Math.max(v.width, v.height) * 0.6);
+  g.addColorStop(0, theme.basement.lightGlow);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, v.width, v.height);
 }

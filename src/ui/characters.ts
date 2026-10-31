@@ -4,8 +4,22 @@ import { MAX_HIT_STYLES, MIN_HIT_STYLES, NAME_MAX, newCharacter, validateCharact
 import { characterSprite, COLOR_PARTS, composeSprite, PART_LABELS, PART_OPTIONS, SPRITE_H, SPRITE_W, spriteFromRgba, type PartKey } from '../core/sprite';
 import { STAT_INFO, STAT_KEYS, STAT_MAX, STAT_MIN, type Stats } from '../core/stats';
 import { getStyle, stylesOfKind } from '../core/styles';
+import type { GameConfig } from '../config';
 import type { AppStore } from '../data/storage';
+import { BADGE_LABELS, isUnlocked, REWARDS, type RewardKind } from '../progress/rewards';
+import { theme } from '../theme';
+import { careerTable, levelBar, progressFrom, type Progress } from './careerView';
 import { h, nameTag, spriteImage, type Overlay } from './dom';
+
+/** A character's equipped name color as a CSS color, if any. */
+export function nameColorOf(c: Character): string | null {
+  return c.cosmetics.nameColor ? (theme.nameColors[c.cosmetics.nameColor] ?? null) : null;
+}
+
+export function badgeChips(c: Character): HTMLElement | null {
+  if (!c.cosmetics.badges.length) return null;
+  return h('div', { class: 'chips' }, ...c.cosmetics.badges.map((b) => h('span', { class: 'badge reward' }, BADGE_LABELS[b] ?? b)));
+}
 
 /** Stat bars, for select and profile screens only (never in the HUD). */
 export function statBars(stats: Stats): HTMLElement {
@@ -28,11 +42,16 @@ export function statBars(stats: Stats): HTMLElement {
   );
 }
 
-export function characterCard(c: Character, extra: HTMLElement[] = [], attrs: Record<string, string | EventListener> = {}): HTMLElement {
+export function characterCard(c: Character, level: number, extra: HTMLElement[] = [], attrs: Record<string, string | EventListener> = {}): HTMLElement {
   return h(
     'div',
     { class: 'box card', ...attrs },
-    h('div', { class: 'row' }, spriteImage(characterSprite(c.sprite), 3), h('div', {}, nameTag(c.name, c.master, c.cosmetics.nameColor), h('p', { class: 'dim' }, `Level ${c.level}`))),
+    h(
+      'div',
+      { class: 'row' },
+      spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 3),
+      h('div', { style: 'display:flex;flex-direction:column;gap:2px' }, nameTag(c.name, c.master, nameColorOf(c)), h('p', { class: 'dim' }, `Level ${level}`), badgeChips(c)),
+    ),
     statBars(c.stats),
     h('p', { class: 'dim', style: 'font-size:12px' }, `Hits: ${c.hitStyles.map((id) => getStyle(id).name).join(', ')}`),
     ...extra,
@@ -43,11 +62,17 @@ export class CharactersScreen {
   constructor(
     private overlay: Overlay,
     private store: AppStore,
+    private cfg: GameConfig,
     private onClose: () => void,
   ) {}
 
+  private progress(): Progress {
+    return progressFrom(this.cfg, this.store.matches.list());
+  }
+
   showList(note = ''): void {
     const chars = this.store.characters.list();
+    const prog = this.progress();
     const panel = h(
       'div',
       { class: 'panel' },
@@ -60,10 +85,94 @@ export class CharactersScreen {
       h('p', { class: 'dim' }, 'Your friends, recreated. A match drafts 4 different characters from this pool. Stats show here and in the draft, never during play.'),
       note ? h('p', { class: 'ok' }, note) : null,
       chars.length
-        ? h('div', { class: 'grid' }, ...chars.map((c) => characterCard(c, [h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit')])))
+        ? h(
+            'div',
+            { class: 'grid' },
+            ...chars.map((c) =>
+              characterCard(c, prog.characterLevel(c.id).level, [
+                h('div', { class: 'row' }, h('button', { onclick: () => this.showProfile(c.id) }, 'Profile'), h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit')),
+              ]),
+            ),
+          )
         : h('div', { class: 'box' }, h('p', {}, 'No characters yet. Create your first one with “New character”.')),
     );
     this.overlay.show(panel);
+  }
+
+  /** Career stats, level, rewards, and choosing which unlocked cosmetics to wear. */
+  showProfile(id: string, note = ''): void {
+    const c = this.store.characters.get(id);
+    if (!c) return this.showList();
+    const prog = this.progress();
+    const lvl = prog.characterLevel(id);
+    const career = prog.characterCareer(id);
+    const save = (msg: string) => {
+      c.updatedAt = new Date().toISOString();
+      this.store.characters.save(c);
+      this.showProfile(id, msg);
+    };
+    const kinds: [RewardKind, string][] = [
+      ['nameColor', 'Name color'],
+      ['spriteItem', 'Sprite item'],
+      ['celebration', 'Sink celebration'],
+      ['badge', 'Badges'],
+    ];
+    const equip = h(
+      'div',
+      { class: 'grid' },
+      ...kinds.map(([kind, title]) => {
+        const rewards = REWARDS.filter((r) => r.kind === kind);
+        const current = kind === 'badge' ? null : (c.cosmetics[kind] ?? null);
+        const buttons = rewards.map((r) => {
+          const open = isUnlocked(lvl.level, kind, r.id);
+          const on = kind === 'badge' ? c.cosmetics.badges.includes(r.id) : current === r.id;
+          const b = h(
+            'button',
+            {
+              class: on ? 'on' : '',
+              disabled: !open,
+              title: open ? r.label : `Unlocks at level ${r.level}`,
+              onclick: () => {
+                if (kind === 'badge') {
+                  c.cosmetics.badges = on ? c.cosmetics.badges.filter((x) => x !== r.id) : [...c.cosmetics.badges, r.id];
+                } else c.cosmetics[kind] = on ? null : r.id;
+                save(on ? `Took off ${r.label}.` : `Wearing ${r.label}.`);
+              },
+            },
+            open ? r.label.replace(/ (name|badge|sink celebration)$/, '') : `Level ${r.level}`,
+          );
+          if (kind === 'nameColor' && open) b.style.color = theme.nameColors[r.id];
+          return b;
+        });
+        return h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', {}, title), h('div', { class: 'chips' }, ...buttons));
+      }),
+    );
+    this.overlay.show(
+      h(
+        'div',
+        { class: 'panel' },
+        h('div', { class: 'row spread' }, h('h1', {}, `${c.name}`), h('div', { class: 'row' }, h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit'), h('button', { onclick: () => this.showList() }, 'All characters'))),
+        h(
+          'div',
+          { class: 'box row', style: 'align-items:flex-start;gap:20px' },
+          spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 5),
+          h(
+            'div',
+            { style: 'display:flex;flex-direction:column;gap:10px;flex:1;min-width:220px' },
+            nameTag(c.name, c.master, nameColorOf(c)),
+            badgeChips(c),
+            levelBar(lvl),
+            h('p', { class: 'dim' }, 'Levels come from playing (games, wins, sinks, saves, aces, perfect hits) and unlock cosmetics only. Stats never change.'),
+            statBars(c.stats),
+          ),
+        ),
+        note ? h('p', { class: 'ok' }, note) : null,
+        h('h2', {}, 'Career'),
+        careerTable(career),
+        h('h2', {}, 'Rewards'),
+        equip,
+      ),
+    );
   }
 
   edit(c: Character): void {

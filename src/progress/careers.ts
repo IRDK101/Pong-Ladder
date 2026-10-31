@@ -16,7 +16,7 @@ export const FAULT_LABELS: Record<FaultKind, string> = {
   doubleBounce: 'Double bounces',
   missedReturn: 'Missed returns',
   hitOut: 'Hits out',
-  volley: 'Volleys (hit before the bounce)',
+  volley: 'Hit before the bounce',
   ownSideBounce: 'Own-side bounces',
   wrongTeammate: 'Wrong-teammate hits',
   lowHit: 'Low hits',

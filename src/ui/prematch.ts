@@ -7,7 +7,9 @@ import { characterSprite } from '../core/sprite';
 import type { TeamId } from '../core/types';
 import type { AppStore } from '../data/storage';
 import type { Participant, Roster } from '../game/game';
-import { characterCard } from './characters';
+import { progressFrom, type Progress } from './careerView';
+import { characterCard, nameColorOf } from './characters';
+import { theme } from '../theme';
 import { h, nameTag, spriteImage, type Overlay } from './dom';
 
 export const GUEST = '';
@@ -23,7 +25,9 @@ export function participantFrom(c: Character, profileId: string | null): Partici
     hitStyles: [...c.hitStyles],
     serveStyles: [...c.serveStyles],
     master: c.master,
-    sprite: characterSprite(c.sprite),
+    sprite: characterSprite(c.sprite, c.cosmetics.spriteItem ?? null),
+    nameColor: nameColorOf(c),
+    celebration: c.cosmetics.celebration && theme.celebrations[c.cosmetics.celebration] ? c.cosmetics.celebration : null,
     characterId: c.id,
     profileId,
   };
@@ -49,6 +53,7 @@ export class PrematchFlow {
   private lineup: Record<TeamId, [string, string]> | null = null;
   private chars = new Map<string, Character>();
   private error = '';
+  private progress: Progress | null = null;
 
   constructor(
     private overlay: Overlay,
@@ -61,6 +66,7 @@ export class PrematchFlow {
   begin(): void {
     const usable = this.store.characters.list().filter((c) => validateCharacter(c).length === 0);
     this.chars = new Map(usable.map((c) => [c.id, c]));
+    this.progress = progressFrom(this.cfg, this.store.matches.list());
     if (usable.length < 4) return this.notEnough(usable.length);
     this.showProfiles();
   }
@@ -143,7 +149,7 @@ export class PrematchFlow {
       const attrs = free.has(c.id)
         ? { class: 'box card pick', tabindex: '0', role: 'button', 'aria-label': `Pick ${c.name}`, onclick: () => this.choose(team, c.id), onkeydown: (e: Event) => (e as KeyboardEvent).key === 'Enter' && this.choose(team, c.id) }
         : { class: 'box card taken' };
-      return characterCard(c, extra, attrs as Record<string, string | EventListener>);
+      return characterCard(c, this.progress!.characterLevel(c.id).level, extra, attrs as Record<string, string | EventListener>);
     });
     const coin = d.picks.length === 0 ? `Coin flip: Team ${this.first} picks first. ` : '';
     const order = d.order.map((t, i) => {
@@ -180,7 +186,8 @@ export class PrematchFlow {
     const lu = this.lineup!;
     const side = (t: TeamId) => {
       const [l, r] = lu[t].map((id) => this.chars.get(id)!);
-      const spot = (label: string, c: Character) => h('div', { class: 'row' }, spriteImage(characterSprite(c.sprite), 3), h('div', {}, h('p', { class: 'dim' }, label), nameTag(c.name, c.master, c.cosmetics.nameColor)));
+      const spot = (label: string, c: Character) =>
+        h('div', { class: 'row' }, spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 3), h('div', {}, h('p', { class: 'dim' }, label), nameTag(c.name, c.master, nameColorOf(c))));
       return h(
         'div',
         { class: 'box card' },

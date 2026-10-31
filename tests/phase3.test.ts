@@ -7,6 +7,7 @@ import { levelFor, xpFor, xpToReach } from '../src/progress/levels';
 import { isUnlocked, newRewards, REWARDS, unlockedAt } from '../src/progress/rewards';
 import { characterSprite, composeSprite, SPRITE_ITEMS, withItem } from '../src/core/sprite';
 import { DEFAULT_PARTS } from '../src/core/character';
+import { summarizeMatch } from '../src/progress/summary';
 import { AL, AR, BL, BR, LOW, Script } from './helpers';
 
 const cfg = makeConfig();
@@ -218,5 +219,25 @@ describe('achievements framework', () => {
     const after = { career: emptyCareer(), events: [{ matchId: 'm', game: 0, kind: 'saveMade' as const, detail: { cupsLeft: 1 } }] };
     expect(newlyEarned(before, after, 'profile').map((a) => a.id)).toEqual(['lastCupStand']);
     expect(ACHIEVEMENTS.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('post-match summary', () => {
+  it('reports XP, level-ups with rewards, Elo changes and new achievements for this match only', () => {
+    const earlier = recordFor(scriptedGame(), 'm0', 'B', undefined, '2026-10-29T12:00:00Z');
+    const now = recordFor(scriptedGame(), 'm1', 'A');
+    const sum = summarizeMatch(cfg, [earlier, now], now);
+    const ar = sum.characters.find((c) => c.characterId === 'cAR')!;
+    const w = cfg.progression.xp;
+    expect(ar.xpGained).toBe(w.gamePlayed + w.gameWon + w.matchWon + 7 * w.cupSunk);
+    expect(ar.levelAfter).toBeGreaterThanOrEqual(ar.levelBefore);
+    expect(ar.rewards).toEqual(newRewards(ar.levelBefore, ar.levelAfter));
+    expect(ar.achievements.map((a) => a.id)).toEqual([]); // hat trick already earned in m0's game
+    const pA = sum.profiles.find((p) => p.profileId === 'pA')!;
+    expect(pA.ratingBefore).toBe(984); // m0 was a loss
+    expect(pA.ratingAfter).toBeGreaterThan(pA.ratingBefore);
+    const first = summarizeMatch(cfg, [now], now);
+    expect(first.characters.find((c) => c.characterId === 'cAR')!.achievements.map((a) => a.id)).toContain('hatTrick');
+    expect(first.characters.find((c) => c.characterId === 'cAR')!.levelAfter).toBe(levelFor(cfg, xpFor(cfg, deriveCareers([now]).characters.get('cAR')!)).level);
   });
 });
