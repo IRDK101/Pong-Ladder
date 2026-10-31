@@ -4,7 +4,11 @@ import { makeConfig, type GameConfig } from './config';
 import { theme } from './theme';
 import { buildFormation } from './core/formation';
 import type { TeamId } from './core/types';
-import { Game, genericRoster, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
+import { Game, genericRoster, idleInput, POSITIONS, TOP_DOWN_FRAME, type Roster, type TeamInput } from './game/game';
+import { CpuController } from './game/ai';
+import { coopInput } from './game/controllers';
+import { cameraFrame, teamCamera } from './render/camera';
+import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { Keyboard } from './input/keyboard';
 import { cupAt, drawField, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
@@ -62,6 +66,7 @@ const overlay = new Overlay();
 type Screen = 'menu' | 'help' | 'panel' | 'playing' | 'gameEnd' | 'matchEnd';
 let screen: Screen = 'menu';
 let game: Game | null = null;
+let cpu: CpuController | null = null;
 let record: MatchRecord | null = null;
 let menuNote = '';
 let gameOverAt = 0;
@@ -92,6 +97,12 @@ function openPanel(show: () => void): void {
 function startMatch(cfg: GameConfig, roster: Roster): void {
   overlay.hide();
   game = new Game(cfg, Math.random, roster);
+  // Aim keys follow the screen each human is looking at.
+  const frameFor = (team: 'A' | 'B') => cameraFrame(teamCamera(cfg, team, 16, 9));
+  if (cfg.view === 'topDown') game.controlFrames = { A: TOP_DOWN_FRAME, B: TOP_DOWN_FRAME };
+  else if (cfg.view === 'split' && cfg.players.mode === 'versus') game.controlFrames = { A: frameFor('A'), B: frameFor('B') };
+  else game.controlFrames = { A: frameFor('A'), B: frameFor('A') };
+  cpu = cfg.players.mode === 'coop' ? new CpuController('B', cfg.players.cpu, Math.random) : null;
   record = newMatchRecord(cfg);
   for (const k of POSITIONS) record.roster[k] = { characterId: roster[k].characterId, profileId: roster[k].profileId };
   game.messages.push({ text: `${game.serverName()} serves first (random draw)`, time: 0 });
@@ -104,6 +115,16 @@ function recordGame(): void {
   if (!game || !record) return;
   record.games.push({ winner: game.engine.peek().winner, log: game.engine.log });
   store.matches.save(record);
+}
+
+/** Keyboard (and CPU) input for the current mode. */
+function liveInputs(g: Game): Record<TeamId, TeamInput> {
+  if (g.cfg.players.mode === 'coop') return { A: coopInput(g, 'A', keyboard.team('A'), keyboard.team('B')), B: cpu ? cpu.input(g) : idleInput() };
+  return { A: keyboard.team('A'), B: keyboard.team('B') };
+}
+
+function layoutFor(cfg: GameConfig): 'behindA' | 'split' {
+  return cfg.view === 'split' && cfg.players.mode === 'versus' ? 'split' : 'behindA';
 }
 
 function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
@@ -175,7 +196,7 @@ function frame(dt: number): void {
 
   const g = game!;
   if (screen === 'playing') {
-    g.update(dt, debugInputs ? debugInputs(g) : { A: keyboard.team('A'), B: keyboard.team('B') });
+    g.update(dt, debugInputs ? debugInputs(g) : liveInputs(g));
     if (g.engine.peek().phase === 'gameOver') {
       recordGame();
       gameOverAt = performance.now();
@@ -185,7 +206,8 @@ function frame(dt: number): void {
     g.update(dt, { A: idleInput(), B: idleInput() });
   }
 
-  renderGame(ctx, theme, view, g);
+  if (g.cfg.view === 'topDown') renderGame(ctx, theme, view, g);
+  else renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
   renderHud(ctx, theme, view, g);
 
   // Short pause so the final call is readable before the overlay accepts input.
@@ -239,7 +261,7 @@ canvas.addEventListener('click', (e) => {
       }
     });
   } else if (screen === 'playing' && game) {
-    const cup = cupAt(game.cfg, view, game.penaltyCups(), sx, sy);
+    const cup = game.cfg.view === 'topDown' ? cupAt(game.cfg, view, game.penaltyCups(), sx, sy) : pickCup3D(game, game.penaltyCups(), sx, sy);
     if (cup) game.chooseCup(cup.team, cup.id);
   }
 });

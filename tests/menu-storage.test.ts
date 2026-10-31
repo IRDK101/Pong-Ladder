@@ -11,8 +11,23 @@ describe('pre-game menu', () => {
     expect(cfg).toMatchObject({ formation: 'tree', matchFormat: 'single', penaltyCupSelection: 'choose', skiCollision: false });
   });
 
+  it('defaults to head-to-head, medium CPU, behind-Team-A view', () => {
+    const cfg = new Menu().config();
+    expect(cfg.players).toEqual({ mode: 'versus', cpu: 'medium' });
+    expect(cfg.view).toBe('behindA');
+    const m = new Menu();
+    m.move(0, 1); // same team vs CPU
+    m.move(1, 0);
+    m.move(0, 1); // hard
+    m.move(1, 0);
+    m.move(0, 1); // split
+    m.move(0, 1); // top-down
+    expect(m.config()).toMatchObject({ players: { mode: 'coop', cpu: 'hard' }, view: 'topDown' });
+  });
+
   it('changes options with left/right and wraps', () => {
     const m = new Menu();
+    m.move(3, 0); // to Formation, after Players / CPU level / View
     m.move(0, 1); // formation → shrub
     m.move(1, 0);
     m.move(0, -1); // match → best of 3 (wraps backwards)
@@ -30,7 +45,7 @@ describe('pre-game menu', () => {
   it('game speed: normal is the default, quick is faster', () => {
     const m = new Menu();
     expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
-    m.move(2, 0);
+    m.move(5, 0);
     m.move(0, 1);
     expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
   });
@@ -38,7 +53,7 @@ describe('pre-game menu', () => {
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
     const actions: string[] = [];
-    m.move(5, 0); // first action row, after the 5 option rows
+    m.move(8, 0); // first action row, after the 8 option rows
     for (let i = 0; i < 6; i++) {
       actions.push(m.activate()!);
       m.move(1, 0);

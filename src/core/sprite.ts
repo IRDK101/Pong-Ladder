@@ -59,7 +59,7 @@ function shade(hex: string, f: number): string {
   return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
 }
 
-export function composeSprite(parts: SpriteParts): Sprite {
+export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'front'): Sprite {
   const c = new Canvas();
   const skin = pick(PART_OPTIONS.skin, parts.skin);
   const hair = pick(PART_OPTIONS.hairColor, parts.hairColor);
@@ -144,8 +144,25 @@ export function composeSprite(parts: SpriteParts): Sprite {
       break;
   }
 
+  // Seen from behind: the back of the head instead of a face; only the headband and chain show.
+  if (facing === 'back') {
+    const back = hairStyle === 'Bald' ? skin : hairStyle === 'Buzz' ? shade(hair, 1.1) : hair;
+    c.rect(5, 2, 10, 8, back);
+    if (hairStyle === 'Mohawk') {
+      c.rect(5, 2, 10, 8, skin);
+      c.rect(7, 0, 8, 8, hair);
+    }
+    if (hairStyle === 'Cap') {
+      c.rect(5, 4, 10, 8, hair);
+      c.rect(5, 1, 10, 3, shirt);
+    }
+    c.rect(7, 9, 8, 9, shade(skin, 0.85));
+    if (acc === 'Headband') c.rect(5, 3, 10, 3, '#e23b3b');
+    if (acc === 'Chain') c.rect(tx0 + 1, 10, tx1 - 1, 10, '#e8c547');
+  }
+
   // Accessories.
-  switch (acc) {
+  switch (facing === 'back' ? 'None' : acc) {
     case 'Glasses':
       c.rect(5, 5, 10, 5, OUTLINE);
       c.set(6, 5, '#9fd3ff');
@@ -223,6 +240,18 @@ export function withItem(base: Sprite, itemId: string | null | undefined): Sprit
 /** The sprite to show for a character: hand-drawn/uploaded pixels if present, else the parts; plus any equipped item. */
 export function characterSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }, itemId: string | null = null): Sprite {
   return withItem(sprite.pixels ?? composeSprite(sprite.parts), itemId);
+}
+
+/**
+ * The character seen from behind. Part-built sprites get a real back view;
+ * a hand-drawn or uploaded sprite is mirrored with its face covered in its own darkest color.
+ */
+export function characterBackSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }, itemId: string | null = null): Sprite {
+  if (!sprite.pixels) return withItem(composeSprite(sprite.parts, 'back'), itemId === 'goldChain' ? null : itemId);
+  const p = sprite.pixels;
+  const out = p.pixels.slice();
+  for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) out[y * p.w + x] = p.pixels[y * p.w + (p.w - 1 - x)];
+  return withItem({ ...p, pixels: out }, itemId === 'goldChain' ? null : itemId);
 }
 
 /** Nearest-color quantize RGBA image data (already scaled to the sprite size) into sprite pixels. */

@@ -283,3 +283,32 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
 - **Achievements:** a framework only, as the spec asks. An achievement is a rule over career stats plus the attributed event stream. It ships with the spec's two examples ("sink 3 in a row" and "save your last cup") and a `newlyEarned` check. The post-match summary already shows newly earned ones, which is a minimal unlock notification. The full set and the achievements screen come later.
 - **Post-match summary:** shows XP gained, level-ups, rewards unlocked, Elo changes and new achievements for this match only (progress with the match compared to progress without it).
 - **Theme:** a placeholder basement (concrete slab floor with seams and stains, brick walls, a pool of light over the table) drawn from `theme.basement`. It's meant to be replaced once the Zeta Psi reference photos arrive.
+
+## Visual overhaul and play modes
+
+- **3D-looking view (Canvas 2D, no engine):** the game's 3D coordinates are projected through a perspective camera (`src/render/camera.ts`) onto a low-resolution buffer (`camera.pixelSize` = 3 screen pixels per rendered pixel). The buffer is scaled up with nearest-neighbour sampling, so everything stays pixel art.
+  - The room, table, ski and cups are flat-shaded projected polygons.
+  - People are pixel sprites standing up as billboards.
+  - Names, timing feedback and the HUD are drawn crisp, at full resolution.
+- **Camera:** behind and above the team's shoulders, placed by `config.camera`. Your own team is drawn see-through so it never hides the table.
+  - People are drawn a little shorter than life (1.45 m) so the table reads.
+  - Players are drawn standing off their table corners. This is drawing only; play still uses the same spots.
+  - Part-built characters have a back view; hand-drawn or uploaded sprites are mirrored.
+- **Views (menu → View):**
+  - Behind Team A is the default.
+  - Split screen gives each team its own camera, in head-to-head only.
+  - Classic top-down is the original view.
+  - Aim keys follow the screen each human is watching. Behind your team, up/down moves the shot deeper/shorter and left/right moves it across the table. On the far side of a shared screen, the keys move the crosshair the way it looks on screen.
+- **Play modes (menu → Players):**
+  - **Head-to-head:** one human per team.
+  - **Same team vs CPU:** both humans on Team A. WASD + Space plays the left teammate; the arrows + Enter play the right one. A press out of turn is ignored, either human can hit a save, and only the server's human serves.
+  - In the draft, the CPU picks for itself: Hard takes the best stat line, Medium one of the better half, Easy anyone. The two humans can have separate profiles. Matches against the CPU are not Elo-rated.
+- **CPU opponent:** `src/game/ai.ts`, Easy / Medium / Hard. It drives the game through the same `TeamInput` a keyboard produces:
+  - It tosses and serves, and times swings around the apex with a difficulty-based spread (plus an occasional whiff).
+  - It slides its crosshair toward a live opponent cup, deeper on harder levels, and mixes in its character's other styles.
+  - All rules, stats and timing windows apply to it unchanged.
+- **Room:** a generic frat basement, all colors in `theme.room`.
+  - Wood-panel walls and a low ceiling with joists, a pipe run, and string lights.
+  - A concrete floor with seams and stains.
+  - At each end wall: a beat-up couch, the house letters (`theme.houseLetters`, default ΖΨ), a Big Green flag and a paddle rack.
+  - Posters on the side walls, and a pool of light over the table.

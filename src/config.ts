@@ -1,6 +1,7 @@
 // All house-rule values and tuning live here. See DESIGN.md "Config".
 
 import type { FirstPick } from './core/draft';
+import type { Difficulty } from './game/ai';
 import type { StatEffects } from './core/stats';
 import type { Formation } from './core/types';
 
@@ -29,6 +30,23 @@ export interface GameConfig {
   skiCollision: boolean;
   /** Who picks first in the draft. */
   draftFirstPick: FirstPick;
+  /** Head-to-head (one human per team) or both humans on Team A against the CPU. */
+  players: { mode: 'versus' | 'coop'; cpu: Difficulty };
+  /** Camera: behind Team A, split screen (each team's own view), or the classic top-down table. */
+  view: 'behindA' | 'split' | 'topDown';
+  /** Behind-the-shoulders camera placement (meters, relative to the table). */
+  camera: {
+    /** Distance behind the team's end of the table. */
+    behind: number;
+    /** Height above the table surface. */
+    height: number;
+    /** Where it looks: fraction of the table length from its own end, and height. */
+    lookAt: number;
+    lookHeight: number;
+    fovY: number;
+    /** Screen pixels per rendered pixel (bigger = chunkier pixel art). */
+    pixelSize: number;
+  };
   controls: { A: TeamControls; B: TeamControls };
   table: {
     /** Length along the x axis, Team A end at x = 0 (meters). */
@@ -130,6 +148,9 @@ export const defaultConfig: GameConfig = {
   penaltyCupSelection: 'choose',
   skiCollision: false,
   draftFirstPick: 'coinFlip',
+  players: { mode: 'versus', cpu: 'medium' },
+  view: 'behindA',
+  camera: { behind: 1.9, height: 1.85, lookAt: 0.55, lookHeight: -0.05, fovY: 46, pixelSize: 3 },
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },

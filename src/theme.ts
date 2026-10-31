@@ -24,6 +24,8 @@ export const theme = {
     activeRing: '#ffe066',
     penaltyCursor: '#ffe066',
     hudPanel: 'rgba(20, 14, 10, 0.85)',
+    /** Lighter HUD bars over the 3D views, so the room shows through. */
+    hudPanel3d: 'rgba(12, 8, 6, 0.5)',
     good: '#8fe388',
     bad: '#ff7b6b',
     overlay: 'rgba(10, 7, 5, 0.78)',
@@ -46,6 +48,42 @@ export const theme = {
     lightGlow: 'rgba(255, 214, 150, 0.16)',
     wallDepth: 26,
   },
+  /**
+   * The 3D basement room (a generic frat basement: wood paneling, low
+   * ceiling with joists and pipes, string lights, a beat-up couch, Greek
+   * letters on the wall). Replace with the real room's look when known.
+   */
+  room: {
+    floor: '#463c34',
+    floorSeam: '#3a312a',
+    stain: 'rgba(18, 10, 6, 0.32)',
+    wall: '#5e3d26',
+    wallDark: '#4c311f',
+    baseboard: '#2b1a10',
+    ceiling: '#2a231e',
+    joist: '#3b2d22',
+    pipe: '#7c766c',
+    stringLights: ['#ff5a4f', '#ffd34f', '#5fd36b', '#4fb3ff', '#ff7be0'],
+    couch: '#6b2e2e',
+    couchDark: '#4b1f1f',
+    flag: '#00693e',
+    flagMark: '#f2f2f2',
+    letters: '#e8c547',
+    letterShadow: '#3a2a12',
+    posters: ['#2c62d6', '#d6342c', '#e8a33d', '#6b3fa0'],
+    posterInk: '#f2e8d5',
+    paddle: '#b5332e',
+    paddleHandle: '#d9b27c',
+    lampShade: '#1f3a2a',
+    lampGlow: 'rgba(255, 220, 160, 0.30)',
+    vignette: 'rgba(0, 0, 0, 0.55)',
+    tableLeg: '#2b1d12',
+    tableSide: '#4a3220',
+    cupInside: '#8c2420',
+    divider: '#0d0a08',
+  },
+  /** The Greek letters painted on the basement wall. */
+  houseLetters: 'ΖΨ',
   /** Unlockable name colors (cosmetic rewards). */
   nameColors: {
     dartmouthGreen: '#2fb36b',

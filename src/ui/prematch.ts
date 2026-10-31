@@ -3,7 +3,7 @@
 import type { GameConfig } from '../config';
 import { validateCharacter, type Character } from '../core/character';
 import { available, isDone, newDraft, onTheClock, pick, teamPicks, firstPicker, type Draft } from '../core/draft';
-import { characterSprite } from '../core/sprite';
+import { characterBackSprite, characterSprite } from '../core/sprite';
 import type { TeamId } from '../core/types';
 import type { AppStore } from '../data/storage';
 import type { Participant, Roster } from '../game/game';
@@ -26,6 +26,7 @@ export function participantFrom(c: Character, profileId: string | null): Partici
     serveStyles: [...c.serveStyles],
     master: c.master,
     sprite: characterSprite(c.sprite, c.cosmetics.spriteItem ?? null),
+    spriteBack: characterBackSprite(c.sprite, c.cosmetics.spriteItem ?? null),
     nameColor: nameColorOf(c),
     celebration: c.cosmetics.celebration && theme.celebrations[c.cosmetics.celebration] ? c.cosmetics.celebration : null,
     characterId: c.id,
@@ -33,21 +34,41 @@ export function participantFrom(c: Character, profileId: string | null): Partici
   };
 }
 
-/** Build the roster from the draft: each team's lineup is [left, right]. */
-export function rosterFrom(chars: Map<string, Character>, lineup: Record<TeamId, [string, string]>, profiles: Record<TeamId, string>): Roster {
-  const pid = (t: TeamId) => profiles[t] || null;
-  return {
-    'A-left': participantFrom(chars.get(lineup.A[0])!, pid('A')),
-    'A-right': participantFrom(chars.get(lineup.A[1])!, pid('A')),
-    'B-left': participantFrom(chars.get(lineup.B[0])!, pid('B')),
-    'B-right': participantFrom(chars.get(lineup.B[1])!, pid('B')),
+/**
+ * Build the roster from the draft: each team's lineup is [left, right].
+ * `profiles` is one human per team, or (same-team play) one per position of Team A.
+ */
+export function rosterFrom(
+  chars: Map<string, Character>,
+  lineup: Record<TeamId, [string, string]>,
+  profiles: Record<TeamId, string> | { 'A-left': string; 'A-right': string },
+): Roster {
+  const pid = (pos: 'A-left' | 'A-right' | 'B-left' | 'B-right') => {
+    if ('A-left' in profiles) return pos.startsWith('A') ? profiles[pos as 'A-left' | 'A-right'] || null : null;
+    return profiles[pos.charAt(0) as TeamId] || null;
   };
+  return {
+    'A-left': participantFrom(chars.get(lineup.A[0])!, pid('A-left')),
+    'A-right': participantFrom(chars.get(lineup.A[1])!, pid('A-right')),
+    'B-left': participantFrom(chars.get(lineup.B[0])!, pid('B-left')),
+    'B-right': participantFrom(chars.get(lineup.B[1])!, pid('B-right')),
+  };
+}
+
+/** The CPU's draft pick: Hard takes the best stat line, Medium one of the better half, Easy any. */
+export function cpuPick(available: Character[], difficulty: GameConfig['players']['cpu'], rng: () => number): string {
+  const total = (c: Character) => Object.values(c.stats).reduce((a, b) => a + b, 0);
+  const ranked = [...available].sort((a, b) => total(b) - total(a));
+  const pool = difficulty === 'hard' ? ranked.slice(0, 1) : difficulty === 'medium' ? ranked.slice(0, Math.max(1, Math.ceil(ranked.length / 2))) : ranked;
+  return pool[Math.floor(rng() * pool.length)].id;
 }
 
 const teamClass = (t: TeamId) => (t === 'A' ? 'teamA' : 'teamB');
 
 export class PrematchFlow {
   private profiles: Record<TeamId, string> = { A: GUEST, B: GUEST };
+  /** Same-team play: the two humans on Team A. */
+  private coopProfiles = { 'A-left': GUEST, 'A-right': GUEST };
   private draft: Draft | null = null;
   private first: TeamId = 'A';
   private lineup: Record<TeamId, [string, string]> | null = null;
@@ -91,19 +112,40 @@ export class PrematchFlow {
 
   // ------------------------------------------------------- 1. profiles
 
+  private get coop(): boolean {
+    return this.cfg.players.mode === 'coop';
+  }
+
   private showProfiles(): void {
     const profiles = this.store.profiles.list();
-    const select = (team: TeamId) =>
+    const picker = (id: string, value: string, set: (v: string) => void) =>
       h(
         'select',
-        { id: `profile-${team}`, onchange: (e: Event) => (this.profiles[team] = (e.target as HTMLSelectElement).value) },
+        { id, onchange: (e: Event) => set((e.target as HTMLSelectElement).value) },
         h('option', { value: GUEST }, 'Guest'),
         ...profiles.map((p) => {
           const o = h('option', { value: p.id }, p.name);
-          if (this.profiles[team] === p.id) o.selected = true;
+          if (value === p.id) o.selected = true;
           return o;
         }),
       );
+    const select = (team: TeamId) => picker(`profile-${team}`, this.profiles[team], (v) => (this.profiles[team] = v));
+    if (this.coop) {
+      const seat = (pos: 'A-left' | 'A-right', keys: string) =>
+        h('div', { class: 'box card' }, h('h2', { class: 'teamA' }, pos === 'A-left' ? 'Left teammate' : 'Right teammate'), h('p', { class: 'dim' }, keys), picker(`profile-${pos}`, this.coopProfiles[pos], (v) => (this.coopProfiles[pos] = v)));
+      this.overlay.show(
+        h(
+          'div',
+          { class: 'panel' },
+          h('div', { class: 'row spread' }, h('h1', {}, 'Who is playing?'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
+          h('p', { class: 'dim' }, `You two are Team A against the CPU (${this.cfg.players.cpu}). Each of you plays one teammate; teammates alternate hits, and either of you can make a save.`),
+          h('div', { class: 'grid' }, seat('A-left', 'WASD to aim · Space to hit · Q / E styles'), seat('A-right', 'Arrows to aim · Enter to hit · . / / styles')),
+          this.error ? h('p', { class: 'error' }, this.error) : null,
+          h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.toDraft() }, 'Flip the coin and draft')),
+        ),
+      );
+      return;
+    }
     this.overlay.show(
       h(
         'div',
@@ -122,7 +164,12 @@ export class PrematchFlow {
   }
 
   private toDraft(): void {
-    if (this.profiles.A && this.profiles.A === this.profiles.B) {
+    const c = this.coopProfiles;
+    if (this.coop && c['A-left'] && c['A-left'] === c['A-right']) {
+      this.error = 'Both teammates picked the same player. Pick a different profile, or Guest.';
+      return this.showProfiles();
+    }
+    if (!this.coop && this.profiles.A && this.profiles.A === this.profiles.B) {
       this.error = 'Both teams picked the same player. Pick a different profile, or Guest.';
       return this.showProfiles();
     }
@@ -141,6 +188,12 @@ export class PrematchFlow {
       return this.showLineup();
     }
     const team = onTheClock(d)!;
+    if (this.coop && team === 'B') {
+      // The CPU picks for itself.
+      const id = cpuPick(available(d).map((x) => this.chars.get(x)!), this.cfg.players.cpu, this.rng);
+      this.draft = pick(d, 'B', id) as Draft;
+      return this.showDraft();
+    }
     const free = new Set(available(d));
     const pickedBy = new Map(d.picks.map((p) => [p.characterId, p.team]));
     const cards = [...this.chars.values()].map((c) => {
@@ -163,7 +216,14 @@ export class PrematchFlow {
         'div',
         { class: 'panel' },
         h('div', { class: 'row spread' }, h('h1', {}, 'Draft'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
-        h('div', { class: 'row' }, h('span', {}, coin), h('span', { class: teamClass(team), style: 'font-weight:bold' }, `Team ${team}, pick a character.`), h('span', { class: 'dim' }, 'Snake order:'), ...order),
+        h(
+          'div',
+          { class: 'row' },
+          h('span', {}, coin.replace('Team B', this.coop ? 'the CPU' : 'Team B')),
+          h('span', { class: teamClass(team), style: 'font-weight:bold' }, `Team ${team}, pick a character.`),
+          h('span', { class: 'dim' }, 'Snake order:'),
+          ...order,
+        ),
         this.error ? h('p', { class: 'error' }, this.error) : null,
         h('div', { class: 'grid' }, ...cards),
       ),
@@ -194,7 +254,7 @@ export class PrematchFlow {
         h('h2', { class: teamClass(t) }, `Team ${t}`),
         spot('Left', l),
         spot('Right', r),
-        h('button', { onclick: () => ((lu[t] = [lu[t][1], lu[t][0]]), this.showLineup()) }, 'Swap left and right'),
+        this.coop && t === 'B' ? h('p', { class: 'dim' }, `CPU (${this.cfg.players.cpu})`) : h('button', { onclick: () => ((lu[t] = [lu[t][1], lu[t][0]]), this.showLineup()) }, 'Swap left and right'),
       );
     };
     this.overlay.show(
@@ -202,9 +262,15 @@ export class PrematchFlow {
         'div',
         { class: 'panel' },
         h('div', { class: 'row spread' }, h('h1', {}, 'Lineups'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
-        h('p', { class: 'dim' }, 'Positions are fixed for the whole game. Left serves to the opponent on the right, diagonally.'),
+        h(
+          'p',
+          { class: 'dim' },
+          this.coop
+            ? 'The left character is played with WASD + Space, the right one with the arrows + Enter. Positions are fixed for the whole game.'
+            : 'Positions are fixed for the whole game. Left serves to the opponent on the right, diagonally.',
+        ),
         h('div', { class: 'grid' }, side('A'), side('B')),
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.profiles) }) }, 'Start match')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.coop ? this.coopProfiles : this.profiles) }) }, 'Start match')),
       ),
     );
   }

@@ -14,10 +14,10 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   const W = v.width;
 
   // --- Top bar ---
-  ctx.fillStyle = c.hudPanel;
+  ctx.fillStyle = game.cfg.view === 'topDown' ? c.hudPanel : c.hudPanel3d;
   ctx.fillRect(0, 0, W, theme.hudTop);
   drawTeamCups(ctx, theme, 'A', st.cups.A, 20, 'left');
-  drawTeamCups(ctx, theme, 'B', st.cups.B, W - 20, 'right');
+  drawTeamCups(ctx, theme, 'B', st.cups.B, W - 20, 'right', game.cfg.players.mode === 'coop');
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -52,7 +52,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
 
   // --- Bottom: referee messages ---
   const top = v.height - theme.hudBottom;
-  ctx.fillStyle = c.hudPanel;
+  ctx.fillStyle = game.cfg.view === 'topDown' ? c.hudPanel : c.hudPanel3d;
   ctx.fillRect(0, top, W, theme.hudBottom);
   const recent = game.messages.slice(-4);
   ctx.textAlign = 'center';
@@ -69,9 +69,10 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
   ctx.textAlign = 'left';
-  ctx.fillText('A: WASD aim · Space hit', 12, top + 14);
+  const coop = game.cfg.players.mode === 'coop';
+  ctx.fillText(coop ? 'Left teammate: WASD · Space' : 'A: WASD aim · Space hit', 12, top + 14);
   ctx.textAlign = 'right';
-  ctx.fillText('B: Arrows aim · Enter hit', W - 12, top + 14);
+  ctx.fillText(coop ? 'Right teammate: Arrows · Enter' : 'B: Arrows aim · Enter hit', W - 12, top + 14);
   if (st.phase === 'penalty') {
     ctx.textAlign = 'center';
     ctx.fillStyle = c.penaltyCursor;
@@ -85,14 +86,14 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   }
 }
 
-function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId, cups: Cup[], x: number, align: 'left' | 'right'): void {
+function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId, cups: Cup[], x: number, align: 'left' | 'right', cpuTeam = false): void {
   const c = theme.colors;
   const live = cups.filter((k) => k.state !== 'removed').length;
   ctx.textBaseline = 'middle';
   ctx.textAlign = align;
   ctx.font = theme.fonts.title;
   ctx.fillStyle = teamColor(theme, team);
-  ctx.fillText(`TEAM ${team}  ${live}`, x, 22);
+  ctx.fillText(`${cpuTeam ? 'CPU' : `TEAM ${team}`}  ${live}`, x, 22);
   // One mini cup per cup, showing its water level.
   const r = 7;
   const step = r * 2 + 4;

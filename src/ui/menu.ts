@@ -18,7 +18,17 @@ const speed = (timeScale: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
 };
 
+const players = (mode: GameConfig['players']['mode']) => (cfg: GameConfig) => {
+  cfg.players.mode = mode;
+};
+const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
+  cfg.players.cpu = d;
+};
+
 const CHOICES: Choice[] = [
+  { label: 'Players', values: [{ label: 'Head-to-head', apply: players('versus') }, { label: 'Same team vs CPU', apply: players('coop') }] },
+  { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
+  { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }, { label: 'Classic top-down', apply: set('view', 'topDown') }] },
   { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.55) }, { label: 'Quick', apply: speed(0.7) }, { label: 'Relaxed', apply: speed(0.42) }] },
@@ -75,11 +85,11 @@ export class Menu {
   }
 }
 
-const ROW_H = 33;
+const ROW_H = 29;
 
 export function menuRowRect(v: View, i: number) {
   const w = 460;
-  return { x: v.width / 2 - w / 2, y: 150 + i * ROW_H, w, h: ROW_H - 5 };
+  return { x: v.width / 2 - w / 2, y: 128 + i * ROW_H, w, h: ROW_H - 4 };
 }
 
 export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
@@ -90,10 +100,10 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, m
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
   ctx.font = 'bold 40px monospace';
-  ctx.fillText('DARTMOUTH PONG', v.width / 2, 70);
+  ctx.fillText('DARTMOUTH PONG', v.width / 2, 58);
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('Zeta Psi basement rules', v.width / 2, 108);
+  ctx.fillText('Zeta Psi basement rules', v.width / 2, 94);
 
   menu.rows().forEach((row, i) => {
     const r = menuRowRect(v, i);
@@ -144,7 +154,8 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, v: Vi
 
 const HELP: [string, string][] = [
   ['Keys', 'Team A: WASD to aim, Space to hit.   Team B: arrow keys to aim, Enter to hit.'],
-  ['Aim', 'Your crosshair shows where your shot will land. Hold an aim key to slide it; it stays where you leave it.'],
+  ['Aim', 'Your crosshair shows where your shot will land. Hold an aim key to slide it; it stays where you leave it. Keys follow your screen: in the 3D view, up/down is deeper/shorter and left/right is across the table.'],
+  ['Modes', 'Head-to-head: one of you per team (split screen gives each team its own camera). Same team: you two against the CPU; WASD plays the left teammate, the arrows the right one, and a press out of turn does nothing.'],
   ['Hit', 'After the ball bounces on your side, a ring closes in on it. Hit when the ring meets the ball and turns green. Early or late hits land wide and fly lower; below shoulder height is a low hit and loses the rally.'],
   ['Serve', 'Press hit to toss the ball, then hit again as the ring closes at the top of the toss. It must bounce once on your side, then land in the diagonal quarter. Three serves off the table cost half a cup.'],
   ['Saves', 'When a ball hits your cup, return it before it bounces twice. The ring closes faster: react quickly.'],

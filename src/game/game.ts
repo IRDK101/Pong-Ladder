@@ -7,6 +7,7 @@ import { Match } from '../core/match';
 import { BallPhysics, type PhysicsEvent, type Vec3 } from '../core/physics';
 import type { Call, RulesEvent } from '../core/rules';
 import type { Sprite } from '../core/character';
+import { composeSprite } from '../core/sprite';
 import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
 import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, getStyle, type ShotStyle } from '../core/styles';
 import { diagonalOf, laneOf, quarterOf, quarterRect } from '../core/table';
@@ -22,6 +23,8 @@ export interface Participant {
   serveStyles: string[];
   master: boolean;
   sprite: Sprite | null;
+  /** The same character seen from behind (for the behind-the-shoulders camera). */
+  spriteBack?: Sprite | null;
   /** Equipped cosmetics: a CSS name color and a celebration id (theme.celebrations). */
   nameColor: string | null;
   celebration: string | null;
@@ -34,9 +37,18 @@ export type Roster = Record<PositionKey, Participant>;
 
 export const POSITIONS: PositionKey[] = ['A-left', 'A-right', 'B-left', 'B-right'];
 
-/** Generic players for a quick match: neutral stats, the placeholder styles, named by position. */
+/** Generic players for a quick match: neutral stats, the placeholder styles, named by position, in team shirts. */
 export function genericRoster(): Roster {
-  const make = (team: TeamId, side: Side): Participant => ({
+  const make = (team: TeamId, side: Side): Participant => {
+    const i = (team === 'A' ? 0 : 2) + (side === 'left' ? 0 : 1);
+    const parts = { skin: [1, 3, 0, 4][i], hairStyle: [1, 4, 6, 2][i], hairColor: [0, 1, 3, 2][i], shirtStyle: 2, shirtColor: team === 'A' ? 3 : 6, pantsColor: 1, build: [1, 2, 0, 1][i], accessory: 0 };
+    return { ...generic(team, side), sprite: composeSprite(parts), spriteBack: composeSprite(parts, 'back') };
+  };
+  return { 'A-left': make('A', 'left'), 'A-right': make('A', 'right'), 'B-left': make('B', 'left'), 'B-right': make('B', 'right') };
+}
+
+function generic(team: TeamId, side: Side): Participant {
+  return {
     name: `${team}-${side === 'left' ? 'L' : 'R'}`,
     stats: { ...NEUTRAL_STATS },
     hitStyles: [...DEFAULT_HIT_STYLES],
@@ -47,8 +59,7 @@ export function genericRoster(): Roster {
     celebration: null,
     characterId: null,
     profileId: null,
-  });
-  return { 'A-left': make('A', 'left'), 'A-right': make('A', 'right'), 'B-left': make('B', 'left'), 'B-right': make('B', 'right') };
+  };
 }
 
 export interface TeamInput {

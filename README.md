@@ -13,6 +13,7 @@ Status: **Phases 1–3 complete.**
 - Phase 1: rules engine, physics, timing-based hitting and serving, HUD, menu, win screens, and saved match logs.
 - Phase 2: characters with stats, styles and pixel sprites, a character editor, player profiles, a snake draft, and JSON backups.
 - Phase 3: career stats derived from logs, XP and levels with cosmetic rewards, Elo with history, an achievements framework, a post-match summary, and placeholder basement art.
+- Visual overhaul: a pixel-art 3D view from behind your team's shoulders (or split screen, or the classic top-down view), a same-team mode against a CPU opponent (Easy / Medium / Hard), and a frat-basement room.
 
 Rule decisions are in [docs/phase1-test-plan.md](docs/phase1-test-plan.md) and the decisions log at the end of DESIGN.md.
 
