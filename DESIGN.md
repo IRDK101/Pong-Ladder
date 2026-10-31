@@ -292,7 +292,8 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - Names, timing feedback and the HUD are drawn crisp, at full resolution.
 - **Camera:** behind and above the team's shoulders, placed by `config.camera`. Your own team is drawn see-through so it never hides the table.
   - People are drawn a little shorter than life (1.45 m) so the table reads.
-  - Players are drawn standing off their table corners. This is drawing only; play still uses the same spots.
+  - Players are drawn standing off their table corners, a step back from the end (drawing only; play still uses the same spots).
+  - The opposing team is drawn before the table, so the table hides them from the waist down and they read as standing behind the far end.
   - Part-built characters have a back view; hand-drawn or uploaded sprites are mirrored.
 - **Views (menu → View):**
   - Behind Team A is the default.

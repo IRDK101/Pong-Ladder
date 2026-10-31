@@ -44,7 +44,7 @@ function standSpot(game: Game, p: PlayerId): Vec3 {
   const spot = game.playerSpot(p);
   const W = game.cfg.table.width;
   const outward = spot.y < W / 2 ? -0.42 : 0.42;
-  return { x: spot.x + (p.team === 'A' ? -0.15 : 0.15), y: spot.y + outward, z: -game.cfg.physics.tableHeight };
+  return { x: spot.x + (p.team === 'A' ? -0.3 : 0.3), y: spot.y + outward, z: -game.cfg.physics.tableHeight };
 }
 
 const buffers = new Map<string, HTMLCanvasElement>();
@@ -276,6 +276,16 @@ function drawScene(b: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Vi
     }
   }
 
+  // --- People standing behind the far end of the table go first, so the table hides their legs.
+  const viewDepth = (p: Vec3) => (p.x - cam.eye.x) * cam.f.x + (p.y - cam.eye.y) * cam.f.y + (p.z - cam.eye.z) * cam.f.z;
+  const farEnd = viewDepth({ x: cam.f.x >= 0 ? L : 0, y: W / 2, z: 0 });
+  const activeNow = [game.activePlayer('A'), game.activePlayer('B')];
+  const isActive = (p: PlayerId) => activeNow.some((a) => a && a.team === p.team && a.side === p.side);
+  const behindTable = PLAYERS.map((p) => ({ p, pos: standSpot(game, p) }))
+    .filter(({ pos }) => viewDepth(pos) > farEnd)
+    .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
+  for (const { p, pos } of behindTable) drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
+
   // --- Table: legs, sides, top, lines.
   const legs: [number, number][] = [
     [0.1, 0.1],
@@ -336,11 +346,10 @@ function drawScene(b: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Vi
     if (cup.state === 'removed') continue;
     items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(b, theme, cfg, cam, cup, cup === penaltyCup, game.time) });
   }
-  const active = [game.activePlayer('A'), game.activePlayer('B')];
   for (const p of PLAYERS) {
     const pos = standSpot(game, p);
-    const isActive = active.some((a) => a && a.team === p.team && a.side === p.side);
-    items.push({ depth: depthOf(pos), draw: () => drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive) });
+    if (behindTable.some((x) => x.p === p)) continue;
+    items.push({ depth: depthOf(pos), draw: () => drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p)) });
   }
   if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(b, theme, cfg, cam, ball.pos) });
   items.sort((a, c) => c.depth - a.depth);
