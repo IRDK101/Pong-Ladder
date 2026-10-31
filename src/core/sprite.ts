@@ -35,6 +35,10 @@ export const COLOR_PARTS: PartKey[] = ['skin', 'hairColor', 'shirtColor', 'pants
 
 const OUTLINE = '#1a1410';
 const SHOE = '#1b1b1b';
+const SOLE = '#d8d2c4';
+const PADDLE_RED = '#c0392b';
+const PADDLE_BLACK = '#262626';
+const PADDLE_WOOD = '#d9b27c';
 
 class Canvas {
   pixels: string[] = new Array(SPRITE_W * SPRITE_H).fill('');
@@ -78,10 +82,13 @@ export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'fr
   // Head (rows 2-8), neck (9).
   c.rect(5, 2, 10, 8, skin);
   c.rect(7, 9, 8, 9, shade(skin, 0.85));
-  // Eyes and mouth.
+  // Eyes (with a catch-light), brows and mouth.
   c.set(6, 5, OUTLINE);
   c.set(9, 5, OUTLINE);
+  c.set(6, 4, shade(hair, 0.9));
+  c.set(9, 4, shade(hair, 0.9));
   c.rect(7, 7, 8, 7, shade(skin, 0.7));
+  c.set(5, 6, shade(skin, 0.92));
 
   // Torso (10-16) and arms.
   c.rect(tx0, 10, tx1, 16, shirt);
@@ -109,6 +116,10 @@ export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'fr
   c.rect(8, 17, tx1 - 1, 21, pants);
   c.rect(tx0 + 1, 22, 7, 22, SHOE);
   c.rect(8, 22, tx1 - 1, 22, SHOE);
+  c.set(tx0 + 1, 22, SOLE);
+  c.set(tx1 - 1, 22, SOLE);
+  // Belt line.
+  c.rect(tx0, 16, tx1, 16, shade(shirt, 0.72));
   c.set(7, 19, shade(pants, 0.7));
   c.set(8, 19, shade(pants, 0.7));
 
@@ -161,6 +172,28 @@ export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'fr
     if (acc === 'Chain') c.rect(tx0 + 1, 10, tx1 - 1, 10, '#e8c547');
   }
 
+  // Hair highlight (the light comes from the upper left).
+  if (hairStyle !== 'Bald' && hairStyle !== 'Cap') {
+    for (let y = 0; y < 4; y++)
+      for (let x = 4; x < 9; x++)
+        if (c.get(x, y) === hair && (y === 0 || c.get(x, y - 1) !== hair)) {
+          c.set(x, y, shade(hair, 1.45));
+          break;
+        }
+  }
+
+  // The paddle, in the right hand: red face toward you, black rubber from behind.
+  const hand = facing === 'front' ? tx1 + 1 : tx0 - 1;
+  const step = facing === 'front' ? 1 : -1;
+  const face = facing === 'front' ? PADDLE_RED : PADDLE_BLACK;
+  for (let dx = 1; dx <= 3; dx++) {
+    const x = hand + dx * step;
+    c.rect(x, 11, x, 13, face);
+  }
+  c.set(hand + 2 * step, 10, face);
+  c.set(hand + step, 14, PADDLE_WOOD);
+  c.set(hand + step * 3, 11, shade(face, 1.35));
+
   // Accessories.
   switch (facing === 'back' ? 'None' : acc) {
     case 'Glasses':
@@ -183,23 +216,41 @@ export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'fr
       break;
   }
 
-  // Outline the silhouette so it reads on the table.
+  // Form shading: lit left edges, shadowed right edges of each shape.
+  const shaded = new Canvas();
+  shaded.pixels = c.pixels.slice();
+  for (let y = 0; y < SPRITE_H; y++)
+    for (let x = 0; x < SPRITE_W; x++) {
+      const col = c.get(x, y);
+      if (!col || col === OUTLINE) continue;
+      const right = x + 1 < SPRITE_W ? c.get(x + 1, y) : '';
+      const left = x > 0 ? c.get(x - 1, y) : '';
+      if (right !== col && right !== OUTLINE) shaded.set(x, y, shade(col, 0.8));
+      else if (left !== col && left !== OUTLINE) shaded.set(x, y, shade(col, 1.12));
+    }
+
+  // Outline the silhouette in a dark shade of whatever it borders, so it reads on the table.
   const out = new Canvas();
-  out.pixels = c.pixels.slice();
+  out.pixels = shaded.pixels.slice();
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
   for (let y = 0; y < SPRITE_H; y++)
     for (let x = 0; x < SPRITE_W; x++) {
       if (c.get(x, y)) continue;
-      const n = [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ].some(([dx, dy]) => {
+      for (const [dx, dy] of dirs) {
         const nx = x + dx;
         const ny = y + dy;
-        return nx >= 0 && nx < SPRITE_W && ny >= 0 && ny < SPRITE_H && c.get(nx, ny) !== '';
-      });
-      if (n) out.set(x, y, OUTLINE);
+        if (nx < 0 || nx >= SPRITE_W || ny < 0 || ny >= SPRITE_H) continue;
+        const n = c.get(nx, ny);
+        if (n) {
+          out.set(x, y, n === OUTLINE ? OUTLINE : shade(n, 0.32));
+          break;
+        }
+      }
     }
   return { w: SPRITE_W, h: SPRITE_H, pixels: out.pixels };
 }

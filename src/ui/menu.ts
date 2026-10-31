@@ -95,7 +95,15 @@ const ROW = 34;
 const OPTION_ROWS = CHOICES.length;
 const PLAY_ROWS = 2;
 
-/** Screen rectangle of menu row `i` (options, then Play buttons, then More). */
+/** The menu is laid out on a 1131×660 design and scaled (uniformly, centered) to the screen. */
+export const MENU_W = 1131;
+export const MENU_H = 660;
+export function menuLayout(v: View): { s: number; ox: number; oy: number } {
+  const s = Math.min(v.width / MENU_W, v.height / MENU_H);
+  return { s, ox: (v.width - MENU_W * s) / 2, oy: (v.height - MENU_H * s) / 2 };
+}
+
+/** Design-space rectangle of menu row `i` (options, then Play buttons, then More). */
 export function menuRowRect(_v: View, i: number) {
   if (i < OPTION_ROWS) return { x: SETUP_X, y: TOP + i * ROW, w: SETUP_W, h: ROW - 5 };
   if (i < OPTION_ROWS + PLAY_ROWS) return { x: ACTION_X, y: TOP + (i - OPTION_ROWS) * 58, w: ACTION_W, h: 50 };
@@ -145,15 +153,26 @@ function keyCap(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: numbe
   return w + 5;
 }
 
-export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
-  const c = theme.colors;
+export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, menu: Menu, note: string): void {
   const m = theme.menu;
   // Darken the live demo behind, more on the left where the text is.
-  const g = ctx.createLinearGradient(0, 0, v.width, 0);
+  const g = ctx.createLinearGradient(0, 0, screen.width, 0);
   g.addColorStop(0, m.shadeLeft);
   g.addColorStop(1, m.shadeRight);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, v.width, v.height);
+  ctx.fillRect(0, 0, screen.width, screen.height);
+  const L = menuLayout(screen);
+  ctx.save();
+  ctx.translate(L.ox, L.oy);
+  ctx.scale(L.s, L.s);
+  const v = { ...screen, width: MENU_W, height: MENU_H };
+  drawMenuBody(ctx, theme, v, menu, note);
+  ctx.restore();
+}
+
+function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
+  const c = theme.colors;
+  const m = theme.menu;
 
   // Logo and subtitle.
   ctx.imageSmoothingEnabled = false;
@@ -287,11 +306,21 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
   return lines;
 }
 
-export function drawHelp(ctx: CanvasRenderingContext2D, theme: Theme, v: View): void {
+export function drawHelp(ctx: CanvasRenderingContext2D, theme: Theme, screen: View): void {
   const c = theme.colors;
   ctx.fillStyle = c.overlay;
-  ctx.fillRect(0, 0, v.width, v.height);
-  ctx.fillRect(0, 0, v.width, v.height);
+  ctx.fillRect(0, 0, screen.width, screen.height);
+  ctx.fillRect(0, 0, screen.width, screen.height);
+  const L = menuLayout(screen);
+  ctx.save();
+  ctx.translate(L.ox, L.oy);
+  ctx.scale(L.s, L.s);
+  drawHelpBody(ctx, theme, { ...screen, width: MENU_W, height: MENU_H });
+  ctx.restore();
+}
+
+function drawHelpBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View): void {
+  const c = theme.colors;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
   ctx.fillStyle = c.text;

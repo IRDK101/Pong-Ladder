@@ -11,7 +11,7 @@ import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { Keyboard } from './input/keyboard';
 import { cupAt, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
-import { Menu, drawEndScreen, drawHelp, drawMenu, menuRowRect, type MenuAction } from './ui/menu';
+import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, menuRowRect, type MenuAction } from './ui/menu';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
 import { injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
@@ -23,9 +23,22 @@ import { hasTrackedPlayers, showSummary } from './ui/summary';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const baseCfg = makeConfig();
-const view = makeView(baseCfg, theme);
-canvas.width = view.width;
-canvas.height = view.height;
+// The game fills the window. Drawing happens in CSS pixels; the canvas backing
+// store is scaled by the device pixel ratio so text stays sharp.
+let view = makeView(baseCfg, theme, window.innerWidth, window.innerHeight);
+let dpr = 1;
+function resize(): void {
+  const w = Math.max(320, window.innerWidth);
+  const h = Math.max(240, window.innerHeight);
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  view = makeView(baseCfg, theme, w, h);
+}
+resize();
+window.addEventListener('resize', resize);
 
 const keyboard = new Keyboard(baseCfg);
 
@@ -254,16 +267,19 @@ window.addEventListener('keydown', (e) => {
 
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
-  const sx = ((e.clientX - rect.left) * canvas.width) / rect.width;
-  const sy = ((e.clientY - rect.top) * canvas.height) / rect.height;
+  const sx = ((e.clientX - rect.left) * view.width) / rect.width;
+  const sy = ((e.clientY - rect.top) * view.height) / rect.height;
   if (screen === 'help') {
     screen = 'menu';
     return;
   }
   if (screen === 'menu') {
+    const L = menuLayout(view);
+    const mx = (sx - L.ox) / L.s;
+    const my = (sy - L.oy) / L.s;
     menu.rows().forEach((_, i) => {
       const r = menuRowRect(view, i);
-      if (sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h) {
+      if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
         menu.cursor = i;
         runMenuAction(menu.activate());
       }
@@ -278,6 +294,8 @@ let last = performance.now();
 function loop(now: number): void {
   const dt = Math.min((now - last) / 1000, 1 / 30);
   last = now;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
   frame(dt);
   keyboard.endFrame();
   requestAnimationFrame(loop);

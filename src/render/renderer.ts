@@ -17,15 +17,32 @@ export interface View {
   height: number;
 }
 
-export function makeView(cfg: GameConfig, theme: Theme): View {
-  const scale = theme.pixelsPerMeter;
-  const pad = theme.tablePadding;
+/**
+ * The screen layout. Without a size it is the classic fixed layout; with one
+ * (the window), the top-down table is scaled and centered to fill it.
+ */
+export function makeView(cfg: GameConfig, theme: Theme, width?: number, height?: number): View {
+  if (width === undefined || height === undefined) {
+    const pad = theme.tablePadding;
+    const scale = theme.pixelsPerMeter;
+    return {
+      scale,
+      ox: pad,
+      oy: theme.hudTop + 40,
+      width: Math.round(cfg.table.length * scale + pad * 2),
+      height: Math.round(cfg.table.width * scale + theme.hudTop + 40 + theme.hudBottom + 40),
+    };
+  }
+  const usableH = Math.max(100, height - theme.hudTop - theme.hudBottom - 80);
+  // Leave room at both ends for the players standing behind the table (and their names).
+  const ends = (cfg.hitting.standOff + 0.45) * 2;
+  const scale = Math.max(80, Math.min((width - 40) / (cfg.table.length + ends), usableH / cfg.table.width));
   return {
     scale,
-    ox: pad,
-    oy: theme.hudTop + 40,
-    width: Math.round(cfg.table.length * scale + pad * 2),
-    height: Math.round(cfg.table.width * scale + theme.hudTop + 40 + theme.hudBottom + 40),
+    ox: (width - cfg.table.length * scale) / 2,
+    oy: theme.hudTop + 40 + (usableH - cfg.table.width * scale) / 2,
+    width,
+    height,
   };
 }
 

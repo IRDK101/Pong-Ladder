@@ -328,3 +328,26 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
 - **Sinking:** a rally crosshair within 7 cm of a live opponent cup locks onto it (yellow ring), and the shot is solved to arrive at the cup's mouth, not at table level. A perfectly timed hit sinks any cup, the back row included, which a test checks. Perfect-hit scatter is now 1.8 cm, so landing it still depends on timing and Accuracy.
 - **Turn highlight:** the player who's up gets a pulsing double ring, a bouncing arrow, and a yellow tag saying SERVE, HIT or SAVE! along with their name, style and the spin being held. The other players' tags dim.
 - **Title screen:** a pixel logo, Match Setup on the left and Play / More on the right, and a key-cap controls legend, all over a live CPU-vs-CPU demo match in the basement.
+
+## Graphics pass (full screen, pixel art)
+
+- **Full screen:** the canvas fills the window, is resized live, and is backed at the device pixel ratio so text stays sharp. The 3D view picks its pixel size so it has about `camera.rows` (250) rendered rows at any resolution, which keeps the pixel art equally chunky. The title and help screens use a 1131×660 design that scales uniformly to fit. The classic top-down view scales the table to fill the screen and keeps room for the players at each end.
+- **HUD:** compact pixel panels, so the scene shows between them.
+  - Team panels in the top corners (team label, cups left, mini cups, the two names).
+  - A status panel top center (it turns yellow on saves and penalties).
+  - The last two referee calls bottom center, with a one-line hint and each team's keys in the bottom corners.
+- **Characters (part-built, still 16×24):**
+  - Form shading, lit from the upper left.
+  - Outlines in a dark shade of the neighboring color.
+  - Brows, a hair highlight, a belt line and two-tone shoes.
+  - A paddle in the right hand: red face from the front, black rubber from behind.
+  - Hand-drawn and uploaded sprites are unchanged.
+- **Your own team** (seen from behind) is drawn as a see-through dark silhouette with a team-colored rim, instead of a large blurry sprite.
+- **Room:**
+  - Floor: speckled concrete, with grounding shadows under the table and under each person.
+  - Walls: wood planks in three tones, with grooves, a chair rail and baseboards.
+  - Ceiling: real 3D joists, pipe runs, and string lights with glows.
+  - Decor: a dartboard, posters with simple art, the ΖΨ letters lower on the wall so they clear the HUD, and a mini fridge and trash can in the corners.
+  - Lighting: a hanging lamp with a glowing bulb.
+- **Table and cups:** the table has plywood grain and knots. Cups are shaded left to right, with a white rim band and two ridges like a party cup. The ball has a highlight pixel.
+- **No mechanics changed.**
