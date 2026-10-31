@@ -23,7 +23,7 @@ export const STAT_INFO: Record<StatKey, { label: string; effect: string }> = {
   power: { label: 'Power', effect: 'Ball speed off the paddle: harder to return, slightly harder to control' },
   spin: { label: 'Spin', effect: 'How much the ball curves in flight and kicks after the bounce' },
   serve: { label: 'Serve', effect: 'Serve accuracy and fewer table misses' },
-  saves: { label: 'Saves', effect: 'Extra reaction time when saving a cup' },
+  saves: { label: 'Saves', effect: 'Extra reaction time and reach when saving a cup' },
 };
 
 /** Context a modifier may look at (score, streaks, ...). Empty until modifiers exist. */
@@ -61,6 +61,8 @@ export interface StatEffects {
   serveWindow: EffectRange;
   /** Timing-window multiplier on saves. */
   saveWindow: EffectRange;
+  /** Reach multiplier on saves. */
+  saveReach: EffectRange;
 }
 
 /** Interpolate an effect range for a stat value (1–10). */

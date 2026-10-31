@@ -127,9 +127,26 @@ export interface HitTuning {
   scatterWorst: number;
   /** Fraction of a style's peak height lost by the worst-timed hit. */
   peakLossWorst: number;
-  /** How far the aim keys move the target from its default (m). */
+  /**
+   * How far the crosshair can move from its default spot (m). Rally ranges
+   * reach past the table edges, so a shot can be aimed (or pushed) off it.
+   */
   aimRangeLateral: number;
   aimRangeDepth: number;
+  serveAimLateral: number;
+  serveAimDepth: number;
+  /** A crosshair this close (m) to an opponent cup locks onto it, and the shot is aimed into its mouth. */
+  cupLock: number;
+  /** How far (m) a fully early / fully late swing lands short / long of the aim. */
+  timingDepthError: number;
+  /** The window narrows for faster balls: (ref / speed) ^ exponent, clamped to [min, max]. */
+  windowSpeed: { ref: number; exponent: number; min: number; max: number };
+  /** The window narrows as a rally goes on: perHit less per hit after `startAfter`, down to `min`. */
+  windowRally: { startAfter: number; perHit: number; min: number };
+  /** Reach (m from where the hitter stands): full window within `comfortable`, none beyond `max`. */
+  reach: { comfortable: number; max: number };
+  /** Spin a player adds by holding a direction as they hit (0–1, before the Spin stat). */
+  spin: { top: number; back: number; side: number };
   /** How fast a held aim key moves the crosshair (full range per second, real time). */
   aimSpeed: number;
   /** Server toss: launch speed (m/s) and start height above the table (m). */
@@ -177,11 +194,19 @@ export const defaultConfig: GameConfig = {
   hitting: {
     timingWindow: 0.22,
     saveWindowScale: 0.55,
-    scatterPerfect: 0.03,
+    scatterPerfect: 0.018,
     scatterWorst: 0.45,
     peakLossWorst: 0.6,
-    aimRangeLateral: 0.22,
-    aimRangeDepth: 0.35,
+    aimRangeLateral: 0.8,
+    aimRangeDepth: 0.75,
+    serveAimLateral: 0.42,
+    serveAimDepth: 0.5,
+    cupLock: 0.07,
+    timingDepthError: 0.4,
+    windowSpeed: { ref: 2.4, exponent: 0.8, min: 0.5, max: 1.15 },
+    windowRally: { startAfter: 2, perHit: 0.03, min: 0.55 },
+    reach: { comfortable: 0.75, max: 1.7 },
+    spin: { top: 0.8, back: 0.7, side: 0.75 },
     aimSpeed: 1.6,
     tossSpeed: 2.4,
     tossHeight: 0.1,
@@ -196,6 +221,7 @@ export const defaultConfig: GameConfig = {
     serveScatter: [1.4, 0.6],
     serveWindow: [0.84, 1.16],
     saveWindow: [0.75, 1.25],
+    saveReach: [0.8, 1.2],
   },
   progression: {
     xp: { gamePlayed: 20, gameWon: 15, matchWon: 25, cupSunk: 8, cupDowned: 4, saveMade: 5, clutchSave: 10, ace: 3, perfectHit: 1 },

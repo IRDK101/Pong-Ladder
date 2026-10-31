@@ -4,7 +4,10 @@
 // changes how well it times and aims.
 
 import type { TeamId } from '../core/types';
-import { idleInput, type Game, type TeamInput } from './game';
+import { idleInput, type ControlFrame, type Game, type TeamInput } from './game';
+
+/** Spin the CPU plans: top/back, or sidespin toward world -y ('left') / +y ('right'). */
+type SpinKey = 'top' | 'back' | 'left' | 'right';
 import { apexOffset } from './shot';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
@@ -16,10 +19,12 @@ export interface CpuLevel {
   saveSigma: number;
   /** Chance to miss a swing outright (swings too late). */
   whiff: number;
-  /** How far (in aim units) its chosen aim wanders from the plan. */
+  /** How far (m) its chosen aim point wanders from the cup it picked. */
   aimJitter: number;
-  /** How deep it aims, toward the cups (0 = mid-table, 1 = as deep as aim allows). */
-  depth: number;
+  /** Chance it goes for a cup at all (otherwise a safe ball to mid-table). */
+  cupRate: number;
+  /** Chance it adds spin to a hit or serve. */
+  spinRate: number;
   /** Chance of using a non-default style on a hit. */
   styleMix: number;
   /** Game seconds it waits before tossing a serve. */
@@ -27,9 +32,9 @@ export interface CpuLevel {
 }
 
 export const CPU_LEVELS: Record<Difficulty, CpuLevel> = {
-  easy: { timingSigma: 0.1, saveSigma: 0.12, whiff: 0.07, aimJitter: 0.55, depth: 0.35, styleMix: 0.15, serveDelay: 0.9 },
-  medium: { timingSigma: 0.055, saveSigma: 0.07, whiff: 0.025, aimJitter: 0.3, depth: 0.65, styleMix: 0.3, serveDelay: 0.6 },
-  hard: { timingSigma: 0.028, saveSigma: 0.04, whiff: 0.006, aimJitter: 0.14, depth: 0.85, styleMix: 0.4, serveDelay: 0.4 },
+  easy: { timingSigma: 0.09, saveSigma: 0.11, whiff: 0.07, aimJitter: 0.2, cupRate: 0.4, spinRate: 0.05, styleMix: 0.15, serveDelay: 0.9 },
+  medium: { timingSigma: 0.05, saveSigma: 0.065, whiff: 0.025, aimJitter: 0.1, cupRate: 0.7, spinRate: 0.2, styleMix: 0.3, serveDelay: 0.6 },
+  hard: { timingSigma: 0.025, saveSigma: 0.035, whiff: 0.006, aimJitter: 0.04, cupRate: 0.9, spinRate: 0.35, styleMix: 0.4, serveDelay: 0.4 },
 };
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
@@ -37,7 +42,7 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Easy', med
 export class CpuController {
   private level: CpuLevel;
   /** Plan for the ball currently coming: when to swing, where to aim, which style. */
-  private plan: { key: string; swingAt: number; aim: { x: number; y: number }; style: 0 | 1 | 2 } | null = null;
+  private plan: { key: string; swingAt: number; aim: { x: number; y: number }; style: 0 | 1 | 2; spin: SpinKey | null } | null = null;
   private waitUntil: number | null = null;
 
   constructor(
@@ -70,23 +75,19 @@ export class CpuController {
     let swingAt = this.gauss() * (save ? L.saveSigma : L.timingSigma);
     if (this.rng() < L.whiff) swingAt = w * 2; // too late: whiff
     swingAt = Math.max(-w * 1.5, swingAt);
-    // Aim at a live opponent cup, deep, with some wander.
+    // Aim (in meters) at a live opponent cup, or a safe mid-table ball, with some wander.
     const opp: TeamId = this.team === 'A' ? 'B' : 'A';
     const cups = st.cups[opp].filter((c) => c.state !== 'removed');
     const cup = cups[Math.floor(this.rng() * cups.length)];
-    const W = game.cfg.table.width;
-    const lat = game.cfg.hitting.aimRangeLateral * 2;
-    const forward = this.team === 'A' ? 1 : -1;
-    const aim = serving
-      ? { x: (this.rng() - 0.5) * 0.6, y: (this.rng() - 0.5) * 0.6 }
-      : {
-          x: forward * L.depth + this.gauss() * L.aimJitter * 0.5,
-          y: (cup ? (cup.y - W / 2) / lat : 0) + this.gauss() * L.aimJitter,
-        };
-    aim.x = Math.max(-1, Math.min(1, aim.x));
-    aim.y = Math.max(-1, Math.min(1, aim.y));
+    const styleNow = game.styleFor(st.server.team === this.team && serving ? st.server : (game.activePlayer(this.team) ?? { team: this.team, side: 'left' }), serving ? 'serve' : 'hit', 0);
+    const def = game.defaultSpot(this.team, styleNow);
+    const goal = serving || !cup || this.rng() > L.cupRate ? def : { x: cup.x, y: cup.y };
+    const point = { x: goal.x + this.gauss() * L.aimJitter, y: goal.y + this.gauss() * L.aimJitter };
+    const aim = game.aimToward(this.team, point, styleNow);
+    const spins: SpinKey[] = ['top', 'back', 'left', 'right'];
+    const spin = this.rng() < L.spinRate ? spins[Math.floor(this.rng() * spins.length)] : null;
     const style: 0 | 1 | 2 = serving || this.rng() > L.styleMix ? 0 : this.rng() < 0.5 ? 1 : 2;
-    return { key, swingAt, aim, style };
+    return { key, swingAt, aim, style, spin };
   }
 
   input(game: Game): TeamInput {
@@ -106,19 +107,11 @@ export class CpuController {
     const plan = this.plan;
     inp.style = plan.style;
 
-    // Slide the crosshair toward the plan with the "keys" for this team's view.
-    const a = game.aim[this.team];
     const f = game.controlFrames[this.team];
-    const d = { x: plan.aim.x - a.x, y: plan.aim.y - a.y };
-    const along = (v: [number, number]) => d.x * v[0] + d.y * v[1];
-    const dead = 0.04;
-    const u = along(f.up);
-    const r = along(f.right);
-    if (u > dead) inp.up = true;
-    else if (u < -dead) inp.down = true;
-    if (r > dead) inp.right = true;
-    else if (r < -dead) inp.left = true;
-
+    if (game.timingCue(this.team)) {
+      // Crosshair is frozen now: hold the direction for the planned spin (or nothing).
+      if (plan.spin) this.holdSpin(inp, f, plan.spin);
+    } else this.steer(game, inp, plan.aim);
     if (st.phase === 'awaitServe') {
       if (!game.tossing && game.ball.status !== 'flying') {
         this.waitUntil ??= game.time + this.level.serveDelay;
@@ -131,5 +124,34 @@ export class CpuController {
     }
     if (game.canSwing(this.team) && apexOffset(game.ball.vel, game.cfg.physics.gravity) >= plan.swingAt) inp.hit = true;
     return inp;
+  }
+
+  /** Hold aim keys to slide the crosshair toward `target` (aim units), in this team's view. */
+  private steer(game: Game, inp: TeamInput, target: { x: number; y: number }): void {
+    const a = game.aim[this.team];
+    const f = game.controlFrames[this.team];
+    const d = { x: target.x - a.x, y: target.y - a.y };
+    const along = (v: [number, number]) => d.x * v[0] + d.y * v[1];
+    const dead = 0.04;
+    const u = along(f.up);
+    const r = along(f.right);
+    if (u > dead) inp.up = true;
+    else if (u < -dead) inp.down = true;
+    if (r > dead) inp.right = true;
+    else if (r < -dead) inp.left = true;
+  }
+
+  /** Hold the screen direction that means this spin for this team (see Game.spinChoice). */
+  private holdSpin(inp: TeamInput, f: ControlFrame, spin: SpinKey): void {
+    const fwd = this.team === 'A' ? 1 : -1;
+    // World direction wanted: forward (+-x toward the opponents) or sideways (+-y).
+    const want = spin === 'top' ? [fwd, 0] : spin === 'back' ? [-fwd, 0] : spin === 'right' ? [0, 1] : [0, -1];
+    const u = want[0] * f.up[0] + want[1] * f.up[1];
+    const r = want[0] * f.right[0] + want[1] * f.right[1];
+    if (Math.abs(u) >= Math.abs(r)) {
+      if (u > 0) inp.up = true;
+      else inp.down = true;
+    } else if (r > 0) inp.right = true;
+    else inp.left = true;
   }
 }

@@ -12,7 +12,7 @@ import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
 import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, getStyle, type ShotStyle } from '../core/styles';
 import { diagonalOf, laneOf, quarterOf, quarterRect } from '../core/table';
 import { otherTeam, playerKey, type Cup, type PlayerId, type Side, type TeamId } from '../core/types';
-import { apexOffset, computeHit, computeServe, timingLabel, timingQuality, timingWindow, type Aim, type SwingContext } from './shot';
+import { apexOffset, computeHit, computeServe, SPIN_LABELS, timingLabel, timingQuality, timingWindow, type Aim, type AimSpec, type SpinChoice, type SwingContext } from './shot';
 
 /** Who is playing a position this game: a character (or a generic player) and the human behind it. */
 export interface Participant {
@@ -214,11 +214,10 @@ export class Game {
     if (st.phase === 'awaitServe') return st.server.team === team ? st.server : null;
     if ((st.phase === 'rally' || st.phase === 'serveInFlight') && st.rally && st.rally.target === team) {
       if (st.rally.cupAtRisk) {
-        // During a save either teammate may hit: whoever is on the ball's side.
-        const lane = this.ball.pos.y < this.cfg.table.width / 2 ? 'low' : 'high';
-        const sides = ['left', 'right'] as const;
-        const side = sides.find((s) => laneOf({ team, side: s }) === lane)!;
-        return { team, side };
+        // During a save either teammate may hit: whoever is closer to the ball.
+        const l: PlayerId = { team, side: 'left' };
+        const r: PlayerId = { team, side: 'right' };
+        return this.distanceToBall(l) <= this.distanceToBall(r) ? l : r;
       }
       return { team, side: st.rally.nextSide[team] };
     }
@@ -233,20 +232,79 @@ export class Game {
     return this.bounced[team] || st.rally.cupAtRisk !== null;
   }
 
-  /** Where a shot from `team` is aimed: the style's default spot, moved by the aim keys. */
-  aimTarget(team: TeamId, aim: Aim, style: ShotStyle): { x: number; y: number } {
-    const { hitting, table } = this.cfg;
+  /** How far (m) the crosshair can move from its default spot, along x (depth) and y. */
+  aimRanges(serving: boolean): { depth: number; lateral: number } {
+    const h = this.cfg.hitting;
+    return serving ? { depth: h.serveAimDepth, lateral: h.serveAimLateral } : { depth: h.aimRangeDepth, lateral: h.aimRangeLateral };
+  }
+
+  /**
+   * Where a shot from `team` is aimed: the style's default spot, moved by the
+   * aim keys. It can go past the table edges. A rally crosshair close to a
+   * live opponent cup locks onto it (`cup`), and the shot drops into its mouth.
+   */
+  aimTarget(team: TeamId, aim: Aim, style: ShotStyle): { x: number; y: number; cup: Cup | null } {
+    const serving = style.kind === 'serve';
+    // Depth is measured from the edge nearest the hitter (the widthwise center line).
+    const { x: x0, y: y0 } = this.defaultSpot(team, style);
+    const range = this.aimRanges(serving);
+    const x = x0 + aim.x * range.depth;
+    const y = y0 + aim.y * range.lateral;
+    if (!serving) {
+      let best: Cup | null = null;
+      let bestD = this.cfg.hitting.cupLock;
+      for (const c of this.engine.peek().cups[otherTeam(team)]) {
+        if (c.state === 'removed') continue;
+        const d = Math.hypot(c.x - x, c.y - y);
+        if (d < bestD) {
+          best = c;
+          bestD = d;
+        }
+      }
+      if (best) return { x: best.x, y: best.y, cup: best };
+    }
+    return { x, y, cup: null };
+  }
+
+  /** The crosshair setting (aim units) that points `team`'s shot at a table point (clamped to the crosshair's range). */
+  aimToward(team: TeamId, point: { x: number; y: number }, style: ShotStyle): Aim {
+    const def = this.defaultSpot(team, style);
+    const range = this.aimRanges(style.kind === 'serve');
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    return { x: clamp((point.x - def.x) / range.depth), y: clamp((point.y - def.y) / range.lateral) };
+  }
+
+  /** The default (crosshair-centered) aim point before any cup lock. */
+  defaultSpot(team: TeamId, style: ShotStyle): { x: number; y: number } {
     const serving = style.kind === 'serve';
     const rect = serving
       ? quarterRect(this.cfg, quarterOf(diagonalOf(this.engine.peek().server)))
       : quarterRect(this.cfg, { team: otherTeam(team), lane: 'low' });
-    // Depth is measured from the edge nearest the hitter (the widthwise center line).
     const near = team === 'A' ? rect.x0 : rect.x1;
     const far = team === 'A' ? rect.x1 : rect.x0;
-    const x = near + (far - near) * style.depth;
-    const y = serving ? (rect.y0 + rect.y1) / 2 : table.width / 2;
-    const lat = serving ? hitting.aimRangeLateral * 0.6 : hitting.aimRangeLateral * 2;
-    return { x: x + aim.x * hitting.aimRangeDepth, y: y + aim.y * lat };
+    return { x: near + (far - near) * style.depth, y: serving ? (rect.y0 + rect.y1) / 2 : this.cfg.table.width / 2 };
+  }
+
+  /** Horizontal distance (m) from where a player stands to the ball. */
+  distanceToBall(p: PlayerId): number {
+    const spot = this.playerSpot(p);
+    return Math.hypot(this.ball.pos.x - spot.x, this.ball.pos.y - spot.y);
+  }
+
+  /**
+   * The spin a held direction picks at the moment of a hit, read in the
+   * hitter's own view: toward the opponents = topspin, back toward yourself =
+   * backspin, sideways = sidespin curving that way. Nothing held = no added spin.
+   */
+  spinChoice(team: TeamId, inp: TeamInput): SpinChoice | null {
+    const k = Game.aimOf(inp);
+    if (!k.x && !k.y) return null;
+    const f = this.controlFrames[team];
+    const wx = -k.y * f.up[0] + k.x * f.right[0];
+    const wy = -k.y * f.up[1] + k.x * f.right[1];
+    const forward = team === 'A' ? wx : -wx;
+    if (Math.abs(forward) >= Math.abs(wy)) return { type: forward > 0 ? 'top' : 'back', dir: 1 };
+    return { type: 'side', dir: wy > 0 ? 1 : -1 };
   }
 
   /** Direction the held aim keys point, per axis in {-1, 0, 1}. */
@@ -266,12 +324,18 @@ export class Game {
     const style = this.styleFor(p, tossing ? 'serve' : 'hit', this.selectedStyle[team]);
     return {
       offset: apexOffset(this.ball.vel, this.cfg.physics.gravity),
-      window: timingWindow(this.cfg, style, this.swingContext(p, !tossing && st.rally!.cupAtRisk !== null)),
+      window: timingWindow(this.cfg, style, this.swingContext(p, !tossing && st.rally!.cupAtRisk !== null, tossing)),
     };
   }
 
-  private swingContext(p: PlayerId, save: boolean): SwingContext {
-    return { stats: this.statsOf(p), save, incomingPower: this.incomingPower };
+  private swingContext(p: PlayerId, save: boolean, serving = false): SwingContext {
+    const ctx: SwingContext = { stats: this.statsOf(p), save, incomingPower: this.incomingPower };
+    if (!serving) {
+      ctx.ballSpeed = Math.hypot(this.ball.vel.x, this.ball.vel.y);
+      ctx.rallyHits = this.engine.peek().rally?.hits ?? 0;
+      ctx.reach = this.distanceToBall(p);
+    }
+    return ctx;
   }
 
   /** Whether `team` should see its crosshair: it is serving, or the ball is coming to it. */
@@ -284,6 +348,8 @@ export class Game {
   private moveAim(realDt: number, inputs: Record<TeamId, TeamInput>): void {
     const step = this.cfg.hitting.aimSpeed * realDt;
     for (const team of ['A', 'B'] as TeamId[]) {
+      // Once the timing ring is up, the crosshair freezes: direction keys now pick spin.
+      if (this.timingCue(team)) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
       const f = this.controlFrames[team];
       const d = { x: -k.y * f.up[0] + k.x * f.right[0], y: -k.y * f.up[1] + k.x * f.right[1] };
@@ -324,7 +390,7 @@ export class Game {
     }
 
     // Live ball.
-    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style, inputs[team].side);
+    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style, inputs[team].side, inputs[team]);
     if (this.resumeAt !== null) return; // that swing ended the rally (e.g. low hit)
     const events = this.ball.step(dt, this.cups);
     for (const e of events) {
@@ -388,19 +454,23 @@ export class Game {
     if (hit && !this.tossSwung) {
       this.tossSwung = true;
       const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
-      const q = timingQuality(this.cfg, style, off, this.swingContext(server, false));
-      this.feedback = { team: server.team, label: timingLabel(q, off), quality: q, time: this.time };
-      if (q !== null) return this.serve(server, style, q, this.aim[server.team]);
+      const ctx = this.swingContext(server, false, true);
+      const q = timingQuality(this.cfg, style, off, ctx);
+      const spin = this.spinChoice(server.team, inp);
+      this.feedback = { team: server.team, label: withSpin(timingLabel(q, off), q, spin), quality: q, time: this.time };
+      if (q !== null) return this.serve(server, style, q, this.aim[server.team], spin, off / timingWindow(this.cfg, style, ctx));
     }
     this.ball.step(dt, []);
     // Catch the toss on the way down; no penalty for a dropped toss.
     if (this.ball.vel.z < 0 && this.ball.pos.z <= this.cfg.hitting.tossHeight) this.placeBallWithServer();
   }
 
-  private serve(server: PlayerId, style: ShotStyle, q: number, aim: Aim): void {
+  private serve(server: PlayerId, style: ShotStyle, q: number, aim: Aim, spin: SpinChoice | null, lateness: number): void {
     const from = { ...this.ball.pos };
     const stats = this.statsOf(server);
-    const shot = computeServe(this.cfg, style, from, this.aimTarget(server.team, aim, style), q, this.rng, stats);
+    const t = this.aimTarget(server.team, aim, style);
+    const spec: AimSpec = { x: t.x, y: t.y, forward: server.team === 'A' ? 1 : -1, lateness, spin };
+    const shot = computeServe(this.cfg, style, from, spec, q, this.rng, stats);
     this.tossing = false;
     this.resetBallTracking();
     this.incomingPower = stats.power;
@@ -408,7 +478,7 @@ export class Game {
     this.ball.launch(from, shot.vel, shot.fx);
   }
 
-  private trySwing(team: TeamId, styleIndex: number, side?: Side): void {
+  private trySwing(team: TeamId, styleIndex: number, side?: Side, inp: TeamInput = idleInput()): void {
     if (!this.canSwing(team)) return;
     const rally = this.engine.peek().rally!;
     const saving = rally.cupAtRisk !== null;
@@ -418,12 +488,17 @@ export class Game {
     const style = this.styleFor(player, 'hit', styleIndex);
     this.swung[team] = true;
     const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
-    const q = timingQuality(this.cfg, style, off, this.swingContext(player, saving));
-    this.feedback = { team, label: timingLabel(q, off), quality: q, time: this.time };
-    if (q === null) return; // whiff
+    const ctx = this.swingContext(player, saving);
+    const q = timingQuality(this.cfg, style, off, ctx);
+    const w = timingWindow(this.cfg, style, ctx);
+    const spin = this.spinChoice(team, inp);
+    this.feedback = { team, label: withSpin(timingLabel(q, off, w <= 0), q, spin), quality: q, time: this.time };
+    if (q === null) return; // whiff (or out of reach)
     const from = { ...this.ball.pos };
     const stats = this.statsOf(player);
-    const shot = computeHit(this.cfg, style, from, this.aimTarget(team, this.aim[team], style), q, this.rng, stats);
+    const t = this.aimTarget(team, this.aim[team], style);
+    const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin };
+    const shot = computeHit(this.cfg, style, from, spec, q, this.rng, stats);
     this.resetBallTracking();
     this.incomingPower = stats.power;
     this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
@@ -471,4 +546,9 @@ export class Game {
       c.kind === 'penaltyApplied' ? DELAY_AFTER_PENALTY : c.kind === 'reServe' || c.kind === 'tableMiss' ? DELAY_AFTER_RESERVE : DELAY_AFTER_RALLY;
     this.resumeAt = Math.max(this.resumeAt ?? 0, this.time + delay);
   }
+}
+
+/** "Perfect · Topspin" when a hit connects with spin. */
+function withSpin(label: string, q: number | null, spin: SpinChoice | null): string {
+  return q !== null && spin ? `${label} · ${SPIN_LABELS[spin.type]}` : label;
 }

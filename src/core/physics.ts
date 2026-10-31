@@ -32,6 +32,8 @@ export interface BallEffects {
   topspin: number;
   restitutionScale: number;
   frictionScale: number;
+  /** Bounces the spin lasts for (serves: 2, so it still kicks on the receiver's side). Default 1. */
+  bounces?: number;
 }
 
 export const NO_EFFECTS: BallEffects = { curve: 0, sideKick: 0, topspin: 0, restitutionScale: 1, frictionScale: 1 };
@@ -110,7 +112,9 @@ export class BallPhysics {
       v.z = -v.z * ph.restitution * fx.restitutionScale * (1 - ph.topspinBounceLoss * fx.topspin);
       v.x *= ph.tableFriction * fx.frictionScale * kick;
       v.y = v.y * ph.tableFriction * fx.frictionScale * kick + fx.sideKick;
-      this.fx = NO_EFFECTS; // spin is spent on the first bounce
+      // Spin is spent after its bounces; a serve's sidespin curve only bends the first segment.
+      const left = (fx.bounces ?? 1) - 1;
+      this.fx = left > 0 ? { ...fx, curve: 0, bounces: left } : NO_EFFECTS;
       this.sinceBounce = 0;
       events.push({ type: 'bounce', x: p.x, y: p.y });
       // A ball that has stopped bouncing is rolling; call it dead (it has

@@ -97,24 +97,25 @@ describe('same-team (co-op) input', () => {
 
   it('an out-of-turn swing is ignored, and the right teammate can still hit that ball', () => {
     const g = coopGame();
-    const cpu = new CpuController('B', 'hard', mulberry32(2));
-    // Serve, then wait for B's return to come to A (A-R is due).
-    step(g, press({ hit: true }), press());
-    for (let t = 0; t < 3 && !(g.tossing && apexOffset(g.ball.vel, 9.81) >= 0); t += DT) step(g, press(), press(), cpu.input(g));
-    step(g, press({ hit: true }), press(), cpu.input(g));
-    let tries = 0;
-    while (!g.canSwing('A') && tries++ < 600) step(g, press(), press(), cpu.input(g));
-    expect(g.canSwing('A')).toBe(true);
-    expect(g.engine.peek().rally!.nextSide.A).toBe('right');
-    const hits = () => g.engine.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').length;
+    const eng = g.engine;
+    // A-L serves, B-R returns; the ball comes back to A, where A-R is due.
+    eng.dispatch({ type: 'hit', player: { team: 'A', side: 'left' }, peak: 1 });
+    eng.dispatch({ type: 'bounce', x: 0.6, y: 0.3 });
+    eng.dispatch({ type: 'bounce', x: 1.83, y: 0.9 });
+    eng.dispatch({ type: 'hit', player: { team: 'B', side: 'right' }, peak: 1 });
+    expect(eng.peek().rally!.nextSide.A).toBe('right');
+    // Drop the ball onto A's side near A-R; it bounces and rises.
+    g.ball.launch({ x: 0.15, y: 0.9, z: 0.25 }, { x: 0, y: 0, z: -0.5 });
+    while (!g.canSwing('A')) step(g, press(), press());
+    const hits = () => eng.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').length;
     const before = hits();
-    step(g, press({ hit: true }), press(), cpu.input(g)); // left human presses out of turn
+    step(g, press({ hit: true }), press()); // the left human presses out of turn
     expect(hits()).toBe(before);
     expect(g.canSwing('A')).toBe(true); // the ball is still live for A-R
-    while (apexOffset(g.ball.vel, 9.81) < 0) step(g, press(), press(), cpu.input(g));
-    step(g, press(), press({ hit: true }), cpu.input(g));
+    while (apexOffset(g.ball.vel, 9.81) < 0) step(g, press(), press());
+    step(g, press(), press({ hit: true }));
     expect(hits()).toBe(before + 1);
-    const last = g.engine.log.filter((e) => e.kind === 'input').pop()!.data as { player: { side: string } };
+    const last = eng.log.filter((e) => e.kind === 'input').pop()!.data as { player: { side: string } };
     expect(last.player.side).toBe('right');
   });
 

@@ -62,7 +62,7 @@ describe('shot model', () => {
   it('a perfect hit lands near the aim point and reaches the style peak; a bad one scatters and drops', () => {
     const rng = mulberry32(1);
     const from = { x: -0.2, y: 0.6, z: 0.2 };
-    const aim = { x: 1.8, y: 0.6 };
+    const aim = { x: 1.8, y: 0.6, forward: 1 as const };
     for (let i = 0; i < 50; i++) {
       const s = computeHit(cfg, hit, from, aim, 1, rng);
       expect(Math.hypot(s.target.x - aim.x, s.target.y - aim.y)).toBeLessThanOrEqual(cfg.hitting.scatterPerfect + 1e-9);
@@ -135,14 +135,23 @@ describe('game loop (physics + rules + input)', () => {
     expect(calls.some((c) => c.kind === 'lowHit')).toBe(true);
   });
 
-  it('good players aiming deep at the cups play a whole game to the end', () => {
+  it('good players aiming at the cups play a whole game to the end', () => {
     for (const formation of ['shrub', 'tree'] as const) {
       const g = new Game(cfgWith({ formation, penaltyCupSelection: 'auto' }), mulberry32(8));
-      const deep = (team: TeamId) => timedBot(0.06, team === 'A' ? { right: true } : { left: true });
-      const calls = play(g, { A: deep('A'), B: deep('B') }, 4000);
+      // Point the crosshair at a live opponent cup whenever the ball is not yet hittable.
+      const cupBot = (_g: Game, team: TeamId): TeamInput => {
+        const inp = timedBot(0.04)(g, team);
+        if (!g.timingCue(team)) {
+          const opp = team === 'A' ? 'B' : 'A';
+          const cup = g.engine.peek().cups[opp].find((c) => c.state !== 'removed');
+          if (cup) g.aim[team] = g.aimToward(team, cup, getStyle('standardHit'));
+        }
+        return inp;
+      };
+      const calls = play(g, { A: cupBot, B: cupBot }, 4000);
       const kinds = new Set(calls.map((c) => c.kind));
       expect(g.engine.peek().phase).toBe('gameOver');
-      expect(kinds.has('cupHit') || kinds.has('sink')).toBe(true);
+      expect(kinds.has('sink')).toBe(true);
       // Every rally-ending call names who serves next.
       for (const c of calls) if (c.nextServer) expect(c.text).toMatch(/serves|re-serves/);
     }
@@ -174,7 +183,9 @@ describe('game loop (physics + rules + input)', () => {
     }
     expect(seen).not.toBeNull();
     expect(seen!.offset).toBeLessThan(0); // just bounced: still rising, early
-    expect(seen!.window).toBeCloseTo(g.cfg.hitting.timingWindow);
+    // Speed, reach and rally length can only narrow the base window (or widen it a little for slow balls).
+    expect(seen!.window).toBeGreaterThan(0);
+    expect(seen!.window).toBeLessThanOrEqual(g.cfg.hitting.timingWindow * g.cfg.hitting.windowSpeed.max + 1e-9);
     expect(g.aiming(recv)).toBe(true);
   });
 
@@ -187,7 +198,9 @@ describe('game loop (physics + rules + input)', () => {
     const g = new Game(cfgWith(), mulberry32(12), roster);
     const calls = play(g, { A: timedBot(0, { style: 1 }), B: timedBot(0) }, 20, () => g.engine.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').length >= 4);
     const hits = g.engine.log.filter((e) => e.kind === 'input' && (e.data as { type: string }).type === 'hit').map((e) => e.data as { player: { team: string }; style: string });
-    for (const h of hits.slice(1)) expect(h.style).toBe(h.player.team === 'A' ? 'lob' : 'standardHit');
+    const rallyHits = hits.filter((h) => h.style !== 'standardServe');
+    expect(rallyHits.length).toBeGreaterThan(0);
+    for (const h of rallyHits) expect(h.style).toBe(h.player.team === 'A' ? 'lob' : 'standardHit');
     expect(g.serverName()).toMatch(/Ari|Jo|Sam|Kit/);
     expect(calls[0].text).toMatch(/Good serve by (Ari|Jo|Sam|Kit)/);
     expect((g.engine.log[0].data as { names: Record<string, string> }).names['A-left']).toBe('Ari');
@@ -206,7 +219,7 @@ describe('game loop (physics + rules + input)', () => {
     const team = g.engine.peek().server.team;
     // Serve off the side of the table three times.
     const far: Partial<TeamInput> = { up: true };
-    g.cfg.hitting.aimRangeLateral = 5;
+    g.cfg.hitting.serveAimLateral = 5;
     play(g, { A: team === 'A' ? timedBot(0, far) : idleBot, B: team === 'B' ? timedBot(0, far) : idleBot }, 20, () => g.engine.peek().phase === 'penalty');
     expect(g.engine.peek().phase).toBe('penalty');
     const cups = g.penaltyCups();

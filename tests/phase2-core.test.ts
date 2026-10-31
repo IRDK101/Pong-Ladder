@@ -79,7 +79,7 @@ describe('stats pipeline', () => {
   it('SKILL BEATS STATS: a perfect hit by Accuracy 2 lands closer than a badly timed hit by Accuracy 10', () => {
     const rng = mulberry32(42);
     const from = { x: -0.2, y: 0.6, z: 0.2 };
-    const aim = { x: 1.8, y: 0.6 };
+    const aim = { x: 1.8, y: 0.6, forward: 1 as const };
     const meanErr = (acc: number, q: number) => {
       let sum = 0;
       for (let i = 0; i < 400; i++) {
@@ -170,7 +170,7 @@ describe('style library', () => {
     const rng = mulberry32(3);
     const lows = (id: string) => {
       let n = 0;
-      for (let i = 0; i < 300; i++) if (computeHit(cfg, getStyle(id), { x: -0.2, y: 0.6, z: 0.2 }, { x: 1.8, y: 0.6 }, 0.6, rng).peak < cfg.shoulderHeight) n++;
+      for (let i = 0; i < 300; i++) if (computeHit(cfg, getStyle(id), { x: -0.2, y: 0.6, z: 0.2 }, { x: 1.8, y: 0.6, forward: 1 }, 0.6, rng).peak < cfg.shoulderHeight) n++;
       return n;
     };
     expect(lows('flatFast')).toBeGreaterThan(lows('lob'));

@@ -16,13 +16,14 @@ function timeToTable(z0: number, vz: number, g: number): number {
 /**
  * Launch velocity so the ball peaks at `peak` and first lands on the table at `to`.
  * If the ball is already above `peak`, it is hit flat (vz = 0). `curve` is the
- * sideways acceleration from sidespin, compensated for.
+ * sideways acceleration from sidespin, compensated for. `landZ` is the height
+ * the ball should arrive at `to` (0 = the table; the cup height to drop into a cup).
  */
-export function solveArc(from: Vec3, to: { x: number; y: number }, peak: number, g: number, curve = 0): Vec3 {
-  const apex = Math.max(peak, from.z, 0.01);
+export function solveArc(from: Vec3, to: { x: number; y: number }, peak: number, g: number, curve = 0, landZ = 0): Vec3 {
+  const apex = Math.max(peak, from.z, landZ + 0.01, 0.01);
   const vz = Math.sqrt(2 * g * (apex - from.z));
-  // From the apex, fall `apex` to the table.
-  const T = vz / g + Math.sqrt((2 * apex) / g);
+  // From the apex, fall to the landing height (the table, or a cup's mouth).
+  const T = vz / g + Math.sqrt((2 * (apex - landZ)) / g);
   // Aim off by the sideways drift a curving shot will pick up, so it still lands on target.
   return { x: (to.x - from.x) / T, y: (to.y - from.y - (curve * T * T) / 2) / T, z: vz };
 }
