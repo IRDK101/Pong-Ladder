@@ -61,11 +61,29 @@ export interface TeamInput {
   hit: boolean;
   /** Which of the player's styles the hit uses: 0 = default, 1/2 = style keys held. */
   style: 0 | 1 | 2;
+  /**
+   * Same-team play: which teammate's human produced this input. A hit from
+   * the teammate whose turn it is not is ignored (either may hit a save).
+   * Undefined = one human controls the whole team.
+   */
+  side?: Side;
   /** Direction pressed this frame, for menus / cup selection: -1 prev, +1 next. */
   nav: -1 | 0 | 1;
 }
 
 export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, style: 0, nav: 0 });
+
+/**
+ * How a human's screen maps onto the table, so aim keys move the crosshair
+ * the way they look: world-space (x, y) directions for screen-up and screen-right.
+ */
+export interface ControlFrame {
+  up: [number, number];
+  right: [number, number];
+}
+
+/** Classic top-down view: screen-up is -y, screen-right is +x. */
+export const TOP_DOWN_FRAME: ControlFrame = { up: [0, -1], right: [1, 0] };
 
 export interface Message {
   text: string;
@@ -95,11 +113,15 @@ export class Game {
   penaltyCursor = 0;
   /** Set while the server's toss is in the air. */
   tossing = false;
+  /** Tosses so far (lets controllers tell one serve attempt from the next). */
+  tossCount = 0;
   /** Each team's crosshair, in [-1, 1] per axis. Sticky: it stays where the player leaves it. */
   aim: Record<TeamId, Aim> = { A: { x: 0, y: 0 }, B: { x: 0, y: 0 } };
   /** Style index each team currently has selected (held style key). */
   selectedStyle: Record<TeamId, 0 | 1 | 2> = { A: 0, B: 0 };
   readonly roster: Roster;
+  /** Per team: how its human's view maps aim keys to the table. */
+  controlFrames: Record<TeamId, ControlFrame> = { A: TOP_DOWN_FRAME, B: TOP_DOWN_FRAME };
   /** Active sink celebrations (cosmetic), drawn by the renderer. */
   celebrations: { x: number; y: number; time: number; palette: string; seed: number }[] = [];
 
@@ -251,7 +273,9 @@ export class Game {
   private moveAim(realDt: number, inputs: Record<TeamId, TeamInput>): void {
     const step = this.cfg.hitting.aimSpeed * realDt;
     for (const team of ['A', 'B'] as TeamId[]) {
-      const d = Game.aimOf(inputs[team]);
+      const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
+      const f = this.controlFrames[team];
+      const d = { x: -k.y * f.up[0] + k.x * f.right[0], y: -k.y * f.up[1] + k.x * f.right[1] };
       const a = this.aim[team];
       a.x = Math.max(-1, Math.min(1, a.x + d.x * step));
       a.y = Math.max(-1, Math.min(1, a.y + d.y * step));
@@ -289,7 +313,7 @@ export class Game {
     }
 
     // Live ball.
-    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style);
+    for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style, inputs[team].side);
     if (this.resumeAt !== null) return; // that swing ended the rally (e.g. low hit)
     const events = this.ball.step(dt, this.cups);
     for (const e of events) {
@@ -339,15 +363,18 @@ export class Game {
   private serveInput(inp: TeamInput, dt: number): void {
     const server = this.engine.peek().server;
     const style = this.styleFor(server, 'serve', inp.style);
+    // Same-team play: only the server's human can toss and serve.
+    const hit = inp.hit && (inp.side === undefined || inp.side === server.side);
     if (!this.tossing) {
-      if (inp.hit) {
+      if (hit) {
         this.tossing = true;
+        this.tossCount++;
         this.tossSwung = false;
         this.ball.launch(this.playerSpot(server), { x: 0, y: 0, z: this.cfg.hitting.tossSpeed });
       }
       return;
     }
-    if (inp.hit && !this.tossSwung) {
+    if (hit && !this.tossSwung) {
       this.tossSwung = true;
       const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
       const q = timingQuality(this.cfg, style, off, this.swingContext(server, false));
@@ -370,11 +397,14 @@ export class Game {
     this.ball.launch(from, shot.vel, shot.fx);
   }
 
-  private trySwing(team: TeamId, styleIndex: number): void {
+  private trySwing(team: TeamId, styleIndex: number, side?: Side): void {
     if (!this.canSwing(team)) return;
-    const player = this.activePlayer(team)!;
+    const rally = this.engine.peek().rally!;
+    const saving = rally.cupAtRisk !== null;
+    // Same-team play: an out-of-turn press is ignored; on a save, whoever pressed hits.
+    if (side !== undefined && !saving && side !== rally.nextSide[team]) return;
+    const player = side !== undefined && saving ? { team, side } : this.activePlayer(team)!;
     const style = this.styleFor(player, 'hit', styleIndex);
-    const saving = this.engine.peek().rally!.cupAtRisk !== null;
     this.swung[team] = true;
     const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
     const q = timingQuality(this.cfg, style, off, this.swingContext(player, saving));
