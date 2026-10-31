@@ -50,6 +50,25 @@ export interface GameConfig {
   hitting: HitTuning;
   /** How character stats scale shots: multipliers at stat 1 and stat 10 (5.5 = no effect). */
   statEffects: StatEffects;
+  progression: ProgressionTuning;
+}
+
+export interface ProgressionTuning {
+  /** XP a character earns per career stat. Levels are cosmetic only. */
+  xp: {
+    gamePlayed: number;
+    gameWon: number;
+    matchWon: number;
+    cupSunk: number;
+    cupDowned: number;
+    saveMade: number;
+    clutchSave: number;
+    ace: number;
+    perfectHit: number;
+  };
+  /** XP to go from level n to n+1 is levelStep * n. */
+  levelStep: number;
+  elo: { start: number; k: number };
 }
 
 export interface PhysicsTuning {
@@ -156,6 +175,11 @@ export const defaultConfig: GameConfig = {
     serveScatter: [1.4, 0.6],
     serveWindow: [0.84, 1.16],
     saveWindow: [0.75, 1.25],
+  },
+  progression: {
+    xp: { gamePlayed: 20, gameWon: 15, matchWon: 25, cupSunk: 8, cupDowned: 4, saveMade: 5, clutchSave: 10, ace: 3, perfectHit: 1 },
+    levelStep: 100,
+    elo: { start: 1000, k: 32 },
   },
 };
 

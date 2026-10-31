@@ -32,6 +32,20 @@ export const theme = {
     master: '#ffd76a',
     masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
+  /** Unlockable name colors (cosmetic rewards). */
+  nameColors: {
+    dartmouthGreen: '#2fb36b',
+    basementOrange: '#ff9a3c',
+    iceBlue: '#8fd8ff',
+    hotPink: '#ff6fb5',
+    gold: '#ffd76a',
+  } as Record<string, string>,
+  /** Celebration particle palettes (cosmetic rewards). */
+  celebrations: {
+    confetti: ['#ff6a5c', '#6aa0ff', '#ffe066', '#8fe388', '#ff6fb5'],
+    greenFlare: ['#00693e', '#2fb36b', '#f2f2f2'],
+    fireworks: ['#ffd76a', '#ff9a3c', '#fffaf0', '#ff6a5c'],
+  } as Record<string, string[]>,
   fonts: {
     hud: '14px monospace',
     label: 'bold 12px monospace',

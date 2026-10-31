@@ -502,7 +502,8 @@ export class RulesEngine {
     const length = chain && samePlayer(chain.player, sinker) ? chain.length + 1 : 1;
     const text = `SINK by ${this.name(sinker)}${length > 1 ? ` (x${length})` : ''} — ${this.name(next)} serves to ${this.name(sinker)}`;
     this.endRally('sink', sinker, next, text, calls, { team, cupId });
-    if (this.s.phase !== 'gameOver') this.s.sinkChain = { player: sinker, length };
+    // Kept even when the sink ends the game, so a game-winning chain is counted in full.
+    this.s.sinkChain = { player: sinker, length };
   }
 
   private endRally(kind: CallKind, player: PlayerId, nextServer: PlayerId, text: string, calls: Call[], cup?: { team: TeamId; cupId: string }): void {

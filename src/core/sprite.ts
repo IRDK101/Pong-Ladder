@@ -187,9 +187,42 @@ export function composeSprite(parts: SpriteParts): Sprite {
   return { w: SPRITE_W, h: SPRITE_H, pixels: out.pixels };
 }
 
-/** The sprite to show for a character: hand-drawn/uploaded pixels if present, else the parts. */
-export function characterSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }): Sprite {
-  return sprite.pixels ?? composeSprite(sprite.parts);
+/** Cosmetic sprite items (level rewards), drawn over any sprite: [x, y, color] pixels. */
+export const SPRITE_ITEMS: Record<string, [number, number, string][]> = {
+  greenCap: [
+    ...[5, 6, 7, 8, 9, 10].flatMap((x): [number, number, string][] => [
+      [x, 1, '#00693e'],
+      [x, 2, '#00693e'],
+    ]),
+    [7, 1, '#f2f2f2'],
+    [8, 1, '#f2f2f2'],
+    [7, 2, '#f2f2f2'],
+    [10, 3, '#004d2d'],
+    [11, 3, '#004d2d'],
+    [12, 3, '#004d2d'],
+  ],
+  goldChain: [5, 6, 7, 8, 9, 10].map((x): [number, number, string] => [x, 11, x % 2 ? '#e8c547' : '#c9a227']),
+  crown: [
+    [5, 0, '#ffd76a'],
+    [7, 0, '#ffd76a'],
+    [8, 0, '#ffd76a'],
+    [10, 0, '#ffd76a'],
+    ...[5, 6, 7, 8, 9, 10].map((x): [number, number, string] => [x, 1, '#e8b923']),
+    [7, 1, '#d93b3b'],
+  ],
+};
+
+export function withItem(base: Sprite, itemId: string | null | undefined): Sprite {
+  const item = itemId ? SPRITE_ITEMS[itemId] : undefined;
+  if (!item || base.w !== SPRITE_W || base.h !== SPRITE_H) return base;
+  const pixels = base.pixels.slice();
+  for (const [x, y, c] of item) pixels[y * base.w + x] = c;
+  return { ...base, pixels };
+}
+
+/** The sprite to show for a character: hand-drawn/uploaded pixels if present, else the parts; plus any equipped item. */
+export function characterSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }, itemId: string | null = null): Sprite {
+  return withItem(sprite.pixels ?? composeSprite(sprite.parts), itemId);
 }
 
 /** Nearest-color quantize RGBA image data (already scaled to the sprite size) into sprite pixels. */

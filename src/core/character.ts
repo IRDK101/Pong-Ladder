@@ -38,9 +38,17 @@ export interface Character {
   };
   /** Leveling arrives in Phase 3 (derived from match logs); cosmetics only. */
   level: number;
-  cosmetics: { nameColor: string | null; badges: string[] };
+  /** Equipped cosmetic rewards (reward ids), unlocked by level. */
+  cosmetics: Cosmetics;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Cosmetics {
+  nameColor: string | null;
+  badges: string[];
+  spriteItem?: string | null;
+  celebration?: string | null;
 }
 
 export interface Profile {
@@ -70,7 +78,7 @@ export function newCharacter(name = 'New character', now = new Date()): Characte
     hitStyles: DEFAULT_HIT_STYLES.slice(0, MAX_HIT_STYLES),
     sprite: { parts: { ...DEFAULT_PARTS }, pixels: null },
     level: 1,
-    cosmetics: { nameColor: null, badges: [] },
+    cosmetics: { nameColor: null, badges: [], spriteItem: null, celebration: null },
     createdAt: t,
     updatedAt: t,
   };
