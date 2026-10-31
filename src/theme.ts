@@ -32,6 +32,11 @@ export const theme = {
     button: '#3d2a18',
     buttonActive: '#6b4a2b',
     master: '#ffd76a',
+    /** Colors of the streak behind a spinning ball. */
+    spinTop: '#ff9a3c',
+    spinBack: '#5fd0ff',
+    spinSide: '#ff6fb5',
+    activeText: '#1a1410',
     masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
   /**
@@ -81,6 +86,21 @@ export const theme = {
     tableSide: '#4a3220',
     cupInside: '#8c2420',
     divider: '#0d0a08',
+  },
+  /** Title screen. */
+  menu: {
+    logo: '#f2e8d5',
+    logoShadow: '#1a1410',
+    accent: '#2fb36b',
+    accentWarm: '#ffd34f',
+    panel: 'rgba(14, 10, 8, 0.78)',
+    row: 'rgba(61, 42, 24, 0.85)',
+    rowPlay: 'rgba(30, 80, 52, 0.9)',
+    rowActive: 'rgba(107, 74, 43, 0.95)',
+    shadeLeft: 'rgba(8, 6, 5, 0.82)',
+    shadeRight: 'rgba(8, 6, 5, 0.35)',
+    key: '#3d2a18',
+    keyEdge: '#22160c',
   },
   /** The Greek letters painted on the basement wall. */
   houseLetters: 'ΖΨ',

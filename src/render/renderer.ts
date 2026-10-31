@@ -97,7 +97,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View,
   // Timing feedback near the hitter.
   const fb = game.feedback;
   if (fb && game.time - fb.time < 0.9) {
-    const p = active.find((a) => a.team === fb.team) ?? { team: fb.team, side: 'left' as const };
+    const p = fb.player ?? active.find((a) => a.team === fb.team) ?? { team: fb.team, side: 'left' as const };
     const spot = game.playerSpot(p);
     const [sx, sy] = toScreen(v, spot.x, spot.y);
     ctx.globalAlpha = 1 - (game.time - fb.time) / 0.9;

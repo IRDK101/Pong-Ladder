@@ -2,7 +2,6 @@
 
 import { makeConfig, type GameConfig } from './config';
 import { theme } from './theme';
-import { buildFormation } from './core/formation';
 import type { TeamId } from './core/types';
 import { Game, genericRoster, idleInput, POSITIONS, TOP_DOWN_FRAME, type Roster, type TeamInput } from './game/game';
 import { CpuController } from './game/ai';
@@ -10,7 +9,7 @@ import { coopInput } from './game/controllers';
 import { cameraFrame, teamCamera } from './render/camera';
 import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { Keyboard } from './input/keyboard';
-import { cupAt, drawField, makeView, renderGame } from './render/renderer';
+import { cupAt, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
 import { Menu, drawEndScreen, drawHelp, drawMenu, menuRowRect, type MenuAction } from './ui/menu';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
@@ -160,19 +159,28 @@ function runMenuAction(action: MenuAction): void {
   }
 }
 
-function drawBackdrop(): void {
-  const cfg = menu.config(baseCfg);
-  drawField(ctx, cfg, theme, view, [...buildFormation(cfg, 'A'), ...buildFormation(cfg, 'B')]);
+// A CPU-vs-CPU demo match plays in the basement behind the title screen.
+let demo: { game: Game; a: CpuController; b: CpuController } | null = null;
+function drawBackdrop(dt: number): void {
+  if (!demo || demo.game.engine.peek().phase === 'gameOver') {
+    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), Math.random);
+    const frame = cameraFrame(teamCamera(g.cfg, 'A', 16, 9));
+    g.controlFrames = { A: frame, B: frame };
+    demo = { game: g, a: new CpuController('A', 'hard', Math.random), b: new CpuController('B', 'medium', Math.random) };
+  }
+  const d = demo;
+  d.game.update(dt, { A: d.a.input(d.game), B: d.b.input(d.game) });
+  renderGame3D(ctx, theme, view, d.game, 'behindA', false);
 }
 
 function frame(dt: number): void {
   if (screen === 'panel') {
-    drawBackdrop();
+    drawBackdrop(dt);
     return;
   }
   if (screen === 'help') {
     if (keyboard.presses().length) screen = 'menu';
-    drawBackdrop();
+    drawBackdrop(dt);
     drawHelp(ctx, theme, view);
     return;
   }
@@ -189,7 +197,7 @@ function frame(dt: number): void {
       else if (role === 'hit') runMenuAction(menu.activate());
     }
     if (screen !== 'menu') return;
-    drawBackdrop();
+    drawBackdrop(dt);
     drawMenu(ctx, theme, view, menu, document.hasFocus() ? menuNote : 'Click the game first so it can hear your keyboard.');
     return;
   }

@@ -103,6 +103,8 @@ export interface Message {
 
 export interface Feedback {
   team: TeamId;
+  /** Who swung (the feedback shows by them). */
+  player?: PlayerId;
   label: string;
   quality: number | null;
   time: number;
@@ -128,6 +130,8 @@ export class Game {
   tossCount = 0;
   /** Each team's crosshair, in [-1, 1] per axis. Sticky: it stays where the player leaves it. */
   aim: Record<TeamId, Aim> = { A: { x: 0, y: 0 }, B: { x: 0, y: 0 } };
+  /** Spin each team's held direction would put on the ball right now (while its timing ring is up). */
+  heldSpin: Record<TeamId, SpinChoice | null> = { A: null, B: null };
   /** Style index each team currently has selected (held style key). */
   selectedStyle: Record<TeamId, 0 | 1 | 2> = { A: 0, B: 0 };
   readonly roster: Roster;
@@ -364,7 +368,10 @@ export class Game {
     this.time += dt;
     const st = this.engine.peek();
     if (st.phase !== 'penalty') this.moveAim(realDt, inputs);
-    for (const t of ['A', 'B'] as TeamId[]) this.selectedStyle[t] = inputs[t].style;
+    for (const t of ['A', 'B'] as TeamId[]) {
+      this.selectedStyle[t] = inputs[t].style;
+      this.heldSpin[t] = this.timingCue(t) ? this.spinChoice(t, inputs[t]) : null;
+    }
 
     if (st.phase === 'gameOver') {
       this.ball.step(dt, []);
@@ -457,7 +464,7 @@ export class Game {
       const ctx = this.swingContext(server, false, true);
       const q = timingQuality(this.cfg, style, off, ctx);
       const spin = this.spinChoice(server.team, inp);
-      this.feedback = { team: server.team, label: withSpin(timingLabel(q, off), q, spin), quality: q, time: this.time };
+      this.feedback = { team: server.team, player: server, label: withSpin(timingLabel(q, off), q, spin), quality: q, time: this.time };
       if (q !== null) return this.serve(server, style, q, this.aim[server.team], spin, off / timingWindow(this.cfg, style, ctx));
     }
     this.ball.step(dt, []);
@@ -492,7 +499,7 @@ export class Game {
     const q = timingQuality(this.cfg, style, off, ctx);
     const w = timingWindow(this.cfg, style, ctx);
     const spin = this.spinChoice(team, inp);
-    this.feedback = { team, label: withSpin(timingLabel(q, off, w <= 0), q, spin), quality: q, time: this.time };
+    this.feedback = { team, player, label: withSpin(timingLabel(q, off, w <= 0), q, spin), quality: q, time: this.time };
     if (q === null) return; // whiff (or out of reach)
     const from = { ...this.ball.pos };
     const stats = this.statsOf(player);

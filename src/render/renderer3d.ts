@@ -8,7 +8,7 @@
 
 import type { GameConfig } from '../config';
 import type { Sprite } from '../core/character';
-import type { Vec3 } from '../core/physics';
+import type { BallEffects, Vec3 } from '../core/physics';
 import { getStyle } from '../core/styles';
 import type { Cup, PlayerId, TeamId } from '../core/types';
 import type { Game } from '../game/game';
@@ -98,7 +98,7 @@ export function viewports(cfg: GameConfig, v: View, layout: Layout): Viewport[] 
 let lastViewports: Viewport[] = [];
 
 /** Draw the 3D view(s) onto the main canvas. */
-export function renderGame3D(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, layout: Layout): void {
+export function renderGame3D(ctx: CanvasRenderingContext2D, theme: Theme, v: View, game: Game, layout: Layout, labels = true): void {
   const vps = viewports(game.cfg, v, layout);
   lastViewports = vps;
   ctx.fillStyle = theme.room.divider;
@@ -109,7 +109,7 @@ export function renderGame3D(ctx: CanvasRenderingContext2D, theme: Theme, v: Vie
     drawScene(b, theme, game, vp);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(vp.buf, vp.x, vp.y, vp.w, vp.h);
-    drawLabels(ctx, theme, game, vp);
+    if (labels) drawLabels(ctx, theme, game, vp);
   }
 }
 
@@ -332,6 +332,11 @@ function drawScene(b: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Vi
     if (!game.aiming(team)) continue;
     const t = game.aimTarget(team, game.aim[team], getStyle(st.phase === 'awaitServe' ? 'standardServe' : 'standardHit'));
     const col = team === 'A' ? theme.colors.teamA : theme.colors.teamB;
+    if (t.cup) {
+      // Locked onto a cup: ring its mouth.
+      ring(b, cam, { x: t.x, y: t.y, z: cfg.physics.cupHeight + 0.004 }, cfg.cups.diameter * 0.75, theme.colors.activeRing, 2);
+      continue;
+    }
     ring(b, cam, { x: t.x, y: t.y, z: 0.003 }, 0.07, col, 1);
     line(b, cam, { x: t.x - 0.1, y: t.y, z: 0.003 }, { x: t.x + 0.1, y: t.y, z: 0.003 }, col);
     line(b, cam, { x: t.x, y: t.y - 0.1, z: 0.003 }, { x: t.x, y: t.y + 0.1, z: 0.003 }, col);
@@ -351,7 +356,7 @@ function drawScene(b: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Vi
     if (behindTable.some((x) => x.p === p)) continue;
     items.push({ depth: depthOf(pos), draw: () => drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p)) });
   }
-  if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(b, theme, cfg, cam, ball.pos) });
+  if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(b, theme, cfg, cam, ball.pos, ball.vel, ball.fx) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
 
@@ -476,9 +481,24 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
   if (!base || !head) return;
   const hgt = base.y - head.y;
   if (hgt <= 0) return;
-  // Team-colored floor marker; yellow when it is this player's turn.
+  // Team-colored floor marker; a pulsing yellow ring and a bouncing arrow when it is this player's turn.
   const markerCol = active ? theme.colors.activeRing : p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
   ring(b, cam, feet, 0.28, markerCol, active ? 2 : 1, 16);
+  if (active) {
+    const pulse = 0.5 + 0.5 * Math.sin(game.time * 9);
+    ring(b, cam, feet, 0.34 + pulse * 0.08, theme.colors.activeRing, 1, 16);
+    const tip = project(cam, { ...feet, z: feet.z + PERSON_HEIGHT + 0.12 + pulse * 0.06 });
+    if (tip) {
+      const s = Math.max(3, tip.scale * 0.09);
+      b.fillStyle = theme.colors.activeRing;
+      b.beginPath();
+      b.moveTo(tip.x - s, tip.y - s * 1.4);
+      b.lineTo(tip.x + s, tip.y - s * 1.4);
+      b.lineTo(tip.x, tip.y);
+      b.closePath();
+      b.fill();
+    }
+  }
   if (!sprite) {
     b.fillStyle = p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
     b.fillRect(Math.round(base.x - hgt * 0.15), Math.round(head.y), Math.round(hgt * 0.3), Math.round(hgt));
@@ -491,9 +511,22 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
   b.globalAlpha = 1;
 }
 
-function drawBall(b: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, pos: Vec3): void {
+function drawBall(b: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, pos: Vec3, vel: Vec3, fx: BallEffects): void {
   const c = project(cam, { ...pos, z: pos.z + cfg.physics.ballRadius });
   if (!c) return;
+  // A spinning ball leaves a short colored streak.
+  const spin = fx.topspin > 0.05 ? theme.colors.spinTop : fx.topspin < -0.05 ? theme.colors.spinBack : Math.abs(fx.sideKick) > 0.01 ? theme.colors.spinSide : null;
+  if (spin) {
+    const tail = project(cam, { x: pos.x - vel.x * 0.06, y: pos.y - vel.y * 0.06, z: pos.z - vel.z * 0.06 + cfg.physics.ballRadius });
+    if (tail) {
+      b.strokeStyle = spin;
+      b.lineWidth = 2;
+      b.beginPath();
+      b.moveTo(tail.x, tail.y);
+      b.lineTo(c.x, c.y);
+      b.stroke();
+    }
+  }
   const r = Math.max(1.2, cfg.physics.ballRadius * c.scale);
   b.fillStyle = theme.colors.ballOutline;
   b.beginPath();
@@ -563,30 +596,55 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
     const head = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.12 });
     if (!head) continue;
     const sx = vp.x + head.x * k;
-    const sy = Math.max(vp.y + theme.hudTop + 10, Math.min(vp.y + vp.h - theme.hudBottom - 10, vp.y + head.y * k));
+    const activeHere = game.activePlayer(p.team);
+    // Keep the name (and the turn tag above it) clear of the HUD bars.
+    const minY = vp.y + theme.hudTop + (activeHere && activeHere.side === p.side ? 40 : 10);
+    const sy = Math.max(minY, Math.min(vp.y + vp.h - theme.hudBottom - 10, vp.y + head.y * k));
     const label = (who.master ? '★ ' : '') + who.name + (st.server.team === p.team && st.server.side === p.side ? ' ●' : '');
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    const w = ctx.measureText(label).width + 8;
-    ctx.fillRect(sx - w / 2, sy - 8, w, 16);
-    if (who.master) {
-      ctx.shadowColor = theme.colors.masterGlow;
-      ctx.shadowBlur = 8;
-    }
-    ctx.fillStyle = who.nameColor ?? (who.master ? theme.colors.master : theme.colors.text);
-    ctx.fillText(label, sx, sy);
-    ctx.shadowBlur = 0;
-    const active = game.activePlayer(p.team);
-    if (active && active.side === p.side) {
+    const activeP = game.activePlayer(p.team);
+    const isUp = !!activeP && activeP.side === p.side;
+    const w = ctx.measureText(label).width + 10;
+    if (isUp) {
+      // Whose turn it is: a bright tag saying what they are about to do.
+      const what = st.phase === 'awaitServe' ? 'SERVE' : st.rally?.cupAtRisk ? 'SAVE!' : 'HIT';
+      ctx.font = theme.fonts.title;
+      const tw = Math.max(w, ctx.measureText(what).width + 14);
+      ctx.fillStyle = theme.colors.activeRing;
+      ctx.fillRect(sx - tw / 2, sy - 30, tw, 22);
+      ctx.fillStyle = theme.colors.activeText;
+      ctx.fillText(what, sx, sy - 19);
+      ctx.font = theme.fonts.label;
+      ctx.fillStyle = theme.colors.activeRing;
+      ctx.fillRect(sx - w / 2, sy - 8, w, 16);
+      ctx.fillStyle = theme.colors.activeText;
+      ctx.fillText(label, sx, sy);
       const style = game.currentStyle(p.team);
-      if (style) {
-        ctx.fillStyle = game.selectedStyle[p.team] ? theme.colors.activeRing : theme.colors.textDim;
-        ctx.fillText(style.name, sx, sy + 15);
+      const spin = game.heldSpin[p.team];
+      const bits = [style?.name, spin ? (spin.type === 'side' ? 'Sidespin' : spin.type === 'top' ? 'Topspin' : 'Backspin') : null].filter(Boolean).join(' · ');
+      if (bits) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        const bw = ctx.measureText(bits).width + 8;
+        ctx.fillRect(sx - bw / 2, sy + 9, bw, 15);
+        ctx.fillStyle = spin ? theme.colors.activeRing : theme.colors.text;
+        ctx.fillText(bits, sx, sy + 16);
       }
+    } else {
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(sx - w / 2, sy - 8, w, 16);
+      if (who.master) {
+        ctx.shadowColor = theme.colors.masterGlow;
+        ctx.shadowBlur = 8;
+      }
+      ctx.fillStyle = who.nameColor ?? (who.master ? theme.colors.master : theme.colors.text);
+      ctx.fillText(label, sx, sy);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
     }
   }
   const fb = game.feedback;
   if (fb && game.time - fb.time < 0.9) {
-    const p = game.activePlayer(fb.team) ?? { team: fb.team, side: 'left' as const };
+    const p = fb.player ?? game.activePlayer(fb.team) ?? { team: fb.team, side: 'left' as const };
     const at = project(vp.cam, { ...standSpot(game, p), z: 0.6 });
     if (at) {
       ctx.globalAlpha = 1 - (game.time - fb.time) / 0.9;

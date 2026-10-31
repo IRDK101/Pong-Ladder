@@ -313,3 +313,18 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - A concrete floor with seams and stains.
   - At each end wall: a beat-up couch, the house letters (`theme.houseLetters`, default ΖΨ), a Big Green flag and a paddle rack.
   - Posters on the side walls, and a pool of light over the table.
+
+## Feel update (spin, timing pressure, reach, sinking, misses)
+
+- **Spin from the direction keys:** aim with the crosshair before the ball arrives (or before you toss). Once the timing ring appears, the crosshair freezes, and the direction held at the moment of the hit picks the spin. It's read in the hitter's own view:
+  - Toward the opponents = topspin (bounces low and skids on).
+  - Back toward yourself = backspin (sits up).
+  - Sideways = sidespin that curves and kicks that way.
+  - Nothing held = the style's own spin.
+  - Amounts are in `hitting.spin` and are scaled by the Spin stat. Serve spin lasts two bounces, so it still kicks on the receiver's side; the serve solver accounts for the first bounce, so serves still land where aimed.
+- **Timing pressure:** the hit window shrinks for faster incoming balls (`hitting.windowSpeed`: (2.4 m/s ÷ speed)^0.8, clamped to 0.5–1.15×) and as a rally goes on (`hitting.windowRally`: −3% per hit after the 2nd, down to 55%).
+- **Reach:** the window also shrinks with the distance from where the hitter stands to the ball (`hitting.reach`). There's no penalty within 0.75 m, it narrows after that, and past 1.7 m the ball is out of reach ("Out of reach!"). On a save, the teammate nearer the ball takes it, and the Saves stat extends reach on saves (`statEffects.saveReach`).
+- **Off the table:** the crosshair can now reach past the table's ends and sides (`aimRangeDepth` 0.75 m, `aimRangeLateral` 0.8 m; serves 0.5 m / 0.42 m). Early swings land short and late ones long, by up to 0.4 m, growing with the square of the error (`timingDepthError`).
+- **Sinking:** a rally crosshair within 7 cm of a live opponent cup locks onto it (yellow ring), and the shot is solved to arrive at the cup's mouth, not at table level. A perfectly timed hit sinks any cup, the back row included, which a test checks. Perfect-hit scatter is now 1.8 cm, so landing it still depends on timing and Accuracy.
+- **Turn highlight:** the player who's up gets a pulsing double ring, a bouncing arrow, and a yellow tag saying SERVE, HIT or SAVE! along with their name, style and the spin being held. The other players' tags dim.
+- **Title screen:** a pixel logo, Match Setup on the left and Play / More on the right, and a key-cap controls legend, all over a live CPU-vs-CPU demo match in the basement.
