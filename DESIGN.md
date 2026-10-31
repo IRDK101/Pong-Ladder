@@ -351,3 +351,19 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - Lighting: a hanging lamp with a glowing bulb.
 - **Table and cups:** the table has plywood grain and knots. Cups are shaded left to right, with a white rim band and two ridges like a party cup. The ball has a highlight pixel.
 - **No mechanics changed.**
+
+## Table and cup detail pass
+
+- **Layers:** the 3D view draws in three pixel layers. The room and the people behind the table are on the coarse layer (about 250 rows). The table, cups, ball, crosshair, timing rings and lamp are on a finer layer at `camera.detail` (2×) that resolution, so they get real detail and still read as pixel art. Your own team sits on a coarse layer on top. The vignette is applied over all of them.
+- **Table:**
+  - The top is a hand-generated pixel texture mapped in perspective (48 strips): six lengthwise plywood boards in slightly different tones, staggered butt joints, wavy grain, knots, faint cup-ring stains and worn edges.
+  - Painted lines are real stripes in world units (2 cm border, 1.2 cm center lines), and every top edge has a lit bevel.
+  - Shaded legs with stretchers between them.
+  - The ski is a capsule with thickness, a shadow, a white center stripe and a highlight.
+- **Cups:**
+  - A tapered body in six shading bands, including a specular streak, plus two embossed ridges and a foot ring.
+  - A rolled rim in the cup color, and the pale inside wall.
+  - The water surface sits at its real height (lower in a half cup, which shows more inside wall and darker water) with a shine and an edge line. A strip of water always stays in view so half and full cups read at a glance.
+  - Each cup casts a shadow away from the lamp.
+- **Ball:** a shaded sphere with an outline and a highlight; the spin streak scales with the ball.
+- **No mechanics changed.**

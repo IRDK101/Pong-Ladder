@@ -48,6 +48,8 @@ export interface GameConfig {
     pixelSize: number;
     /** About how many rendered pixel rows the 3D view has (keeps the pixel art equally chunky at any screen size). */
     rows: number;
+    /** The table, cups and ball are drawn at this multiple of that resolution, for finer detail. */
+    detail: number;
   };
   controls: { A: TeamControls; B: TeamControls };
   table: {
@@ -169,7 +171,7 @@ export const defaultConfig: GameConfig = {
   draftFirstPick: 'coinFlip',
   players: { mode: 'versus', cpu: 'medium' },
   view: 'behindA',
-  camera: { behind: 1.9, height: 1.85, lookAt: 0.55, lookHeight: -0.05, fovY: 46, pixelSize: 2, rows: 250 },
+  camera: { behind: 1.9, height: 1.85, lookAt: 0.55, lookHeight: -0.05, fovY: 46, pixelSize: 2, rows: 250, detail: 2 },
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },

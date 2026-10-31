@@ -112,6 +112,34 @@ export const theme = {
     cupInside: '#8c2420',
     divider: '#0d0a08',
   },
+  /** The table (3D view). */
+  table: {
+    boards: ['#6f4c2c', '#694729', '#73502f', '#6a4829', '#704d2d', '#664427'],
+    grain: '#5c3e23',
+    grainLight: '#7e5a37',
+    seam: '#4a3119',
+    knot: '#4e341d',
+    stain: 'rgba(40, 24, 12, 0.35)',
+    edgeWear: '#5a3d22',
+    bevel: '#8a6643',
+    side: '#4a3220',
+    sideDark: '#3a2718',
+    leg: '#2b1d12',
+    legLight: '#3a2819',
+    legDark: '#1f150d',
+    skiSide: '#7d2416',
+    skiShadow: 'rgba(0, 0, 0, 0.35)',
+    skiShine: '#ff8a6a',
+  },
+  /** Cups and ball (3D view). */
+  cup: {
+    inside: '#f1ebdf',
+    insideShade: '#d7cdbb',
+    waterShine: '#e6f6ff',
+    waterEdge: '#3e8fc4',
+    shadow: 'rgba(20, 10, 4, 0.38)',
+    ballShade: '#d9d0bf',
+  },
   /** Title screen. */
   menu: {
     logo: '#f2e8d5',
