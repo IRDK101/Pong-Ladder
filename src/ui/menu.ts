@@ -31,7 +31,7 @@ const CHOICES: Choice[] = [
   { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }, { label: 'Classic top-down', apply: set('view', 'topDown') }] },
   { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
-  { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.55) }, { label: 'Quick', apply: speed(0.7) }, { label: 'Relaxed', apply: speed(0.42) }] },
+  { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
   { label: 'Penalty cup', values: [{ label: 'Team chooses', apply: set('penaltyCupSelection', 'choose') }, { label: 'Automatic', apply: set('penaltyCupSelection', 'auto') }] },
   { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];

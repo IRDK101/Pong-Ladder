@@ -44,7 +44,7 @@ describe('sinking is feasible for every cup, back row included', () => {
     });
   };
 
-  it('a perfectly timed shot locked onto a cup sinks it, every cup', () => {
+  it('a perfectly timed shot aimed at a cup center sinks it, every cup', () => {
     for (const r of rate(1)) expect(r.rate, r.id).toBeGreaterThanOrEqual(0.95);
   });
 
@@ -55,13 +55,14 @@ describe('sinking is feasible for every cup, back row included', () => {
     expect(sloppy.reduce((a, r) => a + r.rate, 0) / sloppy.length).toBeLessThan(0.3);
   });
 
-  it('the crosshair locks onto a nearby cup and aims into its mouth', () => {
+  it('the crosshair does not snap to cups; over a cup mouth the shot aims into it', () => {
     const g = new Game(makeConfig(), () => 0.1);
     const trunk = g.engine.peek().cups.B.find((c) => c.id === 'trunk')!;
-    const aim = g.aimToward('A', { x: trunk.x + 0.03, y: trunk.y - 0.02 }, hit);
-    const t = g.aimTarget('A', aim, hit);
-    expect(t.cup?.id).toBe('trunk');
-    expect(t.x).toBe(trunk.x);
+    const near = g.aimTarget('A', g.aimToward('A', { x: trunk.x + 0.02, y: trunk.y - 0.01 }, hit), hit);
+    expect(near.cup?.id).toBe('trunk');
+    expect(near.x).toBeCloseTo(trunk.x + 0.02);
+    const beside = g.aimTarget('A', g.aimToward('A', { x: trunk.x + 0.08, y: trunk.y }, hit), hit);
+    expect(beside.cup).toBeNull();
     // The back cups are within the crosshair's reach.
     expect(Math.abs(g.aimToward('A', trunk, hit).x)).toBeLessThan(1);
   });
@@ -240,5 +241,18 @@ describe('serve and fault flow', () => {
       }
     }
     expect(checked).toBeGreaterThan(5);
+  });
+});
+
+describe('rallies build pace', () => {
+  it('later returns fly lower, but a standard hit never drops under shoulder height for it', async () => {
+    const { pacedStyle } = await import('../src/game/game');
+    const c = makeConfig();
+    expect(pacedStyle(c, hit, 1).peak).toBe(hit.peak);
+    const late = pacedStyle(c, hit, 12).peak;
+    expect(late).toBeLessThan(hit.peak);
+    expect(late).toBeGreaterThan(c.shoulderHeight);
+    const flat = getStyle('flatFast');
+    expect(pacedStyle(c, flat, 30).peak).toBeGreaterThan(c.shoulderHeight);
   });
 });

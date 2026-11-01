@@ -13,7 +13,6 @@ import type { Cup, PlayerId, TeamId } from '../core/types';
 import type { Game } from '../game/game';
 import type { Theme } from '../theme';
 import { project, projectPolygon, teamCamera, type Camera } from './camera';
-import { solveArc, solveServe } from '../core/trajectory';
 import { SPIN_LABELS } from '../game/shot';
 import type { View } from './renderer';
 
@@ -605,96 +604,31 @@ function showsAim(game: Game, vp: Viewport, team: TeamId): boolean {
   return lastViewports.length < 2 || vp.team === team;
 }
 
-/** Sampled flight path of a shot (no spin or scatter), for the aim preview. */
-function previewPath(game: Game, team: TeamId): { pts: Vec3[]; target: { x: number; y: number; cup: Cup | null } } | null {
-  const style = game.currentStyle(team);
-  const p = game.activePlayer(team);
-  if (!style || !p) return null;
-  const cfg = game.cfg;
-  const g = cfg.physics.gravity;
-  const t = game.aimTarget(team, game.aim[team], style);
-  const ball = game.ball.pos;
-  const serving = style.kind === 'serve';
-  const spot = game.playerSpot(p);
-  const from: Vec3 = serving || game.timingCue(team) ? { ...ball } : { x: spot.x, y: spot.y, z: 0.3 };
-  const pts: Vec3[] = [];
-  const arc = (o: Vec3, v: Vec3, landZ: number) => {
-    const dt = 1 / 90;
-    const q = { ...o };
-    const vel = { ...v };
-    for (let k = 0; k < 400; k++) {
-      pts.push({ ...q });
-      vel.z -= g * dt;
-      q.x += vel.x * dt;
-      q.y += vel.y * dt;
-      q.z += vel.z * dt;
-      if (vel.z < 0 && q.z <= landZ) break;
-    }
-    return { pos: { ...q, z: landZ }, vel };
-  };
-  if (serving) {
-    const { vel } = solveServe(cfg, from, t, style.peak);
-    const first = arc(from, vel, 0);
-    const ph = cfg.physics;
-    arc(first.pos, { x: first.vel.x * ph.tableFriction, y: first.vel.y * ph.tableFriction, z: -first.vel.z * ph.restitution }, 0);
-  } else {
-    const landZ = t.cup ? cfg.physics.cupHeight : 0;
-    arc(from, solveArc(from, t, style.peak, g, 0, landZ), landZ);
-  }
-  return { pts, target: t };
-}
-
-/** The aim preview: a dotted path and a landing marker (a ring on a locked cup, red when off the table). */
+/**
+ * The aim marker on the table: a ring with four ticks and a center dot. It
+ * flashes once the shot is locked in (the timing rings are up), and turns red
+ * with an X when aimed off the table. No path preview and no cup highlight:
+ * reading the shot is the player's job.
+ */
 function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, team: TeamId): void {
   const cfg = game.cfg;
-  const path = previewPath(game, team);
-  if (!path) return;
-  const { pts, target: t } = path;
-  const frozen = game.timingCue(team) !== null;
+  const style = game.currentStyle(team);
+  if (!style) return;
+  const t = game.aimTarget(team, game.aim[team], style);
+  const locked = game.timingCue(team) !== null;
   const { length: L, width: W } = cfg.table;
-  const off = !t.cup && (t.x < 0 || t.x > L || t.y < 0 || t.y > W);
-  const col = off ? theme.colors.bad : team === 'A' ? theme.colors.aimA : theme.colors.aimB;
+  const off = t.x < 0 || t.x > L || t.y < 0 || t.y > W;
+  const base = off ? theme.colors.bad : team === 'A' ? theme.colors.aimA : theme.colors.aimB;
+  // Locked: flash between white and the team color (about 8 times a second).
+  const flash = locked && Math.floor(game.time * 16) % 2 === 0;
+  const col = flash ? theme.colors.lockFlash : base;
   const dark = theme.colors.ballOutline;
-
-  // Dotted path, marching toward the target and fading in from the hitter.
-  const step = 5;
-  const phase = Math.floor(game.time * 30) % step;
-  for (let k = phase; k < pts.length; k += step) {
-    const q = project(cam, pts[k]);
-    if (!q) continue;
-    const a = k / pts.length;
-    const s = q.scale > 260 ? 3 : 2;
-    h.globalAlpha = 0.45 + 0.55 * a;
-    h.fillStyle = dark;
-    h.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, s + 2, s + 2);
-    h.fillStyle = col;
-    h.fillRect(Math.round(q.x), Math.round(q.y), s, s);
-  }
-  h.globalAlpha = 1;
-
-  if (t.cup) {
-    // Locked on a cup: a bright ring around its rim and a marker over it.
-    const H = cfg.physics.cupHeight;
-    const r = cfg.cups.diameter / 2;
-    ring(h, cam, { x: t.x, y: t.y, z: H + 0.004 }, r * 1.25, dark, 4, 28);
-    ring(h, cam, { x: t.x, y: t.y, z: H + 0.004 }, r * 1.25, theme.colors.activeRing, 2, 28);
-    const top = project(cam, { x: t.x, y: t.y, z: H + 0.09 + (frozen ? 0 : Math.sin(game.time * 8) * 0.01) });
-    if (top) {
-      const s = Math.max(3, Math.round(top.scale * 0.025));
-      h.fillStyle = dark;
-      tri(h, Math.round(top.x), Math.round(top.y) + 1, s + 1);
-      h.fillStyle = theme.colors.activeRing;
-      tri(h, Math.round(top.x), Math.round(top.y), s);
-    }
-    return;
-  }
-  // Landing marker on the table (or the floor beyond it): ring, four ticks, center dot.
-  // Off the table the marker floats at table height, so it reads as just past the edge.
+  // The marker floats at table height, even past the edge, so it reads as just off the table.
   const z = 0.003;
-  const R = 0.085 + (frozen ? 0 : 0.008 * Math.sin(game.time * 6));
+  const R = 0.085 + (locked ? 0 : 0.008 * Math.sin(game.time * 6));
   const c = { x: t.x, y: t.y, z };
-  if (frozen) {
-    h.globalAlpha = 0.3;
+  if (locked) {
+    h.globalAlpha = flash ? 0.45 : 0.25;
     disc(h, cam, c, R, col, 24);
     h.globalAlpha = 1;
   }
@@ -702,7 +636,7 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   ring(h, cam, c, R, col, 2, 28);
   const tick = (dx: number, dy: number) => {
     const a = { x: t.x + dx * R * 1.25, y: t.y + dy * R * 1.25, z };
-    const e = { x: t.x + dx * R * (frozen ? 1.45 : 1.75), y: t.y + dy * R * (frozen ? 1.45 : 1.75), z };
+    const e = { x: t.x + dx * R * (locked ? 1.45 : 1.75), y: t.y + dy * R * (locked ? 1.45 : 1.75), z };
     line(h, cam, a, e, dark, 4);
     line(h, cam, a, e, col, 2);
   };

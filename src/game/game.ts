@@ -245,8 +245,9 @@ export class Game {
 
   /**
    * Where a shot from `team` is aimed: the style's default spot, moved by the
-   * aim keys. It can go past the table edges. A rally crosshair close to a
-   * live opponent cup locks onto it (`cup`), and the shot drops into its mouth.
+   * aim keys. It can go past the table edges. There is no snapping: only when
+   * the crosshair sits over a live opponent cup's mouth (`cup`) does the shot
+   * aim to drop in at rim height instead of landing on the table.
    */
   aimTarget(team: TeamId, aim: Aim, style: ShotStyle): { x: number; y: number; cup: Cup | null } {
     const serving = style.kind === 'serve';
@@ -255,20 +256,13 @@ export class Game {
     const range = this.aimRanges(serving);
     const x = x0 + aim.x * range.depth;
     const y = y0 + aim.y * range.lateral;
+    let cup: Cup | null = null;
     if (!serving) {
-      let best: Cup | null = null;
-      let bestD = this.cfg.hitting.cupLock;
-      for (const c of this.engine.peek().cups[otherTeam(team)]) {
-        if (c.state === 'removed') continue;
-        const d = Math.hypot(c.x - x, c.y - y);
-        if (d < bestD) {
-          best = c;
-          bestD = d;
-        }
-      }
-      if (best) return { x: best.x, y: best.y, cup: best };
+      const mouth = this.cfg.cups.diameter / 2;
+      for (const c of this.engine.peek().cups[otherTeam(team)])
+        if (c.state !== 'removed' && Math.hypot(c.x - x, c.y - y) <= mouth) cup = c;
     }
-    return { x, y, cup: null };
+    return { x, y, cup };
   }
 
   /** The crosshair setting (aim units) that points `team`'s shot at a table point (clamped to the crosshair's range). */
@@ -523,7 +517,7 @@ export class Game {
     const stats = this.statsOf(player);
     const t = this.aimTarget(team, this.aim[team], style);
     const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin };
-    const shot = computeHit(this.cfg, style, from, spec, q, this.rng, stats);
+    const shot = computeHit(this.cfg, pacedStyle(this.cfg, style, rally.hits), from, spec, q, this.rng, stats);
     this.resetBallTracking();
     this.incomingPower = stats.power;
     // Launch first: if the engine ends the rally on the hit (a low hit), the ball goes straight back to the server.
@@ -581,4 +575,16 @@ export class Game {
 /** "Perfect · Topspin" when a hit connects with spin. */
 function withSpin(label: string, q: number | null, spin: SpinChoice | null): string {
   return q !== null && spin ? `${label} · ${SPIN_LABELS[spin.type]}` : label;
+}
+
+/**
+ * Rallies build pace: after a few hits, returns fly a little lower (and so
+ * faster). A well-timed return never gets pushed under shoulder height by it.
+ */
+export function pacedStyle(cfg: GameConfig, style: ShotStyle, rallyHits: number): ShotStyle {
+  const p = cfg.hitting.rallyPace;
+  const k = Math.max(p.min, 1 - p.perHit * Math.max(0, rallyHits - p.startAfter));
+  if (k >= 1) return style;
+  const floor = Math.min(style.peak, cfg.shoulderHeight * 1.15);
+  return { ...style, peak: Math.max(floor, style.peak * k) };
 }

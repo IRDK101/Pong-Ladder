@@ -113,10 +113,11 @@ describe('game loop (physics + rules + input)', () => {
 
   it('perfect players sustain a long rally aimed at mid-table', () => {
     const g = new Game(cfgWith(), mulberry32(5));
-    const calls = play(g, { A: timedBot(0), B: timedBot(0) }, 30, (c) => c.length > 1);
-    expect(calls).toHaveLength(1);
-    expect(calls[0].kind).toBe('goodServe');
-    expect(g.engine.peek().rally!.hits).toBeGreaterThan(15);
+    // A lively ball can carry on into a cup after landing; that is part of the rally (a save), not its end.
+    const inRally = new Set(['goodServe', 'cupHit', 'saveMade']);
+    const calls = play(g, { A: timedBot(0), B: timedBot(0) }, 30, (c) => c.some((x) => !inRally.has(x.kind)));
+    const end = calls.find((c) => !inRally.has(c.kind));
+    expect(end?.rallyHits ?? g.engine.peek().rally!.hits, JSON.stringify(calls.map((c) => c.text))).toBeGreaterThan(15);
   });
 
   it('a very late swing is a whiff (no hit); the ball then double-bounces', () => {

@@ -386,3 +386,18 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - Only human teams' aim is shown. In split screen, each half shows only its own team's aim.
 - **Timing cue:** a fixed white ring around the ball, with a colored ring closing in on it. Yellow means early, green the sweet spot, red late.
 - **Labels:** one consistent pill style. Whoever is up gets a single yellow tag such as "HIT · name", with spin or a non-default style shown under it. The old floating chip and big arrow are gone.
+
+## Aim and pace update
+
+- **No shot preview and no cup snapping.** The dotted path and the cup lock (ring and marker on the targeted cup) are removed, so sinking cups is up to the player's read.
+  - The crosshair moves freely.
+  - The shot drops in at rim height only when the crosshair sits over a live cup's mouth (within the cup radius). Anywhere else it aims at the table.
+  - `hitting.cupLock` is gone.
+- **Locked-in flash:** once the timing rings are up, the aim is locked and the marker flashes white and the team color about 8 times a second.
+- **Livelier physics, still forgiving:**
+  - Game speed: `timeScale` 0.62 (was 0.55). The menu offers Normal 0.62, Quick 0.78 and Relaxed 0.46.
+  - Bouncier table: `restitution` 0.88.
+  - Stronger spin: `topspinKick` 0.26, `sideCurve` 2.0, `sideKick` 0.55, chosen spin {top 0.9, back 0.8, side 0.85}.
+  - The base timing window is wider to keep it easy to learn: 0.24 s.
+  - **Rallies build pace (`rallyPace`):** after 2 hits, each return flies 3.5% lower (and so faster), down to 72% of the style's peak. The peak never drops below 1.15 × shoulder height because of this, so pace alone never causes a low hit.
+- **Measured** over 6 medium-vs-medium CPU games, compared with before this update: the ball moves about 19% faster, there are more cup hits from lively bounces, and sinks fall from about 15.5 to 12.3 per game without snapping.

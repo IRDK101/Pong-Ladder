@@ -31,6 +31,8 @@ export const theme = {
     /** Aim markers: lighter team colors that read on the wood. */
     aimA: '#ff9c8c',
     aimB: '#9cc4ff',
+    /** The aim marker flashes this color once a shot is locked in. */
+    lockFlash: '#ffffff',
     bad: '#ff7b6b',
     overlay: 'rgba(10, 7, 5, 0.78)',
     button: '#3d2a18',

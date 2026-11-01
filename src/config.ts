@@ -139,14 +139,14 @@ export interface HitTuning {
   aimRangeDepth: number;
   serveAimLateral: number;
   serveAimDepth: number;
-  /** A crosshair this close (m) to an opponent cup locks onto it, and the shot is aimed into its mouth. */
-  cupLock: number;
   /** How far (m) a fully early / fully late swing lands short / long of the aim. */
   timingDepthError: number;
   /** The window narrows for faster balls: (ref / speed) ^ exponent, clamped to [min, max]. */
   windowSpeed: { ref: number; exponent: number; min: number; max: number };
   /** The window narrows as a rally goes on: perHit less per hit after `startAfter`, down to `min`. */
   windowRally: { startAfter: number; perHit: number; min: number };
+  /** Rallies build pace: after `startAfter` hits each return flies perHit lower (so faster), down to `min` of the style's peak. */
+  rallyPace: { startAfter: number; perHit: number; min: number };
   /** Reach (m from where the hitter stands): full window within `comfortable`, none beyond `max`. */
   reach: { comfortable: number; max: number };
   /** Spin a player adds by holding a direction as they hit (0–1, before the Spin stat). */
@@ -182,21 +182,21 @@ export const defaultConfig: GameConfig = {
   ski: { length: 1.1, width: 0.08 },
   physics: {
     gravity: 9.81,
-    restitution: 0.85,
+    restitution: 0.88,
     tableFriction: 0.92,
     ballRadius: 0.02,
     cupHeight: 0.12,
     cupRestitution: 0.45,
     tableHeight: 0.76,
     skiHeight: 0.03,
-    timeScale: 0.55,
+    timeScale: 0.62,
     topspinBounceLoss: 0.3,
-    topspinKick: 0.18,
-    sideCurve: 1.6,
-    sideKick: 0.45,
+    topspinKick: 0.26,
+    sideCurve: 2.0,
+    sideKick: 0.55,
   },
   hitting: {
-    timingWindow: 0.22,
+    timingWindow: 0.24,
     saveWindowScale: 0.55,
     scatterPerfect: 0.018,
     scatterWorst: 0.45,
@@ -205,12 +205,12 @@ export const defaultConfig: GameConfig = {
     aimRangeDepth: 0.75,
     serveAimLateral: 0.42,
     serveAimDepth: 0.5,
-    cupLock: 0.07,
     timingDepthError: 0.4,
     windowSpeed: { ref: 2.4, exponent: 0.8, min: 0.5, max: 1.15 },
     windowRally: { startAfter: 2, perHit: 0.03, min: 0.55 },
+    rallyPace: { startAfter: 2, perHit: 0.035, min: 0.72 },
     reach: { comfortable: 0.75, max: 1.7 },
-    spin: { top: 0.8, back: 0.7, side: 0.75 },
+    spin: { top: 0.9, back: 0.8, side: 0.85 },
     aimSpeed: 1.6,
     tossSpeed: 2.4,
     tossHeight: 0.1,
