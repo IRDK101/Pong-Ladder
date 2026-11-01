@@ -448,3 +448,24 @@ The second set of reference photos showed the full basement, so the 3D view now 
   - Long writing on walls is drawn in perspective strips, so it doesn't smear when seen close up at an angle.
 - **Menu:** a new "Table" row (`cfg.venue`). The CPU demo behind the title screen plays at the chosen table, and the top-down view uses that table's color.
 - **Left out:** profane graffiti from the photos, and characters from the night sky table's real fan art. The spirits on that table are generic.
+
+### Layout corrected: the tables stand in one row
+
+Side-angle photos showed the real arrangement, and the layout now follows it.
+
+- **The row:** the three tables stand in a single row down the room (x), each with its long axis across the room (y) and players at the ends:
+  - bar end wall;
+  - **Chain table**;
+  - first pillar pair and beam;
+  - **Saints table**, in the middle;
+  - second pillar pair and beam;
+  - **Night sky table**;
+  - the wall with the bathroom and exit doors.
+- **What each end sees:** one end of every table faces the long bench wall (tombstones, LEFT TURN YIELD ON GREEN, the KEEP SHUT windows, QUARTER MILE RD, 8 / CLAY DG, ONE WAY). The other end faces the stage side (stage, Monopoly table, speakers, JOHNSON CONTROLS, 74, ΖΨ, STOP sign). So the neighboring tables show to either side of every view.
+- **Slogans by face:** placed as in the photos.
+  - First pair: "GLIZZ" and "SWEAT SAVES BLOOD" toward the bar; "IF I DIE, I DIE." and "EAT ME! / PASSIVE INCOME '24" toward the saints table.
+  - Second pair: "YOU CAN'T SPELL / KOWABUNGA '26" and "GET GOOFY NOW!" toward the saints table; "ART THOU FEELING IT NOW?" and "'16 TAILS" toward the night sky table.
+  - "LOCO FOR MOLOKO" is a pillar against the door wall, between the bathroom and the exit.
+  - Beams: "Act or be acted upon." with the pizza proverb, and "On the Seventh Cup, He Rested." with TYRANNOSAURUS REX ON A BOAT, over the first pair; BIG BRIGGS, THE CLASS OF 1962 ROOM and RONA RUINED MY DAY, with "IT'S FOR THE KIDS" and "Draw without an eraser." on the back, over the second pair.
+- **Bar:** across the bar end, in line with the row. The arch over it reads "Now Serving Frankenstein Family Ale", with two fridges behind the counter and red corners on either side.
+- **Tests:** a test checks the row order and that a pillar pair stands between each pair of neighboring tables.

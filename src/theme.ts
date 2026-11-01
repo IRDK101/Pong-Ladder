@@ -143,6 +143,8 @@ export const theme = {
     glassStackDark: 'rgba(160, 175, 190, 0.55)',
     jug: '#5bd632',
     chair: '#6b3f20',
+    barAlcove: '#1a1512',
+    plaque: '#4a2c14',
     chairDark: '#4a2a14',
     vignette: 'rgba(0, 0, 0, 0.6)',
     tableShadow: 'rgba(0, 0, 0, 0.42)',

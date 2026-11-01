@@ -1,11 +1,22 @@
 import { makeConfig } from '../src/config';
-import { BEAMS, PILLARS, ROOM, VENUE_ORDER, basementToWorld, tableToBasement } from '../src/render/basement';
+import { BEAMS, PILLAR_ROWS, PILLARS, ROOM, ROW_Y, VENUE_ORDER, VENUES, basementToWorld, tableToBasement } from '../src/render/basement';
 import { teamCamera } from '../src/render/camera';
 
 const cfg = makeConfig();
 const { length: L, width: W } = cfg.table;
 
 describe('basement layout', () => {
+  it('the three tables stand in one row, bar end to door end: chain, saints, night sky', () => {
+    const xs = (['chain', 'saints', 'spirits'] as const).map((v) => VENUES[v].cx);
+    expect(xs).toEqual([...xs].sort((a, c) => a - c));
+    for (const v of VENUE_ORDER) expect(VENUES[v].cy).toBe(ROW_Y);
+    // A pillar pair stands between each pair of neighboring tables.
+    expect(PILLAR_ROWS[0]).toBeGreaterThan(VENUES.chain.cx + W / 2);
+    expect(PILLAR_ROWS[0]).toBeLessThan(VENUES.saints.cx - W / 2);
+    expect(PILLAR_ROWS[1]).toBeGreaterThan(VENUES.saints.cx + W / 2);
+    expect(PILLAR_ROWS[1]).toBeLessThan(VENUES.spirits.cx - W / 2);
+  });
+
   it('maps each table into the game frame and back', () => {
     for (const v of VENUE_ORDER) {
       const to = tableToBasement(cfg, v);
@@ -44,7 +55,7 @@ describe('basement layout', () => {
         const q = back({ x: pl.x, y: pl.y, z: 0 });
         const onTable = q.x > -0.35 && q.x < L + 0.35 && q.y > -0.35 && q.y < W + 0.35;
         const spots = [-0.55, L + 0.55].flatMap((x) => [W * 0.25 - 0.62, W * 0.75 + 0.62].map((y) => ({ x, y })));
-        const nearPlayer = spots.some((s) => Math.hypot(s.x - q.x, s.y - q.y) < 0.75);
+        const nearPlayer = spots.some((s) => Math.hypot(s.x - q.x, s.y - q.y) < 0.55);
         expect(onTable || nearPlayer, `${v}: pillar at ${pl.x},${pl.y}`).toBe(false);
       }
     }
