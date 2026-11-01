@@ -7,8 +7,8 @@ export const theme = {
     tableTop: '#6b4a2b',
     tableEdge: '#3d2a18',
     tableLine: '#f2e8d5',
-    skiBody: '#c23b22',
-    skiStripe: '#f2e8d5',
+    skiBody: '#a8361f',
+    skiStripe: '#e3d6bd',
     cupTeamA: '#d6342c',
     cupTeamB: '#2c62d6',
     cupRim: '#f5f5f5',
@@ -28,6 +28,9 @@ export const theme = {
     /** Lighter HUD bars over the 3D views, so the room shows through. */
     hudPanel3d: 'rgba(12, 8, 6, 0.5)',
     good: '#8fe388',
+    /** Aim markers: lighter team colors that read on the wood. */
+    aimA: '#ff9c8c',
+    aimB: '#9cc4ff',
     bad: '#ff7b6b',
     overlay: 'rgba(10, 7, 5, 0.78)',
     button: '#3d2a18',
@@ -129,7 +132,7 @@ export const theme = {
     legDark: '#1f150d',
     skiSide: '#7d2416',
     skiShadow: 'rgba(0, 0, 0, 0.35)',
-    skiShine: '#ff8a6a',
+    skiShine: '#d0644a',
   },
   /** Cups and ball (3D view). */
   cup: {
@@ -173,6 +176,8 @@ export const theme = {
   } as Record<string, string[]>,
   fonts: {
     hud: '14px monospace',
+    bar: 'bold 15px monospace',
+    small: '11px monospace',
     label: 'bold 12px monospace',
     title: 'bold 20px monospace',
   },
@@ -181,7 +186,7 @@ export const theme = {
   /** Padding around the table in screen pixels (left/right, top, bottom). */
   tablePadding: 175,
   hudTop: 70,
-  hudBottom: 120,
+  hudBottom: 64,
   ballPixelRadius: 6,
   playerPixelRadius: 13,
   /** Screen pixels per sprite pixel for characters on the table. */

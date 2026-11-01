@@ -220,6 +220,7 @@ describe('game loop (physics + rules + input)', () => {
     // Serve off the side of the table three times.
     const far: Partial<TeamInput> = { up: true };
     g.cfg.hitting.serveAimLateral = 5;
+    g.aim[team] = { x: 0, y: -1 };
     play(g, { A: team === 'A' ? timedBot(0, far) : idleBot, B: team === 'B' ? timedBot(0, far) : idleBot }, 20, () => g.engine.peek().phase === 'penalty');
     expect(g.engine.peek().phase).toBe('penalty');
     const cups = g.penaltyCups();

@@ -69,46 +69,39 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   ctx.fillStyle = c.textDim;
   ctx.fillText(bits.join('  ·  '), W / 2, M + 38);
 
-  // --- Referee messages, bottom center: the newest big, the one before it small.
-  const recent = game.messages.slice(-2);
-  if (recent.length) {
-    ctx.font = theme.fonts.title;
-    const newest = recent[recent.length - 1].text;
-    const mw = Math.min(W - 2 * M, Math.max(ctx.measureText(newest).width + 48, 360));
-    const mh = recent.length > 1 ? 58 : 38;
-    const my = v.height - M - mh - 18;
-    panel(ctx, theme, W / 2 - mw / 2, my, mw, mh, c.tableEdge);
-    ctx.textAlign = 'center';
-    if (recent.length > 1) {
-      ctx.font = theme.fonts.label;
-      ctx.fillStyle = c.textDim;
-      ctx.fillText(recent[0].text, W / 2, my + 15);
-    }
-    ctx.font = theme.fonts.title;
-    ctx.fillStyle = c.text;
-    ctx.fillText(newest, W / 2, my + mh - 18);
-  }
-
-  // --- One-line hint under the message box, and the keys in the bottom corners.
-  ctx.font = theme.fonts.label;
+  // --- Bottom bar: the newest referee call, with a one-line hint under it.
   const coop = game.cfg.players.mode === 'coop';
   const hint =
     st.phase === 'penalty'
-      ? `Team ${st.penalty!.team}: aim keys to pick a cup, hit key to confirm (or click it)`
+      ? `Team ${st.penalty!.team}: aim keys pick a cup, hit key confirms (or click it)`
       : st.phase === 'awaitServe'
-        ? 'Serve: hit to toss, hit again when the ring turns green · hold a direction for spin'
-        : 'Aim before the ball arrives · hit when the ring meets the ball · hold a direction for spin';
-  const tag = (text: string, x: number, align: CanvasTextAlign, col: string) => {
-    const w = ctx.measureText(text).width + 12;
-    const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(x0, v.height - M - 14, w, 16);
-    ctx.fillStyle = col;
-    ctx.textAlign = 'center';
-    ctx.fillText(text, x0 + w / 2, v.height - M - 6);
-  };
-  tag(hint, W / 2, 'center', st.phase === 'penalty' ? c.penaltyCursor : c.textDim);
-  if (W > 1100) {
+        ? 'Aim, then hit to toss · hit again as the rings meet · hold a direction for spin'
+        : 'Aim before the ball arrives · hit as the rings meet · hold a direction for spin';
+  const newest = game.messages[game.messages.length - 1]?.text ?? '';
+  ctx.font = theme.fonts.bar;
+  const mw = Math.min(W - 2 * M, Math.max(ctx.measureText(newest).width, ctx.measureText(hint).width * 0.86) + 48);
+  const mh = 46;
+  const my = v.height - M - mh;
+  panel(ctx, theme, W / 2 - mw / 2, my, mw, mh, c.tableEdge);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = c.text;
+  ctx.font = theme.fonts.bar;
+  ctx.fillText(newest, W / 2, my + 16);
+  ctx.font = theme.fonts.small;
+  ctx.fillStyle = st.phase === 'penalty' ? c.penaltyCursor : c.textDim;
+  ctx.fillText(hint, W / 2, my + 33);
+  // Keys in the bottom corners, when there is room beside the bar.
+  if (W - mw > 2 * 230) {
+    ctx.font = theme.fonts.label;
+    const tag = (text: string, x: number, align: CanvasTextAlign, col: string) => {
+      const w = ctx.measureText(text).width + 14;
+      const x0 = align === 'left' ? x : x - w;
+      panel(ctx, theme, x0, v.height - M - 26, w, 26, col);
+      ctx.fillStyle = col;
+      ctx.textAlign = 'center';
+      ctx.fillText(text, x0 + w / 2, v.height - M - 13);
+    };
     tag(coop ? 'Left teammate: WASD · Space' : 'Team A: WASD · Space', M, 'left', c.teamA);
     tag(coop ? 'Right teammate: Arrows · Enter' : 'Team B: Arrows · Enter', W - M, 'right', c.teamB);
   }

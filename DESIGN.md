@@ -367,3 +367,22 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - Each cup casts a shadow away from the lamp.
 - **Ball:** a shaded sphere with an outline and a highlight; the spin streak scales with the ball.
 - **No mechanics changed.**
+
+## Polish pass: aiming, flow and consistency
+
+- **Faults:** after any fault the ball goes straight back to the server's hand, with no dead-ball pause. Only a sink or a failed save keeps a short pause (0.8 s) so the moment reads. The referee call still shows in the bottom bar.
+- **Serves and own cups:** a serve passes over the server's own cups. The rules already ignored them [4.6], and now the physics does too, so a serve can't clip them.
+- **Ball always in view:**
+  - The camera sits a little further back and higher (2.2 m back, 1.9 m up, 50° field of view, tilted up) so high lobs stay on screen.
+  - The bottom bar is slimmer, so the ball in the server's hand isn't covered.
+  - If the ball still leaves the view, an arrow at the screen edge shows where it is.
+- **One pixel grid:** the separate fine layer is gone (`camera.detail` 1, about 400 rows). The room, table, cups and people now share one pixel size. People are drawn from a 4× Scale2x copy of their sprite, so close-up figures have clean edges. Your own team is shown as their real back-view sprites, slightly see-through and set wider at the table corners.
+- **Aim UI:**
+  - A marker on the table: a ring with four ticks and a center dot, outlined dark so it reads on the wood, in a light team color.
+  - A dotted path previews the shot without spin or scatter. A serve's path includes its bounce on your own side.
+  - When the marker locks onto a cup, the cup gets a yellow ring and a marker above it.
+  - When the timing rings appear, the marker fills in and its ticks close up to show it's locked.
+  - The marker turns red with an X when the aim is off the table.
+  - Only human teams' aim is shown. In split screen, each half shows only its own team's aim.
+- **Timing cue:** a fixed white ring around the ball, with a colored ring closing in on it. Yellow means early, green the sweet spot, red late.
+- **Labels:** one consistent pill style. Whoever is up gets a single yellow tag such as "HIT · name", with spin or a non-default style shown under it. The old floating chip and big arrow are gone.

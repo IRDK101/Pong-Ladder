@@ -110,9 +110,10 @@ export interface Feedback {
   time: number;
 }
 
-const DELAY_AFTER_RALLY = 1.6;
-const DELAY_AFTER_RESERVE = 0.9;
-const DELAY_AFTER_PENALTY = 0.6;
+/** Pause (sim seconds) after a sink or a failed save, so the moment reads before the next serve. */
+const DELAY_AFTER_SCORE = 0.8;
+/** After a fault the ball goes straight back to the server. */
+const DELAY_AFTER_FAULT = 0;
 
 export class Game {
   readonly cfg: GameConfig;
@@ -398,11 +399,11 @@ export class Game {
 
     // Live ball.
     for (const team of ['A', 'B'] as TeamId[]) if (inputs[team].hit) this.trySwing(team, inputs[team].style, inputs[team].side, inputs[team]);
-    if (this.resumeAt !== null) return; // that swing ended the rally (e.g. low hit)
-    const events = this.ball.step(dt, this.cups);
+    if (this.rallyOver()) return; // that swing ended the rally (e.g. low hit)
+    const events = this.ball.step(dt, this.liveCups());
     for (const e of events) {
       this.onPhysics(e);
-      if (this.resumeAt !== null || this.engine.peek().phase === 'gameOver') break;
+      if (this.rallyOver()) break;
     }
   }
 
@@ -436,6 +437,22 @@ export class Game {
 
   serverName(): string {
     return this.nameOf(this.engine.peek().server);
+  }
+
+  /** The ball is no longer live: the rally (or serve) has been decided. */
+  private rallyOver(): boolean {
+    const ph = this.engine.peek().phase;
+    return ph !== 'rally' && ph !== 'serveInFlight';
+  }
+
+  /**
+   * Cups the ball can touch right now. A serve passes over the server's own
+   * cups: they play no part in a serve, so the ball never clips them.
+   */
+  private liveCups(): Cup[] {
+    const st = this.engine.peek();
+    if (st.phase !== 'serveInFlight') return this.cups;
+    return st.cups[otherTeam(st.server.team)];
   }
 
   private placeBallWithServer(): void {
@@ -481,8 +498,9 @@ export class Game {
     this.tossing = false;
     this.resetBallTracking();
     this.incomingPower = stats.power;
-    this.dispatch({ type: 'hit', player: server, peak: shot.peak, style: style.id, timing: q });
+    // Launch first: if the engine ends the rally on the hit, the ball goes straight back to the server.
     this.ball.launch(from, shot.vel, shot.fx);
+    this.dispatch({ type: 'hit', player: server, peak: shot.peak, style: style.id, timing: q });
   }
 
   private trySwing(team: TeamId, styleIndex: number, side?: Side, inp: TeamInput = idleInput()): void {
@@ -508,8 +526,9 @@ export class Game {
     const shot = computeHit(this.cfg, style, from, spec, q, this.rng, stats);
     this.resetBallTracking();
     this.incomingPower = stats.power;
-    this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
+    // Launch first: if the engine ends the rally on the hit (a low hit), the ball goes straight back to the server.
     this.ball.launch(from, shot.vel, shot.fx);
+    this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
   }
 
   private resetBallTracking(): void {
@@ -549,9 +568,13 @@ export class Game {
     const phase = this.engine.peek().phase;
     if (phase === 'penalty') this.penaltyCursor = 0;
     if (phase !== 'awaitServe') return;
-    const delay =
-      c.kind === 'penaltyApplied' ? DELAY_AFTER_PENALTY : c.kind === 'reServe' || c.kind === 'tableMiss' ? DELAY_AFTER_RESERVE : DELAY_AFTER_RALLY;
+    const delay = c.kind === 'sink' || c.kind === 'saveFailed' ? DELAY_AFTER_SCORE : DELAY_AFTER_FAULT;
     this.resumeAt = Math.max(this.resumeAt ?? 0, this.time + delay);
+    // A fault returns the ball to the server's hand at once.
+    if (delay === 0 && this.resumeAt <= this.time) {
+      this.resumeAt = null;
+      this.placeBallWithServer();
+    }
   }
 }
 

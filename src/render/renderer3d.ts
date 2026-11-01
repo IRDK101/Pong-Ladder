@@ -9,11 +9,12 @@
 import type { GameConfig } from '../config';
 import type { Sprite } from '../core/character';
 import type { BallEffects, Vec3 } from '../core/physics';
-import { getStyle } from '../core/styles';
 import type { Cup, PlayerId, TeamId } from '../core/types';
 import type { Game } from '../game/game';
 import type { Theme } from '../theme';
 import { project, projectPolygon, teamCamera, type Camera } from './camera';
+import { solveArc, solveServe } from '../core/trajectory';
+import { SPIN_LABELS } from '../game/shot';
 import type { View } from './renderer';
 
 export type Layout = 'behindA' | 'split';
@@ -49,7 +50,7 @@ const PERSON_HEIGHT = 1.45;
 function standSpot(game: Game, p: PlayerId): Vec3 {
   const spot = game.playerSpot(p);
   const W = game.cfg.table.width;
-  const outward = spot.y < W / 2 ? -0.42 : 0.42;
+  const outward = spot.y < W / 2 ? -0.62 : 0.62;
   return { x: spot.x + (p.team === 'A' ? -0.3 : 0.3), y: spot.y + outward, z: -game.cfg.physics.tableHeight };
 }
 
@@ -63,6 +64,39 @@ function buffer(key: string, w: number, h: number): HTMLCanvasElement {
     buffers.set(key, c);
   }
   return c;
+}
+
+/** One Scale2x (EPX) pass: doubles a sprite, rounding stair-step edges while keeping it pixel art. */
+function scale2x(s: Sprite): Sprite {
+  const w = s.w * 2;
+  const out = new Array<string>(w * s.h * 2).fill('');
+  const at = (i: number, j: number) => s.pixels[Math.max(0, Math.min(s.h - 1, j)) * s.w + Math.max(0, Math.min(s.w - 1, i))];
+  for (let j = 0; j < s.h; j++)
+    for (let i = 0; i < s.w; i++) {
+      const p = at(i, j);
+      const a = at(i, j - 1);
+      const b = at(i + 1, j);
+      const c = at(i - 1, j);
+      const d = at(i, j + 1);
+      let e0 = p, e1 = p, e2 = p, e3 = p;
+      if (c === a && c !== d && a !== b) e0 = a;
+      if (a === b && a !== c && b !== d) e1 = b;
+      if (d === c && d !== b && c !== a) e2 = c;
+      if (b === d && b !== a && d !== c) e3 = d;
+      out[2 * j * w + 2 * i] = e0;
+      out[2 * j * w + 2 * i + 1] = e1;
+      out[(2 * j + 1) * w + 2 * i] = e2;
+      out[(2 * j + 1) * w + 2 * i + 1] = e3;
+    }
+  return { w, h: s.h * 2, pixels: out };
+}
+
+const smoothed = new WeakMap<Sprite, Sprite>();
+/** People are drawn from a 4x Scale2x copy of their sprite, so big close-up figures stay clean. */
+function smooth(s: Sprite): Sprite {
+  let t = smoothed.get(s);
+  if (!t) smoothed.set(s, (t = scale2x(scale2x(s))));
+  return t;
 }
 
 const spriteBitmaps = new WeakMap<Sprite, HTMLCanvasElement>();
@@ -128,7 +162,7 @@ export function renderGame3D(ctx: CanvasRenderingContext2D, theme: Theme, v: Vie
       x.clearRect(0, 0, c.width, c.height);
       return x;
     });
-    drawScene(layers[0], layers[1], layers[2], theme, game, vp);
+    drawScene(layers[0], layers[1], layers[2], theme, game, vp, labels);
     ctx.imageSmoothingEnabled = false;
     for (const c of [vp.buf, vp.hi, vp.front]) ctx.drawImage(c, vp.x, vp.y, vp.w, vp.h);
     // Vignette, in screen space over all layers.
@@ -234,7 +268,7 @@ function box(b: CanvasRenderingContext2D, cam: Camera, x0: number, y0: number, z
   }
 }
 
-function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Viewport): void {
+function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Viewport, ui: boolean): void {
   const cfg = game.cfg;
   const cam = vp.cam;
   const R = theme.room;
@@ -364,7 +398,6 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
 
   // --- Fine layer: the table, its markings, the ski, then cups, ball and lamp.
   const ch = vp.camHi;
-  const detail = cfg.camera.detail;
   drawTable3D(h, theme, cfg, ch);
 
   // Light pool from the hanging lamp.
@@ -385,21 +418,9 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     disc(onTop ? h : b, onTop ? ch : cam, { x: ball.pos.x, y: ball.pos.y, z: surf }, cfg.physics.ballRadius * (1 + Math.max(0, ball.pos.z - surf) * 0.4), theme.colors.shadow, 12);
   }
 
-  // Crosshair for whoever hits next.
+  // Aim: a path preview and a landing marker for each team that is about to hit.
   const st = game.engine.peek();
-  for (const team of ['A', 'B'] as TeamId[]) {
-    if (!game.aiming(team)) continue;
-    const t = game.aimTarget(team, game.aim[team], getStyle(st.phase === 'awaitServe' ? 'standardServe' : 'standardHit'));
-    const col = team === 'A' ? theme.colors.teamA : theme.colors.teamB;
-    if (t.cup) {
-      // Locked onto a cup: ring its mouth.
-      ring(h, ch, { x: t.x, y: t.y, z: cfg.physics.cupHeight + 0.004 }, cfg.cups.diameter * 0.75, theme.colors.activeRing, detail * 1.5, 28);
-      continue;
-    }
-    ring(h, ch, { x: t.x, y: t.y, z: 0.003 }, 0.07, col, detail, 28);
-    line(h, ch, { x: t.x - 0.1, y: t.y, z: 0.003 }, { x: t.x + 0.1, y: t.y, z: 0.003 }, col, detail);
-    line(h, ch, { x: t.x, y: t.y - 0.1, z: 0.003 }, { x: t.x, y: t.y + 0.1, z: 0.003 }, col, detail);
-  }
+  for (const team of ['A', 'B'] as TeamId[]) if (ui && showsAim(game, vp, team)) drawAim(h, theme, game, ch, team);
 
   // Depth-sorted fine objects: cups, ball, lamp.
   type Item = { depth: number; draw: () => void };
@@ -415,7 +436,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   items.push({ depth: depthOf(lampAt), draw: () => drawLamp(h, theme, ch, lampAt, ceilZ) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
-  drawTimingRings(h, theme, game, ch, detail);
+  if (ui) drawTimingRings(h, theme, game, ch);
   drawCelebrations3D(h, theme, game, ch);
 
   // --- Front coarse layer: everyone not behind the table (your own team, over its shoulders).
@@ -500,67 +521,200 @@ function drawEndWall(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, x: 
 
 function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, p: PlayerId, feet: Vec3, fromBehind: boolean, active: boolean): void {
   const who = game.participant(p);
-  const sprite = (fromBehind ? who.spriteBack : null) ?? who.sprite;
+  const raw = (fromBehind ? who.spriteBack : null) ?? who.sprite;
   const base = project(cam, feet);
   const head = project(cam, { ...feet, z: feet.z + PERSON_HEIGHT });
   if (!base || !head) return;
   const hgt = base.y - head.y;
   if (hgt <= 0) return;
-  disc(b, cam, { ...feet, z: feet.z + 0.002 }, 0.24, theme.room.personShadow, 12);
-  // Team-colored floor marker; a pulsing yellow ring and a bouncing arrow when it is this player's turn.
-  const markerCol = active ? theme.colors.activeRing : p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
-  ring(b, cam, feet, 0.28, markerCol, active ? 2 : 1, 16);
+  const teamCol = p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
+  disc(b, cam, { ...feet, z: feet.z + 0.002 }, 0.24, theme.room.personShadow, 16);
+  // Floor ring in the team color; yellow, with a pulse, when it is this player's turn.
+  ring(b, cam, feet, 0.28, active ? theme.colors.activeRing : teamCol, active ? 2 : 1, 20);
   if (active) {
     const pulse = 0.5 + 0.5 * Math.sin(game.time * 9);
-    ring(b, cam, feet, 0.34 + pulse * 0.08, theme.colors.activeRing, 1, 16);
-    const tip = project(cam, { ...feet, z: feet.z + PERSON_HEIGHT + 0.12 + pulse * 0.06 });
-    if (tip) {
-      const s = Math.max(3, tip.scale * 0.09);
-      b.fillStyle = theme.colors.activeRing;
-      b.beginPath();
-      b.moveTo(tip.x - s, tip.y - s * 1.4);
-      b.lineTo(tip.x + s, tip.y - s * 1.4);
-      b.lineTo(tip.x, tip.y);
-      b.closePath();
-      b.fill();
-    }
+    ring(b, cam, feet, 0.33 + pulse * 0.06, theme.colors.activeRing, 1, 20);
   }
-  if (!sprite) {
-    b.fillStyle = p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
+  if (!raw) {
+    b.fillStyle = teamCol;
     b.fillRect(Math.round(base.x - hgt * 0.15), Math.round(head.y), Math.round(hgt * 0.3), Math.round(hgt));
     return;
   }
+  const sprite = smooth(raw);
   const w = (hgt * sprite.w) / sprite.h;
-  if (fromBehind) {
-    // Your own team, over their shoulders: a see-through silhouette with a team-colored rim,
-    // so it reads as "you" without hiding the table.
-    const rim = p.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
-    b.globalAlpha = 0.72;
-    b.drawImage(silhouette(sprite, theme.room.silhouette, rim), Math.round(base.x - w / 2), Math.round(head.y), Math.round(w), Math.round(hgt));
-    b.globalAlpha = 1;
-    return;
+  const x = Math.round(base.x - w / 2);
+  const y = Math.round(head.y);
+  // Your own team, seen over their shoulders, is a little see-through so the table stays readable.
+  if (fromBehind) b.globalAlpha = 0.88;
+  b.drawImage(bitmap(sprite), x, y, Math.round(w), Math.round(hgt));
+  b.globalAlpha = 1;
+  if (active) {
+    // A small bobbing marker over the head of whoever is up.
+    const bob = Math.round(Math.sin(game.time * 6) * 2);
+    const s = Math.max(3, Math.round(hgt * 0.045));
+    const tx = Math.round(base.x);
+    const ty = y - 3 - bob;
+    b.fillStyle = theme.colors.ballOutline;
+    tri(b, tx, ty + 1, s + 1);
+    b.fillStyle = theme.colors.activeRing;
+    tri(b, tx, ty, s);
   }
-  b.drawImage(bitmap(sprite), Math.round(base.x - w / 2), Math.round(head.y), Math.round(w), Math.round(hgt));
 }
 
-function drawTimingRings(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, px = 1): void {
+/** A downward-pointing pixel triangle with its tip at (x, y). */
+function tri(b: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  for (let k = 0; k <= s; k++) b.fillRect(x - (s - k), y - s + k, (s - k) * 2 + 1, 1);
+}
+
+/**
+ * Timing cue around the ball: a fixed white ring and a colored ring closing
+ * in on it. Swing as they meet: green is the sweet spot, red is late.
+ */
+function drawTimingRings(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera): void {
   const pos = game.ball.pos;
   const c = project(cam, { ...pos, z: pos.z + game.cfg.physics.ballRadius });
   if (!c) return;
+  const circle = (r: number, col: string, w: number) => {
+    b.strokeStyle = col;
+    b.lineWidth = w;
+    b.beginPath();
+    b.arc(Math.round(c.x) + 0.5, Math.round(c.y) + 0.5, Math.max(1, r), 0, Math.PI * 2);
+    b.stroke();
+  };
   for (const team of ['A', 'B'] as TeamId[]) {
     const cue = game.timingCue(team);
     if (!cue) continue;
     const { offset, window: w } = cue;
     if (offset > w) continue;
-    const base = Math.max(3 * px, game.cfg.physics.ballRadius * c.scale + 2 * px);
-    const radius = base + Math.min(1, Math.max(0, -offset) / (w * 2.5)) * 14 * px;
+    const target = Math.max(5, game.cfg.physics.ballRadius * c.scale + 4);
+    const early = Math.min(1, Math.max(0, -offset) / (w * 2.5));
+    const late = Math.max(0, offset) / w;
+    const radius = target + early * 18 - late * (target - 2);
     const col = Math.abs(offset) <= w * 0.25 ? theme.colors.good : offset > 0 ? theme.colors.bad : theme.colors.activeRing;
-    b.strokeStyle = col;
-    b.lineWidth = px;
-    b.beginPath();
-    b.arc(c.x, c.y, radius, 0, Math.PI * 2);
-    b.stroke();
+    circle(target, theme.colors.ballOutline, 3);
+    circle(target, theme.colors.text, 1);
+    circle(radius, theme.colors.ballOutline, 4);
+    circle(radius, col, 2);
   }
+}
+
+/** Whether a viewport shows `team`'s aim: humans only, and in split screen only on that team's own half. */
+function showsAim(game: Game, vp: Viewport, team: TeamId): boolean {
+  if (!game.aiming(team)) return false;
+  if (game.cfg.players.mode === 'coop' && team === 'B') return false; // the CPU's aim stays hidden
+  return lastViewports.length < 2 || vp.team === team;
+}
+
+/** Sampled flight path of a shot (no spin or scatter), for the aim preview. */
+function previewPath(game: Game, team: TeamId): { pts: Vec3[]; target: { x: number; y: number; cup: Cup | null } } | null {
+  const style = game.currentStyle(team);
+  const p = game.activePlayer(team);
+  if (!style || !p) return null;
+  const cfg = game.cfg;
+  const g = cfg.physics.gravity;
+  const t = game.aimTarget(team, game.aim[team], style);
+  const ball = game.ball.pos;
+  const serving = style.kind === 'serve';
+  const spot = game.playerSpot(p);
+  const from: Vec3 = serving || game.timingCue(team) ? { ...ball } : { x: spot.x, y: spot.y, z: 0.3 };
+  const pts: Vec3[] = [];
+  const arc = (o: Vec3, v: Vec3, landZ: number) => {
+    const dt = 1 / 90;
+    const q = { ...o };
+    const vel = { ...v };
+    for (let k = 0; k < 400; k++) {
+      pts.push({ ...q });
+      vel.z -= g * dt;
+      q.x += vel.x * dt;
+      q.y += vel.y * dt;
+      q.z += vel.z * dt;
+      if (vel.z < 0 && q.z <= landZ) break;
+    }
+    return { pos: { ...q, z: landZ }, vel };
+  };
+  if (serving) {
+    const { vel } = solveServe(cfg, from, t, style.peak);
+    const first = arc(from, vel, 0);
+    const ph = cfg.physics;
+    arc(first.pos, { x: first.vel.x * ph.tableFriction, y: first.vel.y * ph.tableFriction, z: -first.vel.z * ph.restitution }, 0);
+  } else {
+    const landZ = t.cup ? cfg.physics.cupHeight : 0;
+    arc(from, solveArc(from, t, style.peak, g, 0, landZ), landZ);
+  }
+  return { pts, target: t };
+}
+
+/** The aim preview: a dotted path and a landing marker (a ring on a locked cup, red when off the table). */
+function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, team: TeamId): void {
+  const cfg = game.cfg;
+  const path = previewPath(game, team);
+  if (!path) return;
+  const { pts, target: t } = path;
+  const frozen = game.timingCue(team) !== null;
+  const { length: L, width: W } = cfg.table;
+  const off = !t.cup && (t.x < 0 || t.x > L || t.y < 0 || t.y > W);
+  const col = off ? theme.colors.bad : team === 'A' ? theme.colors.aimA : theme.colors.aimB;
+  const dark = theme.colors.ballOutline;
+
+  // Dotted path, marching toward the target and fading in from the hitter.
+  const step = 5;
+  const phase = Math.floor(game.time * 30) % step;
+  for (let k = phase; k < pts.length; k += step) {
+    const q = project(cam, pts[k]);
+    if (!q) continue;
+    const a = k / pts.length;
+    const s = q.scale > 260 ? 3 : 2;
+    h.globalAlpha = 0.45 + 0.55 * a;
+    h.fillStyle = dark;
+    h.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, s + 2, s + 2);
+    h.fillStyle = col;
+    h.fillRect(Math.round(q.x), Math.round(q.y), s, s);
+  }
+  h.globalAlpha = 1;
+
+  if (t.cup) {
+    // Locked on a cup: a bright ring around its rim and a marker over it.
+    const H = cfg.physics.cupHeight;
+    const r = cfg.cups.diameter / 2;
+    ring(h, cam, { x: t.x, y: t.y, z: H + 0.004 }, r * 1.25, dark, 4, 28);
+    ring(h, cam, { x: t.x, y: t.y, z: H + 0.004 }, r * 1.25, theme.colors.activeRing, 2, 28);
+    const top = project(cam, { x: t.x, y: t.y, z: H + 0.09 + (frozen ? 0 : Math.sin(game.time * 8) * 0.01) });
+    if (top) {
+      const s = Math.max(3, Math.round(top.scale * 0.025));
+      h.fillStyle = dark;
+      tri(h, Math.round(top.x), Math.round(top.y) + 1, s + 1);
+      h.fillStyle = theme.colors.activeRing;
+      tri(h, Math.round(top.x), Math.round(top.y), s);
+    }
+    return;
+  }
+  // Landing marker on the table (or the floor beyond it): ring, four ticks, center dot.
+  // Off the table the marker floats at table height, so it reads as just past the edge.
+  const z = 0.003;
+  const R = 0.085 + (frozen ? 0 : 0.008 * Math.sin(game.time * 6));
+  const c = { x: t.x, y: t.y, z };
+  if (frozen) {
+    h.globalAlpha = 0.3;
+    disc(h, cam, c, R, col, 24);
+    h.globalAlpha = 1;
+  }
+  ring(h, cam, c, R, dark, 4, 28);
+  ring(h, cam, c, R, col, 2, 28);
+  const tick = (dx: number, dy: number) => {
+    const a = { x: t.x + dx * R * 1.25, y: t.y + dy * R * 1.25, z };
+    const e = { x: t.x + dx * R * (frozen ? 1.45 : 1.75), y: t.y + dy * R * (frozen ? 1.45 : 1.75), z };
+    line(h, cam, a, e, dark, 4);
+    line(h, cam, a, e, col, 2);
+  };
+  tick(1, 0);
+  tick(-1, 0);
+  tick(0, 1);
+  tick(0, -1);
+  if (off) {
+    const d = R * 0.5;
+    line(h, cam, { x: t.x - d, y: t.y - d, z }, { x: t.x + d, y: t.y + d, z }, col, 2);
+    line(h, cam, { x: t.x - d, y: t.y + d, z }, { x: t.x + d, y: t.y - d, z }, col, 2);
+  } else disc(h, cam, c, 0.012, col, 10);
 }
 
 function drawCelebrations3D(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera): void {
@@ -584,10 +738,25 @@ function drawCelebrations3D(b: CanvasRenderingContext2D, theme: Theme, game: Gam
   }
 }
 
-/** Crisp full-resolution names, style labels and timing feedback over the scaled-up scene. */
+/** A flat label pill: dark (or colored) fill with a 1px darker edge, text centered. */
+function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fill: string, ink: string, edge = 'rgba(0,0,0,0.6)', bounds?: [number, number]): void {
+  const w = Math.ceil(ctx.measureText(text).width) + 12;
+  if (bounds) x = Math.max(bounds[0] + 8 + w / 2, Math.min(bounds[1] - 8 - w / 2, x));
+  const x0 = Math.round(x - w / 2);
+  const y0 = Math.round(y - 9);
+  ctx.fillStyle = edge;
+  ctx.fillRect(x0 - 1, y0 - 1, w + 2, 20);
+  ctx.fillStyle = fill;
+  ctx.fillRect(x0, y0, w, 18);
+  ctx.fillStyle = ink;
+  ctx.fillText(text, x0 + w / 2, y0 + 10);
+}
+
+/** Crisp full-resolution names, turn tags and timing feedback over the scaled-up scene. */
 function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Viewport): void {
   const k = vp.w / vp.buf.width;
   const st = game.engine.peek();
+  const c = theme.colors;
   ctx.save();
   ctx.beginPath();
   ctx.rect(vp.x, vp.y, vp.w, vp.h);
@@ -596,74 +765,82 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
   ctx.textBaseline = 'middle';
   ctx.font = theme.fonts.label;
   const floorZ = -game.cfg.physics.tableHeight;
+  const minY = vp.y + theme.hudTop + 24;
+  const maxY = vp.y + vp.h - theme.hudBottom - 24;
   for (const p of PLAYERS) {
     const who = game.participant(p);
-    const head = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.12 });
+    const head = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.16 });
     if (!head) continue;
     const sx = vp.x + head.x * k;
-    const activeHere = game.activePlayer(p.team);
-    // Keep the name (and the turn tag above it) clear of the HUD bars.
-    const minY = vp.y + theme.hudTop + (activeHere && activeHere.side === p.side ? 40 : 10);
-    const sy = Math.max(minY, Math.min(vp.y + vp.h - theme.hudBottom - 10, vp.y + head.y * k));
-    const label = (who.master ? '★ ' : '') + who.name + (st.server.team === p.team && st.server.side === p.side ? ' ●' : '');
-    const activeP = game.activePlayer(p.team);
-    const isUp = !!activeP && activeP.side === p.side;
-    const w = ctx.measureText(label).width + 10;
-    if (isUp) {
-      // Whose turn it is: a bright tag saying what they are about to do.
+    const bounds: [number, number] = [vp.x, vp.x + vp.w];
+    const sy = Math.max(minY, Math.min(maxY, vp.y + head.y * k));
+    const name = (who.master ? '★ ' : '') + who.name + (st.server.team === p.team && st.server.side === p.side ? ' ●' : '');
+    const up = game.activePlayer(p.team);
+    if (up && up.side === p.side) {
+      // Whose turn it is: one bright tag saying what they are about to do.
       const what = st.phase === 'awaitServe' ? 'SERVE' : st.rally?.cupAtRisk ? 'SAVE!' : 'HIT';
-      ctx.font = theme.fonts.title;
-      const tw = Math.max(w, ctx.measureText(what).width + 14);
-      ctx.fillStyle = theme.colors.activeRing;
-      ctx.fillRect(sx - tw / 2, sy - 30, tw, 22);
-      ctx.fillStyle = theme.colors.activeText;
-      ctx.fillText(what, sx, sy - 19);
-      ctx.font = theme.fonts.label;
-      ctx.fillStyle = theme.colors.activeRing;
-      ctx.fillRect(sx - w / 2, sy - 8, w, 16);
-      ctx.fillStyle = theme.colors.activeText;
-      ctx.fillText(label, sx, sy);
-      const style = game.currentStyle(p.team);
+      pill(ctx, `${what} · ${name}`, sx, sy, c.activeRing, c.activeText, undefined, bounds);
       const spin = game.heldSpin[p.team];
-      const bits = [style?.name, spin ? (spin.type === 'side' ? 'Sidespin' : spin.type === 'top' ? 'Topspin' : 'Backspin') : null].filter(Boolean).join(' · ');
-      if (bits) {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        const bw = ctx.measureText(bits).width + 8;
-        ctx.fillRect(sx - bw / 2, sy + 9, bw, 15);
-        ctx.fillStyle = spin ? theme.colors.activeRing : theme.colors.text;
-        ctx.fillText(bits, sx, sy + 16);
-      }
+      const style = game.currentStyle(p.team);
+      const extra = [game.selectedStyle[p.team] ? style?.name : null, spin ? SPIN_LABELS[spin.type] : null].filter(Boolean).join(' · ');
+      if (extra) pill(ctx, extra, sx, sy + 22, 'rgba(20,14,10,0.85)', c.activeRing, undefined, bounds);
     } else {
-      ctx.globalAlpha = 0.75;
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(sx - w / 2, sy - 8, w, 16);
-      if (who.master) {
-        ctx.shadowColor = theme.colors.masterGlow;
-        ctx.shadowBlur = 8;
-      }
-      ctx.fillStyle = who.nameColor ?? (who.master ? theme.colors.master : theme.colors.text);
-      ctx.fillText(label, sx, sy);
-      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.85;
+      pill(ctx, name, sx, sy, 'rgba(20,14,10,0.75)', who.nameColor ?? (who.master ? c.master : c.text), undefined, bounds);
       ctx.globalAlpha = 1;
     }
   }
+  // Timing feedback ("Perfect", "Late"...) rising from the hitter.
   const fb = game.feedback;
   if (fb && game.time - fb.time < 0.9) {
     const p = fb.player ?? game.activePlayer(fb.team) ?? { team: fb.team, side: 'left' as const };
-    const at = project(vp.cam, { ...standSpot(game, p), z: 0.6 });
+    const at = project(vp.cam, { ...standSpot(game, p), z: 0.05 });
     if (at) {
-      ctx.globalAlpha = 1 - (game.time - fb.time) / 0.9;
-      ctx.fillStyle = fb.quality === null ? theme.colors.bad : fb.quality > 0.55 ? theme.colors.good : theme.colors.text;
+      const age = game.time - fb.time;
+      ctx.globalAlpha = 1 - age / 0.9;
       ctx.font = theme.fonts.title;
-      ctx.fillText(fb.label, vp.x + at.x * k, Math.max(vp.y + 20, vp.y + at.y * k - 30 - (game.time - fb.time) * 30));
+      const half = ctx.measureText(fb.label).width / 2 + 12;
+      const tx = Math.max(vp.x + half, Math.min(vp.x + vp.w - half, vp.x + at.x * k));
+      const ty = Math.max(minY + 30, Math.min(maxY, vp.y + at.y * k - 30 - age * 30));
+      ctx.fillStyle = c.ballOutline;
+      ctx.fillText(fb.label, tx + 2, ty + 2);
+      ctx.fillStyle = fb.quality === null ? c.bad : fb.quality > 0.55 ? c.good : c.text;
+      ctx.fillText(fb.label, tx, ty);
       ctx.globalAlpha = 1;
+    }
+  }
+  // Ball out of view (a sky-high lob): an arrow at the screen edge where it is.
+  const ball = game.ball;
+  if (ball.status === 'flying') {
+    const q = project(vp.cam, ball.pos);
+    const bx = q ? vp.x + q.x * k : vp.x + vp.w / 2;
+    const by = q ? vp.y + q.y * k : vp.y + vp.h;
+    const top = vp.y + theme.hudTop + 6;
+    if (!q || by < top || by > vp.y + vp.h || bx < vp.x || bx > vp.x + vp.w) {
+      const ax = Math.max(vp.x + 20, Math.min(vp.x + vp.w - 20, bx));
+      const below = !!q && by > vp.y + vp.h;
+      const ay = below ? vp.y + vp.h - theme.hudBottom - 10 : top + 4;
+      const dir = below ? 1 : -1;
+      ctx.fillStyle = c.ballOutline;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay + dir * 12);
+      ctx.lineTo(ax - 11, ay - dir * 4);
+      ctx.lineTo(ax + 11, ay - dir * 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = c.ball;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay + dir * 9);
+      ctx.lineTo(ax - 8, ay - dir * 2);
+      ctx.lineTo(ax + 8, ay - dir * 2);
+      ctx.closePath();
+      ctx.fill();
     }
   }
   if (vp.team === 'B' || lastViewports.length > 1) {
     ctx.font = theme.fonts.label;
-    ctx.fillStyle = vp.team === 'A' ? theme.colors.teamA : theme.colors.teamB;
-    ctx.textAlign = 'left';
-    ctx.fillText(`Team ${vp.team} view`, vp.x + 14, vp.y + theme.hudTop + 30);
+    ctx.textAlign = 'center';
+    pill(ctx, `Team ${vp.team} view`, vp.x + 64, vp.y + theme.hudTop + 30, 'rgba(20,14,10,0.8)', vp.team === 'A' ? c.teamA : c.teamB);
   }
   ctx.restore();
 }
@@ -721,31 +898,6 @@ function drawLamp(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, at: Ve
   g.addColorStop(1, 'rgba(0,0,0,0)');
   b.fillStyle = g;
   b.fillRect(bot.x - glow, bot.y + 1 - glow, glow * 2, glow * 2);
-}
-
-const silhouettes = new WeakMap<Sprite, Map<string, HTMLCanvasElement>>();
-/** A sprite as a flat silhouette with a 1px rim along its top and side edges. */
-function silhouette(s: Sprite, fill: string, rim: string): HTMLCanvasElement {
-  let byKey = silhouettes.get(s);
-  if (!byKey) silhouettes.set(s, (byKey = new Map()));
-  const key = fill + rim;
-  let c = byKey.get(key);
-  if (!c) {
-    c = document.createElement('canvas');
-    c.width = s.w;
-    c.height = s.h;
-    const x = c.getContext('2d')!;
-    const at = (i: number, j: number) => i >= 0 && j >= 0 && i < s.w && j < s.h && s.pixels[j * s.w + i] !== '';
-    for (let j = 0; j < s.h; j++)
-      for (let i = 0; i < s.w; i++) {
-        if (!at(i, j)) continue;
-        const edge = !at(i - 1, j) || !at(i + 1, j) || !at(i, j - 1);
-        x.fillStyle = edge ? rim : fill;
-        x.fillRect(i, j, 1, 1);
-      }
-    byKey.set(key, c);
-  }
-  return c;
 }
 
 // ------------------------------------------------------------ table art

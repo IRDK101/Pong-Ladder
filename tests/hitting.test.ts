@@ -5,6 +5,7 @@ import { buildFormation } from '../src/core/formation';
 import { BallPhysics, type PhysicsEvent } from '../src/core/physics';
 import { NEUTRAL_STATS } from '../src/core/stats';
 import { getStyle } from '../src/core/styles';
+import { CpuController } from '../src/game/ai';
 import { Game, idleInput } from '../src/game/game';
 import { computeHit, computeServe, reachFactor, spinEffects, timingDrift, timingWindow } from '../src/game/shot';
 
@@ -185,5 +186,59 @@ describe('spin from the direction held at the hit', () => {
       expect(Math.hypot(bounces[1].x - s.target.x, bounces[1].y - s.target.y)).toBeLessThan(0.02);
       expect(afterFirst).toEqual(expect.objectContaining({ bounces: 1 })); // still spinning after the first bounce
     }
+  });
+});
+
+describe('serve and fault flow', () => {
+  function rng(seed: number) {
+    return () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+  }
+
+  it('a serve never touches the server’s own cups', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const r = rng(seed);
+      const g = new Game(makeConfig({ penaltyCupSelection: 'auto' }), r);
+      const a = new CpuController('A', 'easy', r);
+      const b = new CpuController('B', 'easy', r);
+      let own = 0;
+      g.onCall = () => {};
+      const step = g.ball.step.bind(g.ball);
+      g.ball.step = (dt, cups) => {
+        const st = g.engine.peek();
+        if (st.phase === 'serveInFlight' && cups.some((c) => c.team === st.server.team)) own++;
+        return step(dt, cups);
+      };
+      for (let t = 0; t < 120 && g.engine.peek().phase !== 'gameOver'; t += 1 / 60) g.update(1 / 60, { A: a.input(g), B: b.input(g) });
+      expect(own).toBe(0);
+    }
+  });
+
+  it('after a fault the ball is back in the server’s hand at once', () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const r = rng(seed);
+      const g = new Game(makeConfig({ penaltyCupSelection: 'auto' }), r);
+      const a = new CpuController('A', 'easy', r);
+      const b = new CpuController('B', 'easy', r);
+      let fault = false;
+      g.onCall = (c) => {
+        if (c.kind !== 'sink' && c.kind !== 'saveFailed' && c.nextServer && g.engine.peek().phase === 'awaitServe') fault = true;
+      };
+      for (let t = 0; t < 120 && g.engine.peek().phase !== 'gameOver'; t += 1 / 60) {
+        fault = false;
+        g.update(1 / 60, { A: a.input(g), B: b.input(g) });
+        if (fault) {
+          checked++;
+          expect(g.ball.status).toBe('held');
+          const s = g.playerSpot(g.engine.peek().server);
+          expect(g.ball.pos.x).toBeCloseTo(s.x);
+          expect(g.ball.pos.y).toBeCloseTo(s.y);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(5);
   });
 });
