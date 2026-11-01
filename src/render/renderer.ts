@@ -133,7 +133,7 @@ function drawTable(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme,
   const edge = 6;
   ctx.fillStyle = c.tableEdge;
   ctx.fillRect(x0 - edge, y0 - edge, x1 - x0 + edge * 2, y1 - y0 + edge * 2);
-  ctx.fillStyle = c.tableTop;
+  ctx.fillStyle = theme.venues[cfg.venue].top;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
   ctx.strokeStyle = c.tableLine;

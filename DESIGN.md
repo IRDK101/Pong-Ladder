@@ -422,3 +422,29 @@ The 3D view now follows the photos of the real Zeta Psi basement. Visuals only; 
   - A real ski lies across the middle with black bands, lettering and a binding, overhanging both sides with an upturned tip. The overhang is visual only: `ski.length` still sets the collision area when ski collision is on.
 - **Cups:** clear plastic with water. The water level shows through the side, low in a half cup. There are no team colors on the table cups; the HUD keeps them.
 - **Paddles:** homemade wooden ones in the sprites.
+
+## The whole basement, and choosing a table
+
+The second set of reference photos showed the full basement, so the 3D view now draws the whole room around whichever table is being played. Visuals only: every table plays by the same rules and has the same dimensions.
+
+- **Layout (`src/render/basement.ts`, pure data):** a 15 × 11 m room in "basement meters".
+  - Three playable tables, each with a position and a facing:
+    - **Saints table**: the painted blue figure table in the middle.
+    - **Night sky table**: the black table by the bathroom and the exit, set crosswise.
+    - **Chain table**: fire and ice with a chain down the middle, by the KCAO bar.
+  - `basementToWorld(cfg, venue)` maps the room into the game's world frame for the table in play, so the rules, physics and cameras don't change.
+- **Pillars and beams:** eight pillars and four black ceiling beams carry the slogans from the photos, including "Act or be acted upon.", the pizza proverb, "Love loves to love love.", "ROAD HARD AND PUT AWAY WAY ♥", "On the Seventh Cup, He Rested." and "THE CLASS OF 1962 ROOM". Tests check that no beam hangs between a table's camera and the far end of its table, that no pillar stands on a table or where its players stand, and that every camera is inside the room.
+- **Walls:**
+  - South: the bar with KCAO and HELENIAS, "Now Serving Frankenstein Family Ale", the fridge and a red-orange corner.
+  - North: the stage end ("STEP YOUR LEVELS UP", the Supreme Court line, the 74, ΖΨ, JOHNSON CONTROLS, ITS KCAO A WORLD and LED lights), LEFT TURN YIELD ON GREEN, tombstones on the bench, QUARTER MILE RD, the KEEP SHUT windows, a caution sign, and 8 and CLAY DG.
+  - West: "Conquer evil with swift & terrible justice…", the exit and bathroom doors, and a chair.
+  - East: "DON'T BREAK THE CHAIN", ONE WAY and JAFE.
+- **Stage:** a raised black platform in the north-east corner with speakers, a cup stack, a green jug and the Monopoly table.
+- **Rendering:**
+  - `src/render/basement3d.ts` draws the room.
+  - `src/render/prims.ts` now holds the drawing primitives.
+  - The other tables are drawn as scenery, with cups and their own skis.
+  - Room objects are depth-sorted. The beams are drawn last, because they only ever sit above what is behind them.
+  - Long writing on walls is drawn in perspective strips, so it doesn't smear when seen close up at an angle.
+- **Menu:** a new "Table" row (`cfg.venue`). The CPU demo behind the title screen plays at the chosen table, and the top-down view uses that table's color.
+- **Left out:** profane graffiti from the photos, and characters from the night sky table's real fan art. The spirits on that table are generic.

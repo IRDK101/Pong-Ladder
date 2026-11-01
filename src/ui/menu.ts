@@ -3,6 +3,7 @@
 import { makeConfig, type GameConfig } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
+import { VENUE_ORDER, VENUES } from '../render/basement';
 
 interface Choice {
   label: string;
@@ -29,6 +30,7 @@ const CHOICES: Choice[] = [
   { label: 'Players', values: [{ label: 'Head-to-head', apply: players('versus') }, { label: 'Same team vs CPU', apply: players('coop') }] },
   { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
   { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }, { label: 'Classic top-down', apply: set('view', 'topDown') }] },
+  { label: 'Table', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].name, apply: set('venue', v) })) },
   { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },

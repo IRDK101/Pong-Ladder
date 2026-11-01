@@ -182,6 +182,8 @@ function drawBackdrop(dt: number): void {
     demo = { game: g, a: new CpuController('A', 'hard', Math.random), b: new CpuController('B', 'medium', Math.random) };
   }
   const d = demo;
+  // The demo plays at whichever table is picked in the menu (the venue is visual only).
+  d.game.cfg.venue = menu.config(baseCfg).venue;
   d.game.update(dt, { A: d.a.input(d.game), B: d.b.input(d.game) });
   renderGame3D(ctx, theme, view, d.game, 'behindA', false);
 }

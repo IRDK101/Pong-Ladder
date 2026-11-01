@@ -7,6 +7,8 @@ import type { Formation } from './core/types';
 
 export type MatchFormat = 'single' | 'bestOf3';
 export type PenaltyCupSelection = 'choose' | 'auto';
+/** The playable tables of the basement (see render/basement.ts). */
+export type Venue = 'saints' | 'spirits' | 'chain';
 
 export interface TeamControls {
   up: string;
@@ -32,6 +34,8 @@ export interface GameConfig {
   draftFirstPick: FirstPick;
   /** Head-to-head (one human per team) or both humans on Team A against the CPU. */
   players: { mode: 'versus' | 'coop'; cpu: Difficulty };
+  /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
+  venue: Venue;
   /** Camera: behind Team A, split screen (each team's own view), or the classic top-down table. */
   view: 'behindA' | 'split' | 'topDown';
   /** Behind-the-shoulders camera placement (meters, relative to the table). */
@@ -170,6 +174,7 @@ export const defaultConfig: GameConfig = {
   skiCollision: false,
   draftFirstPick: 'coinFlip',
   players: { mode: 'versus', cpu: 'medium' },
+  venue: 'saints',
   view: 'behindA',
   camera: { behind: 2.2, height: 1.9, lookAt: 0.55, lookHeight: 0.4, fovY: 52, pixelSize: 2, rows: 400, detail: 1 },
   controls: {

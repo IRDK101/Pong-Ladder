@@ -27,7 +27,7 @@ describe('pre-game menu', () => {
 
   it('changes options with left/right and wraps', () => {
     const m = new Menu();
-    m.move(3, 0); // to Formation, after Players / CPU level / View
+    m.move(4, 0); // to Formation, after Players / CPU level / View / Table
     m.move(0, 1); // formation → shrub
     m.move(1, 0);
     m.move(0, -1); // match → best of 3 (wraps backwards)
@@ -45,7 +45,7 @@ describe('pre-game menu', () => {
   it('game speed: normal is the default, quick is faster', () => {
     const m = new Menu();
     expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
-    m.move(5, 0);
+    m.move(6, 0);
     m.move(0, 1);
     expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
   });
@@ -53,7 +53,7 @@ describe('pre-game menu', () => {
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
     const actions: string[] = [];
-    m.move(8, 0); // first action row, after the 8 option rows
+    m.move(9, 0); // first action row, after the 9 option rows
     for (let i = 0; i < 6; i++) {
       actions.push(m.activate()!);
       m.move(1, 0);
@@ -62,6 +62,17 @@ describe('pre-game menu', () => {
     expect(m.cursor).toBe(0); // wrapped
     m.move(-1, 0);
     expect(m.activate()).toBe('backup');
+  });
+
+  it('the Table row picks which basement table to play at', () => {
+    const m = new Menu();
+    expect(m.config().venue).toBe('saints');
+    m.move(3, 0);
+    expect(m.rows()[3].label).toBe('Table');
+    m.move(0, 1);
+    expect(m.config().venue).toBe('spirits');
+    m.move(0, 1);
+    expect(m.config().venue).toBe('chain');
   });
 
   it('builds an independent config each time', () => {
