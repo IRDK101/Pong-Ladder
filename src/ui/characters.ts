@@ -1,7 +1,7 @@
 // Character list and character creator/editor (HTML screens).
 
 import { MAX_HIT_STYLES, MIN_HIT_STYLES, NAME_MAX, newCharacter, validateCharacter, type Character, type Sprite } from '../core/character';
-import { characterSprite, COLOR_PARTS, composeSprite, PART_LABELS, PART_OPTIONS, SPRITE_H, SPRITE_W, spriteFromRgba, type PartKey } from '../core/sprite';
+import { characterBackSprite, characterSprite, COLOR_PARTS, composeSprite, normalizeParts, PART_GROUPS, PART_LABELS, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba, type PartKey } from '../core/sprite';
 import { STAT_INFO, STAT_KEYS, STAT_MAX, STAT_MIN, type Stats } from '../core/stats';
 import { getStyle, stylesOfKind } from '../core/styles';
 import type { GameConfig } from '../config';
@@ -208,11 +208,20 @@ class CharacterEditor {
     private actions: { save: (c: Character) => void; cancel: () => void; remove: (() => void) | null },
   ) {
     this.mode = c.sprite.pixels ? 'draw' : 'parts';
+    // Older characters predate some parts: fill them in so every control has a value.
+    c.sprite.parts = normalizeParts(c.sprite.parts);
   }
 
   render(): void {
     const c = this.c;
-    const preview = h('div', { class: 'box', style: 'display:flex;justify-content:center' }, spriteImage(characterSprite(c.sprite), 8));
+    // Front and back, as the character shows at the far end of the table and over your shoulder.
+    const view = (label: string, img: HTMLCanvasElement) => h('div', { style: 'display:flex;flex-direction:column;align-items:center;gap:4px' }, img, h('span', { class: 'dim', style: 'font-size:12px' }, label));
+    const preview = h(
+      'div',
+      { class: 'box', style: 'display:flex;justify-content:center;gap:28px;background:#4a3f34' },
+      view('Front', spriteImage(characterSprite(c.sprite), 7)),
+      view('Back', spriteImage(characterBackSprite(c.sprite), 7)),
+    );
     const modeTabs = h(
       'div',
       { class: 'row' },
@@ -394,40 +403,62 @@ class CharacterEditor {
   // --------------------------------------------------------- sprite tools
 
   private partsPanel(): HTMLElement {
-    const parts = this.c.sprite.parts;
+    const luma = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+    };
+    const parts = this.c.sprite.parts as Required<typeof this.c.sprite.parts>;
     const overridden = this.c.sprite.pixels !== null;
+    const set = (key: PartKey, i: number) => {
+      parts[key] = i;
+      this.c.sprite.pixels = null;
+      this.render();
+    };
+    const control = (key: PartKey) => {
+      const opts = PART_OPTIONS[key] as readonly string[];
+      const v = parts[key];
+      const body = COLOR_PARTS.includes(key)
+        ? h(
+            'div',
+            { class: 'chips' },
+            // Skin tones show light to dark (they are stored in the order they were added).
+            ...(key === 'skin' ? [...opts.keys()].sort((a, b) => luma(opts[b]) - luma(opts[a])) : [...opts.keys()]).map((i) => {
+              const col = opts[i];
+              const b = h('button', { class: v === i ? 'swatch on' : 'swatch', title: col, 'aria-label': `${PART_LABELS[key]} ${i + 1}`, onclick: () => set(key, i) });
+              b.style.background = col;
+              return b;
+            }),
+          )
+        : h(
+            'div',
+            { class: 'row', style: 'flex-wrap:nowrap;gap:6px' },
+            h('button', { 'aria-label': `Previous ${PART_LABELS[key]}`, onclick: () => set(key, (v - 1 + opts.length) % opts.length) }, '◀'),
+            h('span', { style: 'flex:1;min-width:96px;text-align:center;white-space:nowrap' }, opts[v]),
+            h('button', { 'aria-label': `Next ${PART_LABELS[key]}`, onclick: () => set(key, (v + 1) % opts.length) }, '▶'),
+          );
+      const wide = COLOR_PARTS.includes(key);
+      return h('div', { style: `display:flex;flex-direction:column;gap:4px;${wide ? 'grid-column:1 / -1' : ''}` }, h('span', { class: 'dim' }, `${PART_LABELS[key]}${wide ? '' : ` (${v + 1}/${opts.length})`}`), body);
+    };
     return h(
       'div',
-      { class: 'box', style: 'display:flex;flex-direction:column;gap:10px' },
+      { class: 'box', style: 'display:flex;flex-direction:column;gap:14px' },
       overridden
         ? h('div', { class: 'row' }, h('span', { class: 'dim' }, 'A custom drawing is showing instead of these parts.'), h('button', { onclick: () => ((this.c.sprite.pixels = null), this.render()) }, 'Use parts'))
         : null,
-      ...(Object.keys(PART_OPTIONS) as PartKey[]).map((key) => {
-        const opts = PART_OPTIONS[key] as readonly string[];
-        const set = (i: number) => {
-          parts[key] = i;
-          this.c.sprite.pixels = null;
-          this.render();
-        };
-        const control = COLOR_PARTS.includes(key)
-          ? h(
-              'div',
-              { class: 'chips' },
-              ...opts.map((col, i) => {
-                const b = h('button', { class: parts[key] === i ? 'swatch on' : 'swatch', title: col, 'aria-label': `${PART_LABELS[key]} ${i + 1}`, onclick: () => set(i) });
-                b.style.background = col;
-                return b;
-              }),
-            )
-          : h(
-              'div',
-              { class: 'row' },
-              h('button', { 'aria-label': `Previous ${PART_LABELS[key]}`, onclick: () => set((parts[key] - 1 + opts.length) % opts.length) }, '◀'),
-              h('span', { style: 'min-width:80px;text-align:center' }, opts[parts[key] % opts.length]),
-              h('button', { 'aria-label': `Next ${PART_LABELS[key]}`, onclick: () => set((parts[key] + 1) % opts.length) }, '▶'),
-            );
-        return h('div', { style: 'display:flex;flex-direction:column;gap:4px' }, h('span', { class: 'dim' }, PART_LABELS[key]), control);
-      }),
+      h(
+        'div',
+        { class: 'row' },
+        h('button', { onclick: () => ((this.c.sprite.parts = randomParts()), (this.c.sprite.pixels = null), this.render()) }, 'Randomize look'),
+        h('span', { class: 'dim', style: 'font-size:12px' }, 'then tweak any part below'),
+      ),
+      ...PART_GROUPS.map((g) =>
+        h(
+          'div',
+          { style: 'display:flex;flex-direction:column;gap:8px' },
+          h('h2', {}, g.title),
+          h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 14px' }, ...g.keys.map(control)),
+        ),
+      ),
     );
   }
 

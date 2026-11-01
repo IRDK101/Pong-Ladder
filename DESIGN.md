@@ -512,3 +512,30 @@ These rule decisions were confirmed with the user.
   - The engine has `penalty.chooser`. Table-miss penalties are still chosen by the serving team.
   - The keyboard cursor follows the chooser's keys.
   - Against the CPU, the human can't click to pick for the CPU, and the CPU picks for itself.
+
+## Character system update, and cup hit / sink effects
+
+- **Characters (`core/sprite.ts`):** still 16 × 24 pixels, so hand-drawn and uploaded sprites, and the reward items, keep working. Every category has more options. New options are only appended, so saved characters look the same. New categories:
+  - **Body type:** Slim, Average, Broad, plus Stocky (shorter and wider), Heavy (wider legs, softer jaw, rounder middle) and Lanky (long legs).
+  - **Face:** face shape (Oval, Round, Square, Long, Pointed chin, Wide jaw); eyes (Dots, Big, Sleepy, Wide-set, Lashes, Squint); mouth (Neutral, Smile, Grin, Smirk, Surprised, Flat); facial hair (None, Stubble, Mustache, Goatee, Full beard, Chin strap, Soul patch).
+  - **Hair:** 16 styles (adds Side part, Spiky, Ponytail, Bun, Afro, Mullet, Bob, Swoop, Receding) and 13 colors, including dyed blue, pink and green.
+  - **Headwear and hat color:** Cap, Backwards cap, Beanie, Bucket hat, Visor, Bandana.
+  - **Clothes:**
+    - 11 tops: adds Polo, Flannel, Button-up, Big D sweater, Striped, Open jacket, Vest. White trim turns navy on a white top.
+    - 14 top colors.
+    - Bottoms: Long, Shorts, Sweats, Rolled cuffs, in 9 colors.
+    - 6 shoes, including white sneakers, red high-tops, tan boots and slides.
+  - **Extras:** 13, adding Round glasses, Earring, Freckles, Face paint, Wristband, Watch and Neck tattoo.
+  - **Back views:** every new hair, hat and top has one. Ponytail, buns, hoods, jersey numbers and cap straps show from behind.
+  - **Missing parts:** an older save without the new parts uses option 0 (`normalizeParts`).
+- **Editor:**
+  - Parts are grouped into Body, Face, Hair, Clothes and Extras, with an "n / total" count on each.
+  - Front and back previews, a "Randomize look" button, and skin swatches shown light to dark.
+- **Cup hit:**
+  - The cup wobbles and white impact streaks burst from its rim.
+  - While a save is on, the cup has a pulsing red ring and a "!" over it.
+  - The same shows when a serve clips a cup.
+- **Sink:**
+  - A splash of water drops, rings spreading across the table, and a "SINK!" popping up from the cup.
+  - The top-down view has simple versions of both effects.
+  - These are cosmetic events in `Game.cupFx`, and they add to any equipped celebration.

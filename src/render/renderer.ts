@@ -70,6 +70,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View,
   const cfg = game.cfg;
   const st = game.engine.peek();
   drawField(ctx, cfg, theme, v, game.cups);
+  drawCupFx2D(ctx, cfg, theme, v, game);
 
   // Penalty cursor.
   if (st.phase === 'penalty') {
@@ -419,4 +420,58 @@ function drawBasement(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: The
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, v.width, v.height);
+}
+
+/** Top-down cup effects: a white flash ring on a hit, a red pulse while a save is on, a splash and "SINK!" on a sink. */
+function drawCupFx2D(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v: View, game: Game): void {
+  const r = (cfg.cups.diameter / 2) * v.scale;
+  const F = theme.fx;
+  for (const f of game.cupFx) {
+    const t = game.time - f.time;
+    const [sx, sy] = toScreen(v, f.x, f.y);
+    if (f.kind === 'hit' && t < 0.35) {
+      ctx.globalAlpha = 1 - t / 0.35;
+      ctx.strokeStyle = F.impact;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r * (1.2 + t * 3), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (f.kind === 'sink' && t < 1.0) {
+      ctx.globalAlpha = 1 - t;
+      ctx.strokeStyle = F.splashRing;
+      ctx.lineWidth = 2;
+      for (const m of [1.2, 2.2]) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * (m + t * 3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = F.drop;
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        const d = r * (1 + t * 4.5);
+        ctx.fillRect(Math.round(sx + Math.cos(a) * d) - 2, Math.round(sy + Math.sin(a) * d) - 2, 4, 4);
+      }
+      ctx.font = 'bold 24px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = theme.colors.activeText;
+      ctx.strokeText('SINK!', sx, sy - r - 18 - t * 24);
+      ctx.fillStyle = F.sinkText;
+      ctx.fillText('SINK!', sx, sy - r - 18 - t * 24);
+      ctx.globalAlpha = 1;
+    }
+  }
+  const risk = game.engine.peek().rally?.cupAtRisk;
+  const cup = risk && game.engine.peek().cups[risk.team].find((c) => c.id === risk.cupId);
+  if (cup && cup.state !== 'removed') {
+    const [sx, sy] = toScreen(v, cup.x, cup.y);
+    const pulse = 0.5 + 0.5 * Math.sin(game.time * 14);
+    ctx.strokeStyle = F.danger;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * (1.25 + pulse * 0.2), 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }

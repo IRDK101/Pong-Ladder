@@ -96,3 +96,22 @@ describe('penalty cup choice', () => {
     expect(g.engine.peek().phase).toBe('awaitServe');
   });
 });
+
+describe('cup effects', () => {
+  it('cup hits and sinks leave effect events at the cup, which expire', () => {
+    const r = rng(4);
+    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), r);
+    const a = new CpuController('A', 'hard', r);
+    const b = new CpuController('B', 'hard', r);
+    const seen = new Set<string>();
+    for (let t = 0; t < 600 && seen.size < 2; t += 1 / 60) {
+      g.update(1 / 60, { A: a.input(g), B: b.input(g) });
+      for (const f of g.cupFx) {
+        seen.add(f.kind);
+        const cup = g.engine.peek().cups[f.team].find((c) => c.id === f.cupId)!;
+        expect([cup.x, cup.y]).toEqual([f.x, f.y]);
+      }
+    }
+    expect(seen).toEqual(new Set(['hit', 'sink']));
+  });
+});

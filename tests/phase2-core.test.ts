@@ -3,7 +3,7 @@ import { newCharacter, validateCharacter } from '../src/core/character';
 import { available, firstPicker, isDone, newDraft, onTheClock, pick, snakeOrder, teamPicks, type Draft } from '../src/core/draft';
 import { BallPhysics, NO_EFFECTS, type PhysicsEvent } from '../src/core/physics';
 import { RulesEngine } from '../src/core/rules';
-import { composeSprite, PART_OPTIONS, SPRITE_H, SPRITE_W, spriteFromRgba } from '../src/core/sprite';
+import { composeSprite, normalizeParts, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba } from '../src/core/sprite';
 import { effectiveStats, effect, NEUTRAL_STATS, STAT_KEYS, statEffect, type Stats } from '../src/core/stats';
 import { getStyle, registerStyle, STYLES } from '../src/core/styles';
 import { solveArc, solveServe } from '../src/core/trajectory';
@@ -232,11 +232,33 @@ describe('sprites', () => {
   });
 
   it('every part option changes the picture', () => {
-    const base = { skin: 0, hairStyle: 1, hairColor: 0, shirtStyle: 0, shirtColor: 1, pantsColor: 0, build: 1, accessory: 0 };
+    const base = { ...normalizeParts({ skin: 0, hairStyle: 1, hairColor: 0, shirtStyle: 0, shirtColor: 1, pantsColor: 0, build: 1, accessory: 0 }), headwear: 1 };
     const ref = composeSprite(base).pixels.join();
     for (const key of Object.keys(PART_OPTIONS) as (keyof typeof PART_OPTIONS)[]) {
-      const changed = composeSprite({ ...base, [key]: base[key] + 1 }).pixels.join();
-      expect(changed, key).not.toBe(ref);
+      // Every option of every part (front or back view) draws a different picture from the base.
+      for (let i = 0; i < PART_OPTIONS[key].length; i++) {
+        if (i === base[key]) continue;
+        const p = { ...base, [key]: i };
+        const changed = composeSprite(p).pixels.join() + composeSprite(p, 'back').pixels.join();
+        expect(changed, `${key} = ${PART_OPTIONS[key][i]}`).not.toBe(ref + composeSprite(base, 'back').pixels.join());
+      }
+    }
+  });
+
+  it('older saved characters (only the original eight parts) still draw, as before for those parts', () => {
+    const old = { skin: 2, hairStyle: 3, hairColor: 1, shirtStyle: 2, shirtColor: 0, pantsColor: 1, build: 2, accessory: 1 };
+    expect(composeSprite(old).pixels).toEqual(composeSprite(normalizeParts(old)).pixels);
+    expect(normalizeParts(old).faceShape).toBe(0);
+    expect(normalizeParts({ ...old, skin: 99 }).skin).toBe(99 % PART_OPTIONS.skin.length);
+  });
+
+  it('random looks are valid parts', () => {
+    let seed = 3;
+    const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let k = 0; k < 50; k++) {
+      const p = randomParts(rng);
+      expect(normalizeParts(p)).toEqual(p);
+      expect(composeSprite(p).pixels).toHaveLength(SPRITE_W * SPRITE_H);
     }
   });
 

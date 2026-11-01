@@ -278,6 +278,15 @@ export const theme = {
     shadow: 'rgba(10, 10, 30, 0.28)',
     ballShade: '#d9d0bf',
   },
+  /** Cup hit and sink effects. */
+  fx: {
+    impact: '#ffffff',
+    danger: '#ff5a4a',
+    drop: '#9fd8ff',
+    dropLight: '#e6f6ff',
+    splashRing: 'rgba(200, 235, 255, 0.85)',
+    sinkText: '#ffe066',
+  },
   /** Title screen. */
   menu: {
     logo: '#f2e8d5',

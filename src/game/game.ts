@@ -146,6 +146,8 @@ export class Game {
   readonly roster: Roster;
   /** Per team: how its human's view maps aim keys to the table. */
   controlFrames: Record<TeamId, ControlFrame> = { A: TOP_DOWN_FRAME, B: TOP_DOWN_FRAME };
+  /** Recent cup hits and sinks, for the renderers' effects (cosmetic). */
+  cupFx: { kind: 'hit' | 'sink'; team: TeamId; cupId: string; x: number; y: number; time: number }[] = [];
   /** Active sink celebrations (cosmetic), drawn by the renderer. */
   celebrations: { x: number; y: number; time: number; palette: string; seed: number }[] = [];
 
@@ -435,6 +437,15 @@ export class Game {
     }
   }
 
+  /** How far (m) a recently hit cup is knocked off its spot right now, for the wobble. */
+  cupWobble(team: TeamId, cupId: string): { dx: number; dy: number } {
+    const f = this.cupFx.find((e) => e.kind === 'hit' && e.team === team && e.cupId === cupId && this.time - e.time < 0.45);
+    if (!f) return { dx: 0, dy: 0 };
+    const t = this.time - f.time;
+    const a = 0.012 * (1 - t / 0.45) * Math.sin(t * 60);
+    return { dx: a, dy: a * 0.5 };
+  }
+
   /** Mouse selection of the penalty cup. */
   chooseCup(team: TeamId, cupId: string): boolean {
     return this.dispatch({ type: 'chooseCup', team, cupId });
@@ -584,6 +595,12 @@ export class Game {
   }
 
   private handleCall(c: Call): void {
+    // Cup effects: a hit (a save is on, or a serve clipped a cup) wobbles the cup; a sink splashes.
+    if (c.cup && (c.kind === 'cupHit' || c.kind === 'serveCupPenalty' || c.kind === 'sink')) {
+      const cup = this.engine.peek().cups[c.cup.team].find((x) => x.id === c.cup!.cupId);
+      if (cup) this.cupFx.push({ kind: c.kind === 'sink' ? 'sink' : 'hit', team: cup.team, cupId: cup.id, x: cup.x, y: cup.y, time: this.time });
+    }
+    this.cupFx = this.cupFx.filter((f) => this.time - f.time < 1.5);
     if (c.kind === 'sink' && c.player && c.cup) {
       const who = this.participant(c.player);
       const cup = this.engine.peek().cups[c.cup.team].find((x) => x.id === c.cup!.cupId);

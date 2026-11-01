@@ -247,12 +247,15 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const penaltyCup = st.phase === 'penalty' ? game.penaltyCups()[Math.min(game.penaltyCursor, game.penaltyCups().length - 1)] : undefined;
   for (const cup of game.cups) {
     if (cup.state === 'removed') continue;
-    items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(h, theme, cfg, ch, cup, cup === penaltyCup, game.time) });
+    const wob = game.cupWobble(cup.team, cup.id);
+    const shown = wob.dx || wob.dy ? { ...cup, x: cup.x + wob.dx, y: cup.y + wob.dy } : cup;
+    items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(h, theme, cfg, ch, shown, cup === penaltyCup, game.time) });
   }
   if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, ball.pos, ball.vel, ball.fx) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
   if (ui) drawTimingRings(h, theme, game, ch);
+  drawCupFx(h, theme, game, ch);
   drawCelebrations3D(h, theme, game, ch);
 
   // --- Front coarse layer: everyone not behind the table (your own team, over its shoulders).
@@ -395,6 +398,77 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   } else disc(h, cam, c, 0.012, col, 10);
 }
 
+/**
+ * Cup effects:
+ * - a hit: an impact burst at the rim, and while a save is on, a pulsing
+ *   red ring round the cup with a "!" over it;
+ * - a sink: a splash of water drops, a ring spreading over the table and a
+ *   "SINK!" that pops up from the cup.
+ */
+function drawCupFx(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera): void {
+  const cfg = game.cfg;
+  const H = cfg.physics.cupHeight;
+  const r = cfg.cups.diameter / 2;
+  const F = theme.fx;
+  for (const f of game.cupFx) {
+    const t = game.time - f.time;
+    if (f.kind === 'hit') {
+      if (t > 0.35) continue;
+      // Short white impact streaks out from the rim.
+      const k = t / 0.35;
+      h.globalAlpha = 1 - k;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.3;
+        const r0 = r * (1.1 + k * 0.6);
+        const r1 = r * (1.45 + k * 0.9);
+        line(h, cam, { x: f.x + Math.cos(a) * r0, y: f.y + Math.sin(a) * r0, z: H }, { x: f.x + Math.cos(a) * r1, y: f.y + Math.sin(a) * r1, z: H + 0.01 }, F.impact, 2);
+      }
+      h.globalAlpha = 1;
+      continue;
+    }
+    // Sink.
+    if (t > 1.1) continue;
+    const k = t / 1.1;
+    h.globalAlpha = Math.max(0, 1 - k);
+    ring(h, cam, { x: f.x, y: f.y, z: 0.002 }, r * (1.2 + k * 3.5), F.splashRing, 2, 28);
+    ring(h, cam, { x: f.x, y: f.y, z: 0.002 }, r * (1 + k * 2.2), F.splashRing, 1, 28);
+    let seed = (f.x * 1000 + f.y * 37) | 0 || 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 26; i++) {
+      const a = rnd() * Math.PI * 2;
+      const sp = 0.25 + rnd() * 0.55;
+      const up = 0.9 + rnd() * 1.1;
+      const z = H + up * t - 3.2 * t * t;
+      if (z < 0) continue;
+      const p = project(cam, { x: f.x + Math.cos(a) * sp * t, y: f.y + Math.sin(a) * sp * t, z });
+      if (!p) continue;
+      const s = Math.max(1, Math.round(p.scale * 0.012));
+      h.fillStyle = i % 3 ? F.drop : F.dropLight;
+      h.fillRect(Math.round(p.x), Math.round(p.y), s, s);
+    }
+    h.globalAlpha = 1;
+  }
+  // While a save is on: the hit cup pulses red, with a "!" over it.
+  const risk = game.engine.peek().rally?.cupAtRisk;
+  if (risk) {
+    const cup = game.engine.peek().cups[risk.team].find((c) => c.id === risk.cupId);
+    if (cup && cup.state !== 'removed') {
+      const pulse = 0.5 + 0.5 * Math.sin(game.time * 14);
+      ring(h, cam, { x: cup.x, y: cup.y, z: 0.003 }, r * (1.25 + pulse * 0.2), F.danger, 2, 28);
+      ring(h, cam, { x: cup.x, y: cup.y, z: H + 0.004 }, r * 1.05, F.danger, 1, 28);
+      const top = project(cam, { x: cup.x, y: cup.y, z: H + 0.1 + pulse * 0.015 });
+      if (top) {
+        const s = Math.max(2, Math.round(top.scale * 0.012));
+        h.fillStyle = theme.colors.ballOutline;
+        h.fillRect(Math.round(top.x) - s, Math.round(top.y) - s * 5, s * 3, s * 6 + s * 2);
+        h.fillStyle = F.danger;
+        h.fillRect(Math.round(top.x) - Math.floor(s / 2), Math.round(top.y) - s * 4, s * 2, s * 4);
+        h.fillRect(Math.round(top.x) - Math.floor(s / 2), Math.round(top.y) + s, s * 2, s * 2);
+      }
+    }
+  }
+}
+
 function drawCelebrations3D(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera): void {
   for (const k of game.celebrations) {
     const t = game.time - k.time;
@@ -467,6 +541,25 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
       pill(ctx, name, sx, sy, 'rgba(20,14,10,0.75)', who.nameColor ?? (who.master ? c.master : c.text), undefined, bounds);
       ctx.globalAlpha = 1;
     }
+  }
+  // "SINK!" popping up from a sunk cup.
+  for (const f of game.cupFx) {
+    const t = game.time - f.time;
+    if (f.kind !== 'sink' || t > 1.0) continue;
+    const at = project(vp.cam, { x: f.x, y: f.y, z: game.cfg.physics.cupHeight + 0.1 + t * 0.25 });
+    if (!at) continue;
+    const pop = t < 0.12 ? 0.6 + (t / 0.12) * 0.6 : 1.2 - Math.min(0.2, (t - 0.12) * 0.5);
+    ctx.save();
+    ctx.globalAlpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+    ctx.translate(vp.x + at.x * k, Math.max(minY + 20, vp.y + at.y * k));
+    ctx.scale(pop, pop);
+    ctx.font = 'bold 28px monospace';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = theme.colors.activeText;
+    ctx.strokeText('SINK!', 0, 0);
+    ctx.fillStyle = theme.fx.sinkText;
+    ctx.fillText('SINK!', 0, 0);
+    ctx.restore();
   }
   // Timing feedback ("Perfect", "Late"...) rising from the hitter.
   const fb = game.feedback;

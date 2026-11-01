@@ -11,6 +11,12 @@ export interface Sprite {
   pixels: string[];
 }
 
+/**
+ * Indexes into the part option lists (core/sprite.ts PART_OPTIONS). The
+ * first eight are the original parts; the rest arrived with the bigger
+ * character system and are optional, so older saved characters still load
+ * (missing parts mean option 0).
+ */
 export interface SpriteParts {
   skin: number;
   hairStyle: number;
@@ -20,6 +26,14 @@ export interface SpriteParts {
   pantsColor: number;
   build: number;
   accessory: number;
+  faceShape?: number;
+  eyes?: number;
+  mouth?: number;
+  facialHair?: number;
+  headwear?: number;
+  hatColor?: number;
+  pantsStyle?: number;
+  shoes?: number;
 }
 
 export interface Character {
@@ -61,7 +75,7 @@ export const MIN_HIT_STYLES = 2;
 export const MAX_HIT_STYLES = 3;
 export const NAME_MAX = 18;
 
-export const DEFAULT_PARTS: SpriteParts = { skin: 1, hairStyle: 1, hairColor: 0, shirtStyle: 0, shirtColor: 0, pantsColor: 0, build: 1, accessory: 0 };
+export const DEFAULT_PARTS: Required<SpriteParts> = { skin: 1, hairStyle: 1, hairColor: 0, shirtStyle: 0, shirtColor: 0, pantsColor: 0, build: 1, accessory: 0, faceShape: 0, eyes: 0, mouth: 0, facialHair: 0, headwear: 0, hatColor: 0, pantsStyle: 0, shoes: 0 };
 
 export function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
