@@ -60,7 +60,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   ctx.font = theme.fonts.title;
   const sw = Math.min(W - 2 * (teamW + M * 2), Math.max(ctx.measureText(status).width, 260) + 40);
   const urgent = st.phase === 'penalty' || !!st.rally?.cupAtRisk;
-  panel(ctx, theme, W / 2 - sw / 2, M, sw, 52, urgent ? c.penaltyCursor : c.tableEdge);
+  panel(ctx, theme, W / 2 - sw / 2, M, sw, 52, urgent ? c.penaltyCursor : c.uiEdge);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = urgent ? c.penaltyCursor : c.text;
@@ -72,7 +72,9 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   // --- Bottom bar: the newest referee call, with a one-line hint under it.
   const coop = game.cfg.players.mode === 'coop';
   const hint =
-    st.phase === 'penalty'
+    st.phase === 'gameOver'
+      ? ''
+      : st.phase === 'penalty'
       ? `Team ${st.penalty!.team}: aim keys pick a cup, hit key confirms (or click it)`
       : st.phase === 'awaitServe'
         ? 'Aim, then hit to toss · hit again as the rings meet · hold a direction for spin'
@@ -82,7 +84,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   const mw = Math.min(W - 2 * M, Math.max(ctx.measureText(newest).width, ctx.measureText(hint).width * 0.86) + 48);
   const mh = 46;
   const my = v.height - M - mh;
-  panel(ctx, theme, W / 2 - mw / 2, my, mw, mh, c.tableEdge);
+  panel(ctx, theme, W / 2 - mw / 2, my, mw, mh, c.uiEdge);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;

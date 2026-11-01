@@ -155,7 +155,7 @@ function drawSki(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v
   const [mx, my] = toScreen(v, cfg.table.length / 2, cfg.table.width / 2);
   const w = cfg.ski.width * v.scale;
   const l = cfg.ski.length * v.scale;
-  ctx.fillStyle = c.skiBody;
+  ctx.fillStyle = theme.venues[cfg.venue].ski.body;
   ctx.beginPath();
   ctx.roundRect(mx - w / 2, my - l / 2, w, l, w / 2);
   ctx.fill();
@@ -169,10 +169,19 @@ function drawCup(ctx: CanvasRenderingContext2D, cfg: GameConfig, theme: Theme, v
   const [sx, sy] = toScreen(v, cup.x, cup.y);
   const r = (cfg.cups.diameter / 2) * v.scale;
 
-  ctx.fillStyle = cup.team === 'A' ? c.cupTeamA : c.cupTeamB;
+  // Clear plastic cups, as in the 3D view, with a thin team-colored base ring so each side reads.
+  ctx.fillStyle = theme.cup.glass;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.beginPath();
+  ctx.arc(sx, sy, r + 1.5, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.strokeStyle = cup.team === 'A' ? c.teamA : c.teamB;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
   // Water: full fills most of the mouth; half is a smaller, darker pool.
   ctx.fillStyle = cup.state === 'full' ? c.water : c.waterHalf;

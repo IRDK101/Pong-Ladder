@@ -26,7 +26,7 @@ export const theme = {
     penaltyCursor: '#ffe066',
     hudPanel: 'rgba(20, 14, 10, 0.85)',
     /** Lighter HUD bars over the 3D views, so the room shows through. */
-    hudPanel3d: 'rgba(12, 8, 6, 0.5)',
+    hudPanel3d: 'rgba(10, 9, 8, 0.72)',
     good: '#8fe388',
     /** Aim markers: lighter team colors that read on the wood. */
     aimA: '#ff9c8c',
@@ -34,9 +34,13 @@ export const theme = {
     /** The aim marker flashes this color once a shot is locked in. */
     lockFlash: '#ffffff',
     bad: '#ff7b6b',
-    overlay: 'rgba(10, 7, 5, 0.78)',
-    button: '#3d2a18',
-    buttonActive: '#6b4a2b',
+    overlay: 'rgba(8, 7, 6, 0.86)',
+    /** UI chrome (menus, HTML screens, HUD): black panels with dim-gold edges and gold accents, like the basement's painted header bands. */
+    button: '#1d1b19',
+    buttonActive: '#3b3324',
+    uiEdge: '#5c4d28',
+    uiField: '#121110',
+    gold: '#e6c45a',
     master: '#ffd76a',
     /** Colors of the streak behind a spinning ball. */
     spinTop: '#ff9a3c',
@@ -45,20 +49,18 @@ export const theme = {
     activeText: '#1a1410',
     masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
-  /**
-   * Basement scenery (placeholder until reference photos of the Zeta Psi
-   * basement arrive): concrete floor, brick walls, a hanging light.
-   */
+  /** Top-down view scenery: the basement's rust-red concrete floor and dark wood walls with black trim. */
   basement: {
-    floor: '#2b2420',
-    floorSeam: '#241e1a',
-    stain: 'rgba(12, 8, 6, 0.28)',
-    brick: '#5a2e22',
-    brickDark: '#4a251b',
-    mortar: '#2e1f19',
-    lightGlow: 'rgba(255, 214, 150, 0.16)',
+    floor: '#6a311f',
+    floorSeam: '#5a2a1b',
+    stain: 'rgba(30, 12, 6, 0.3)',
+    brick: '#4a2c17',
+    brickDark: '#3b2312',
+    mortar: '#121212',
+    lightGlow: 'rgba(235, 242, 255, 0.12)',
     wallDepth: 26,
   },
+
   /**
    * The 3D basement room, after the real Zeta Psi basement (reference
    * photos):
@@ -279,18 +281,19 @@ export const theme = {
   /** Title screen. */
   menu: {
     logo: '#f2e8d5',
-    logoShadow: '#1a1410',
-    accent: '#2fb36b',
-    accentWarm: '#ffd34f',
-    panel: 'rgba(14, 10, 8, 0.78)',
-    row: 'rgba(61, 42, 24, 0.85)',
-    rowPlay: 'rgba(30, 80, 52, 0.9)',
-    rowActive: 'rgba(107, 74, 43, 0.95)',
-    shadeLeft: 'rgba(8, 6, 5, 0.82)',
-    shadeRight: 'rgba(8, 6, 5, 0.35)',
-    key: '#3d2a18',
-    keyEdge: '#22160c',
+    logoShadow: '#0a0908',
+    accent: '#e6c45a',
+    accentWarm: '#ffe08a',
+    panel: 'rgba(10, 9, 8, 0.82)',
+    row: 'rgba(30, 28, 26, 0.92)',
+    rowPlay: 'rgba(62, 50, 22, 0.94)',
+    rowActive: 'rgba(92, 74, 30, 0.96)',
+    shadeLeft: 'rgba(6, 5, 4, 0.82)',
+    shadeRight: 'rgba(6, 5, 4, 0.4)',
+    key: '#2a2724',
+    keyEdge: '#0d0c0b',
   },
+
   /** The Greek letters painted on the basement wall. */
   houseLetters: 'ΖΨ',
   /** Unlockable name colors (cosmetic rewards). */

@@ -469,3 +469,28 @@ Side-angle photos showed the real arrangement, and the layout now follows it.
   - Beams: "Act or be acted upon." with the pizza proverb, and "On the Seventh Cup, He Rested." with TYRANNOSAURUS REX ON A BOAT, over the first pair; BIG BRIGGS, THE CLASS OF 1962 ROOM and RONA RUINED MY DAY, with "IT'S FOR THE KIDS" and "Draw without an eraser." on the back, over the second pair.
 - **Bar:** across the bar end, in line with the row. The arch over it reads "Now Serving Frankenstein Family Ale", with two fridges behind the counter and red corners on either side.
 - **Tests:** a test checks the row order and that a pillar pair stands between each pair of neighboring tables.
+
+## Visual consistency pass
+
+A visual-only pass: no features or gameplay changed.
+
+- **One UI palette, black and gold** (after the basement's painted header bands), used everywhere:
+  - title menu, How to play, end-of-game panels, HUD bars, and all HTML screens (characters, editor, players, draft, lineups, backup);
+  - black translucent panels with a dim-gold 1 px edge (`colors.uiEdge`) and gold accents and headings (`colors.gold`);
+  - primary buttons are gold, not green;
+  - team red and blue stay for team-specific things;
+  - green and red still mean good and bad timing.
+- **Title screen:**
+  - "PONG" is gold, and the stray square next to it is gone;
+  - the subtitle reads "ZETA PSI BASEMENT RULES", because the Greek letters rendered poorly in the monospace font.
+- **How to play:**
+  - rewritten for the current game: no cup snapping, the marker flashes when locked, the colored ring closes on a white ring, the style keys;
+  - laid out in a sized panel, so the "go back" prompt is never cut off.
+- **End screens:** use the same panel as the menu, scaled with it.
+- **HUD:** darker panels for legibility, and no hint line once the game is over.
+- **Wall writing:** skipped when right over the camera or seen almost edge-on, and faded at shallow angles. It used to turn into pixel noise at the edges of the screen.
+- **Top-down view:**
+  - rust-red concrete floor and dark walls, matching the 3D basement;
+  - clear cups with a thin team-colored ring, like the 3D cups;
+  - the ski color follows the chosen table.
+- **HTML screens:** file inputs and placeholders are styled to match, and page titles get a gold underline.

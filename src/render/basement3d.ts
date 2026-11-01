@@ -33,6 +33,10 @@ function wallQuad(m: WallMap, t0: number, t1: number, z0: number, z1: number, ou
 /** Paint text onto a wall, fitted (keeping its proportions) and centered in the box t0..t1 by z0..z1. Skipped when the wall faces away. */
 function wallText(b: CanvasRenderingContext2D, cam: Camera, m: WallMap, text: string, font: string, fill: string, t0: number, t1: number, z0: number, z1: number, out = 0.004): void {
   if (!facesCamera(cam, m, (t0 + t1) / 2, (z0 + z1) / 2)) return;
+  // Skip writing seen almost edge-on or right over the camera: at this resolution it only
+  // turns into noise. Writing at a shallow angle fades out instead of popping.
+  const view = legibility(cam, m, t0, t1, z0, z1, out);
+  if (view <= 0) return;
   const img = textBitmap(text, font, fill, '');
   const aspect = img.width / img.height;
   let w = t1 - t0;
@@ -65,9 +69,39 @@ function wallText(b: CanvasRenderingContext2D, cam: Camera, m: WallMap, text: st
     b.clip();
     b.setTransform((tr.x - tl.x) / sw, (tr.y - tl.y) / sw, (bl.x - tl.x) / img.height, (bl.y - tl.y) / img.height, tl.x, tl.y);
     const span = Math.min(sw * 1.2, img.width - i * sw);
+    b.globalAlpha = view;
     b.drawImage(img, i * sw, 0, span, img.height, 0, 0, span, img.height);
     b.restore();
   }
+}
+
+/**
+ * 0..1: how readable a patch of wall writing is from the camera. 0 when any
+ * part is closer than 1.2 m, or the wall is seen at under ~14 degrees; it
+ * ramps to 1 by ~30 degrees.
+ */
+function legibility(cam: Camera, m: WallMap, t0: number, t1: number, z0: number, z1: number, out: number): number {
+  let near = Infinity;
+  for (const [t, z] of [
+    [t0, z0],
+    [t1, z0],
+    [t0, z1],
+    [t1, z1],
+  ]) {
+    const p = m(t, z, out);
+    near = Math.min(near, (p.x - cam.eye.x) * cam.f.x + (p.y - cam.eye.y) * cam.f.y + (p.z - cam.eye.z) * cam.f.z);
+  }
+  if (near < 1.2) return 0;
+  const c = m((t0 + t1) / 2, (z0 + z1) / 2, out);
+  const n = m((t0 + t1) / 2, (z0 + z1) / 2, out + 1);
+  const nx = n.x - c.x;
+  const ny = n.y - c.y;
+  const nz = n.z - c.z;
+  const dx = cam.eye.x - c.x;
+  const dy = cam.eye.y - c.y;
+  const dz = cam.eye.z - c.z;
+  const cos = (nx * dx + ny * dy + nz * dz) / (Math.hypot(nx, ny, nz) * Math.hypot(dx, dy, dz) || 1);
+  return Math.max(0, Math.min(1, (cos - 0.24) / 0.26));
 }
 
 function wallShape(b: CanvasRenderingContext2D, cam: Camera, m: WallMap, pts: [number, number][], fill: string, out = 0.006): void {

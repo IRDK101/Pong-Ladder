@@ -132,12 +132,6 @@ function logo(theme: Theme): HTMLCanvasElement {
   x.fillText('PONG', 2, 19);
   x.fillStyle = m.accent;
   x.fillText('PONG', 1, 18);
-  // A little ball in flight.
-  x.fillStyle = m.logo;
-  x.fillRect(48, 23, 3, 3);
-  x.fillStyle = m.logoShadow;
-  x.fillRect(56, 24, 2, 1);
-  x.fillRect(61, 25, 2, 1);
   logoCache = c;
   return c;
 }
@@ -186,7 +180,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
   ctx.fillStyle = m.accent;
   ctx.fillRect(SETUP_X, 182, 120, 3);
   ctx.fillStyle = c.textDim;
-  ctx.fillText(`${theme.houseLetters} BASEMENT RULES  ·  PADDLE PONG FOR FOUR`, SETUP_X + 132, 184);
+  ctx.fillText('ZETA PSI BASEMENT RULES  ·  PADDLE PONG FOR FOUR', SETUP_X + 132, 184);
 
   // Column headings and panels.
   const heading = (text: string, x: number, y: number) => {
@@ -195,9 +189,15 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
     ctx.fillStyle = m.accent;
     ctx.fillText(text, x, y);
   };
-  ctx.fillStyle = m.panel;
-  ctx.fillRect(SETUP_X - 12, TOP - 30, SETUP_W + 24, OPTION_ROWS * ROW + 40);
-  ctx.fillRect(ACTION_X - 12, TOP - 30, ACTION_W + 24, PLAY_ROWS * 58 + 34 + 4 * ROW + 40);
+  const box = (x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = m.panel;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = c.uiEdge;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  };
+  box(SETUP_X - 12, TOP - 30, SETUP_W + 24, OPTION_ROWS * ROW + 40);
+  box(ACTION_X - 12, TOP - 30, ACTION_W + 24, PLAY_ROWS * 58 + 34 + 4 * ROW + 40);
   heading('MATCH SETUP', SETUP_X, TOP - 14);
   heading('PLAY', ACTION_X, TOP - 14);
   heading('MORE', ACTION_X, TOP + PLAY_ROWS * 58 + 14);
@@ -259,38 +259,58 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
   ctx.fillText('↑↓ move · ←→ change · hit key selects · mouse works too', x, y + 11);
   if (note) {
     ctx.font = theme.fonts.hud;
-    ctx.fillStyle = c.good;
+    ctx.fillStyle = m.accent;
     ctx.fillText(note, SETUP_X, y + 44);
   }
 }
 
-export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, v: View, title: string, lines: string[], prompt: string): void {
+/** Game / match over: a centered panel in the menu style, scaled like the menu. */
+export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, title: string, lines: string[], prompt: string): void {
   const c = theme.colors;
+  const m = theme.menu;
   ctx.fillStyle = c.overlay;
-  ctx.fillRect(0, 0, v.width, v.height);
+  ctx.fillRect(0, 0, screen.width, screen.height);
+  const L = menuLayout(screen);
+  ctx.save();
+  ctx.translate(L.ox, L.oy);
+  ctx.scale(L.s, L.s);
+  const w = 640;
+  const h = 150 + lines.length * 30;
+  const x = (MENU_W - w) / 2;
+  const y = (MENU_H - h) / 2;
+  ctx.fillStyle = m.panel;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = c.uiEdge;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = m.accent;
+  ctx.fillRect(x, y, w, 4);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
-  ctx.font = 'bold 44px monospace';
-  ctx.fillText(title, v.width / 2, v.height / 2 - 90);
-  ctx.font = theme.fonts.title;
-  ctx.fillStyle = c.textDim;
-  lines.forEach((l, i) => ctx.fillText(l, v.width / 2, v.height / 2 - 30 + i * 30));
-  ctx.fillStyle = c.activeRing;
+  ctx.font = 'bold 34px monospace';
+  ctx.fillText(title, MENU_W / 2, y + 48);
   ctx.font = theme.fonts.hud;
-  ctx.fillText(prompt, v.width / 2, v.height / 2 + 30 + lines.length * 30);
+  ctx.fillStyle = c.textDim;
+  lines.forEach((l, i) => ctx.fillText(l, MENU_W / 2, y + 96 + i * 30));
+  if (prompt) {
+    ctx.fillStyle = m.accent;
+    ctx.font = theme.fonts.label;
+    ctx.fillText(prompt.toUpperCase(), MENU_W / 2, y + h - 26);
+  }
+  ctx.restore();
 }
 
 const HELP: [string, string][] = [
-  ['Keys', 'Team A: WASD to aim, Space to hit.   Team B: arrow keys to aim, Enter to hit.'],
-  ['Aim', 'Your crosshair shows where your shot will land; it stays where you leave it. In the 3D view up/down is deeper/shorter, left/right is across. It can go off the table, so mind the edges. Near a cup it snaps on (a yellow ring): a well-timed hit drops in.'],
-  ['Spin', 'When the ring appears your crosshair freezes, and the direction you hold as you hit adds spin: forward = topspin (low, skids on), back = backspin (sits up), sideways = sidespin that curves and kicks that way. Works on serves too.'],
-  ['Modes', 'Head-to-head: one of you per team (split screen gives each team its own camera). Same team: you two against the CPU; WASD plays the left teammate, the arrows the right one, and a press out of turn does nothing.'],
-  ['Hit', 'After the ball bounces on your side, a ring closes in on it. Hit when it meets the ball and turns green. Early hits land short, late ones long, and both fly lower. Fast balls, long rallies and balls far from you leave less time; too far is out of reach.'],
-  ['Serve', 'Press hit to toss the ball, then hit again as the ring closes at the top of the toss. It must bounce once on your side, then land in the diagonal quarter. Three serves off the table cost half a cup.'],
-  ['Saves', 'When a ball hits your cup, return it before it bounces twice. The ring closes faster: react quickly.'],
+  ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles.'],
+  ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
+  ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long. Fast balls, long rallies and balls far from you leave less time.'],
+  ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too.'],
+  ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Three serves off the table cost half a cup.'],
+  ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again.'],
-  ['Turns', 'Teammates alternate hits. The yellow ring marks whose turn it is; control switches automatically.'],
+  ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
+  ['Modes', 'Head-to-head: one of you per team (split screen gives each team its own camera). Same team: you two against the CPU; WASD plays the left teammate, the arrows the right one.'],
 ];
 
 /** Split text into lines no wider than maxWidth with the current font. */
@@ -323,29 +343,43 @@ export function drawHelp(ctx: CanvasRenderingContext2D, theme: Theme, screen: Vi
 
 function drawHelpBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View): void {
   const c = theme.colors;
+  const m = theme.menu;
+  const x = 90;
+  const w = v.width - 180;
+  const textX = x + 110;
+  const maxW = x + w - 28 - textX;
+  // Measure first so the panel fits the text.
+  ctx.font = theme.fonts.hud;
+  const blocks = HELP.map(([k, t]) => ({ k, lines: wrap(ctx, t, maxW) }));
+  const bodyH = blocks.reduce((a, b) => a + b.lines.length * 19 + 12, 0);
+  const top = Math.max(16, (v.height - (bodyH + 120)) / 2);
+  ctx.fillStyle = m.panel;
+  ctx.fillRect(x, top, w, bodyH + 120);
+  ctx.strokeStyle = c.uiEdge;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, top + 0.5, w - 1, bodyH + 119);
+  ctx.fillStyle = m.accent;
+  ctx.fillRect(x, top, w, 4);
   ctx.textBaseline = 'middle';
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'left';
   ctx.fillStyle = c.text;
-  ctx.font = 'bold 32px monospace';
-  ctx.fillText('HOW TO PLAY', v.width / 2, 80);
-  const x = Math.max(40, v.width / 2 - 440);
-  const textX = x + 90;
-  const maxW = v.width - textX - 40;
-  let y = 150;
-  for (const [k, text] of HELP) {
-    ctx.textAlign = 'left';
-    ctx.font = theme.fonts.title;
-    ctx.fillStyle = c.activeRing;
-    ctx.fillText(k, x, y);
+  ctx.font = 'bold 26px monospace';
+  ctx.fillText('HOW TO PLAY', x + 28, top + 38);
+  let y = top + 80;
+  for (const b of blocks) {
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = m.accent;
+    ctx.fillText(b.k.toUpperCase(), x + 28, y);
     ctx.font = theme.fonts.hud;
     ctx.fillStyle = c.text;
-    for (const line of wrap(ctx, text, maxW)) {
+    for (const line of b.lines) {
       ctx.fillText(line, textX, y);
-      y += 20;
+      y += 19;
     }
-    y += 16;
+    y += 12;
   }
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'right';
+  ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('Press any key or click to go back', v.width / 2, y + 10);
+  ctx.fillText('ANY KEY OR CLICK TO GO BACK', x + w - 28, top + 38);
 }
