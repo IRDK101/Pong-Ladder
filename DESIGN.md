@@ -401,3 +401,24 @@ Rule clarifications Q1–Q13 and implementation decisions D1–D4 are in [docs/p
   - The base timing window is wider to keep it easy to learn: 0.24 s.
   - **Rallies build pace (`rallyPace`):** after 2 hits, each return flies 3.5% lower (and so faster), down to 72% of the style's peak. The peak never drops below 1.15 × shoulder height because of this, so pace alone never causes a low hit.
 - **Measured** over 6 medium-vs-medium CPU games, compared with before this update: the ball moves about 19% faster, there are more cup hits from lively bounces, and sinks fall from about 15.5 to 12.3 per game without snapping.
+
+## Basement look from reference photos
+
+The 3D view now follows the photos of the real Zeta Psi basement. Visuals only; no mechanics changed.
+
+- **Floor:** rust-red stained concrete with darker and worn patches, specks, and soft light washes under the tubes.
+- **Ceiling:** sooty black with stains and fluorescent tube fixtures. The hanging lamp is gone, and the light pool on the table is a cooler white. The ceiling is lower (2.05 m above the table). The camera tilts up a little (`lookHeight` 0.4, `fovY` 52) to show the top of the room.
+- **Walls:**
+  - Dark stained wood with raised panels and scratched-in names.
+  - A bench ledge along the long walls.
+  - A black painted header band with hand-lettered slogans: "BIG BRIGGS", "THE CLASS OF 1962 ROOM", "On the Seventh Cup, He Rested.", "TYRANNOSAURUS REX ON A BOAT", "Brothers should be nicer to other brothers" and "STEP YOUR LEVEL UP".
+- **Pillars:** two, beside the middle of the table. Wood below, black above, with a painted slogan on each end-facing side ("SWEAT SAVES BLOOD", "IF I DIE, I DIE.", "GET GOOFY NOW!", "MY MOM SAYS WE'RE A-SIDE"). Painted faces are drawn only when they face the camera.
+- **End walls:** each camera sees the opposite end.
+  - Behind Team B: the 74 sign, gold ΖΨ, LEFT TURN YIELD ON GREEN, a faded STOP sign, "ITS KCAO A WORLD", tombstones on the bench, and a caution sign.
+  - Behind Team A: the bar with KCAO painted on it, "Now Serving Frankenstein Family Ale", a white fridge and a JOHNSON CONTROLS sign.
+- **Table:**
+  - A painted blue top with a big red, green and gold figure, gold ΖΨ and '16X letters (each team reads the far half), and a chipped cream border. Faint chalk center lines stay because the quarters matter for serves.
+  - It sits on a gray trash can, not legs.
+  - A real ski lies across the middle with black bands, lettering and a binding, overhanging both sides with an upturned tip. The overhang is visual only: `ski.length` still sets the collision area when ski collision is on.
+- **Cups:** clear plastic with water. The water level shows through the side, low in a half cup. There are no team colors on the table cups; the HUD keeps them.
+- **Paddles:** homemade wooden ones in the sprites.

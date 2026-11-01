@@ -171,7 +171,7 @@ export const defaultConfig: GameConfig = {
   draftFirstPick: 'coinFlip',
   players: { mode: 'versus', cpu: 'medium' },
   view: 'behindA',
-  camera: { behind: 2.2, height: 1.9, lookAt: 0.55, lookHeight: 0.25, fovY: 50, pixelSize: 2, rows: 400, detail: 1 },
+  camera: { behind: 2.2, height: 1.9, lookAt: 0.55, lookHeight: 0.4, fovY: 52, pixelSize: 2, rows: 400, detail: 1 },
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },

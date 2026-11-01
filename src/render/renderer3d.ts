@@ -273,117 +273,12 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const R = theme.room;
   const { length: L, width: W } = cfg.table;
   const floorZ = -cfg.physics.tableHeight;
-  const ceilZ = 2.25;
+  const ceilZ = 2.05;
   const X0 = -2.5;
   const X1 = L + 2.5;
   const Y0 = -1.9;
   const Y1 = W + 1.9;
-
-  // --- Room shell.
-  poly(b, cam, [{ x: X0, y: Y0, z: ceilZ }, { x: X1, y: Y0, z: ceilZ }, { x: X1, y: Y1, z: ceilZ }, { x: X0, y: Y1, z: ceilZ }], R.ceiling);
-  poly(b, cam, [{ x: X0, y: Y0, z: floorZ }, { x: X1, y: Y0, z: floorZ }, { x: X1, y: Y1, z: floorZ }, { x: X0, y: Y1, z: floorZ }], R.floor);
-
-  // Concrete: speckles, slab seams, sticky stains.
-  for (const s of floorSpecks(X0, X1, Y0, Y1)) {
-    const p = project(cam, { x: s.x, y: s.y, z: floorZ });
-    if (!p) continue;
-    b.fillStyle = s.light ? R.floorSpeck : R.floorSeam;
-    b.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
-  }
-  for (let x = Math.ceil(X0); x <= X1; x += 1.2) line(b, cam, { x, y: Y0, z: floorZ }, { x, y: Y1, z: floorZ }, R.floorSeam);
-  for (let y = Y0; y <= Y1; y += 1.2) line(b, cam, { x: X0, y, z: floorZ }, { x: X1, y, z: floorZ }, R.floorSeam);
-  let seed = 11;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 26; i++) disc(b, cam, { x: X0 + rnd() * (X1 - X0), y: Y0 + rnd() * (Y1 - Y0), z: floorZ }, 0.06 + rnd() * 0.18, R.stain, 9);
-  // The table's shadow on the floor.
-  poly(b, cam, [{ x: -0.08, y: -0.1, z: floorZ + 0.001 }, { x: L + 0.08, y: -0.1, z: floorZ + 0.001 }, { x: L + 0.08, y: W + 0.1, z: floorZ + 0.001 }, { x: -0.08, y: W + 0.1, z: floorZ + 0.001 }], R.tableShadow);
-
-  // Wood-plank walls in alternating tones, with grooves, a chair rail and baseboards.
-  const plank = 0.24;
-  for (let i = 0, x = X0; x < X1; i++, x += plank) {
-    const col = i % 3 === 0 ? R.wallAlt : i % 3 === 1 ? R.wall : R.wallWarm;
-    for (const y of [Y0, Y1]) {
-      poly(b, cam, [{ x, y, z: floorZ }, { x: x + plank, y, z: floorZ }, { x: x + plank, y, z: ceilZ }, { x, y, z: ceilZ }], col);
-      line(b, cam, { x, y, z: floorZ }, { x, y, z: ceilZ }, R.wallDark);
-    }
-  }
-  for (let i = 0, y = Y0; y < Y1; i++, y += plank) {
-    const col = i % 2 ? R.wallDark : R.wallAlt;
-    for (const x of [X0, X1]) poly(b, cam, [{ x, y, z: floorZ }, { x, y: y + plank, z: floorZ }, { x, y: y + plank, z: ceilZ }, { x, y, z: ceilZ }], col);
-  }
-  for (const y of [Y0, Y1]) {
-    poly(b, cam, [{ x: X0, y, z: floorZ }, { x: X1, y, z: floorZ }, { x: X1, y, z: floorZ + 0.12 }, { x: X0, y, z: floorZ + 0.12 }], R.baseboard);
-    poly(b, cam, [{ x: X0, y, z: 0.08 }, { x: X1, y, z: 0.08 }, { x: X1, y, z: 0.12 }, { x: X0, y, z: 0.12 }], R.rail);
-  }
-  for (const x of [X0, X1]) poly(b, cam, [{ x, y: Y0, z: floorZ }, { x, y: Y1, z: floorZ }, { x, y: Y1, z: floorZ + 0.12 }, { x, y: Y0, z: floorZ + 0.12 }], R.baseboard);
-
-  // Ceiling joists (real boxes) and pipe runs.
-  for (let x = X0 + 0.3; x <= X1; x += 0.6) box(b, cam, x, Y0, ceilZ - 0.14, x + 0.07, Y1, ceilZ, R.joist, R.joistDark, R.joistDark);
-  box(b, cam, X0, Y0 + 0.48, ceilZ - 0.26, X1, Y0 + 0.56, ceilZ - 0.18, R.pipeLight, R.pipe, R.pipe);
-  box(b, cam, X0, Y1 - 0.84, ceilZ - 0.3, X1, Y1 - 0.78, ceilZ - 0.24, R.pipeLight, R.pipe, R.pipe);
-
-  // End-wall decor at both ends, so either camera sees the far wall dressed.
-  for (const endX of [X0, X1]) drawEndWall(b, theme, cam, endX, endX === X1 ? -1 : 1, W, floorZ);
-  // Posters (with words on them) and a dartboard on the side walls.
-  for (const [y, inward] of [
-    [Y0, 1],
-    [Y1, -1],
-  ] as const) {
-    const yy = y + inward * 0.012;
-    R.posters.forEach((col, i) => {
-      const x = -1.4 + i * ((L + 2.8) / R.posters.length) + 0.3;
-      poly(b, cam, [{ x: x - 0.02, y: yy, z: 0.18 }, { x: x + 0.38, y: yy, z: 0.18 }, { x: x + 0.38, y: yy, z: 0.72 }, { x: x - 0.02, y: yy, z: 0.72 }], R.posterFrame);
-      poly(b, cam, [{ x, y: yy, z: 0.2 }, { x: x + 0.36, y: yy, z: 0.2 }, { x: x + 0.36, y: yy, z: 0.7 }, { x, y: yy, z: 0.7 }], col);
-      // Simple poster art: a ball over two stripes.
-      const k = (i + (inward === 1 ? 0 : 1)) % 2;
-      wallDisc(b, cam, { x: x + 0.18, y: yy + inward * 0.001, z: 0.56 }, 0.07, k ? R.posterInk : R.posterFrame, 10);
-      poly(b, cam, [{ x: x + 0.05, y: yy + inward * 0.001, z: 0.3 }, { x: x + 0.31, y: yy + inward * 0.001, z: 0.3 }, { x: x + 0.31, y: yy + inward * 0.001, z: 0.34 }, { x: x + 0.05, y: yy + inward * 0.001, z: 0.34 }], R.posterInk);
-      poly(b, cam, [{ x: x + 0.05, y: yy + inward * 0.001, z: 0.38 }, { x: x + 0.31, y: yy + inward * 0.001, z: 0.38 }, { x: x + 0.31, y: yy + inward * 0.001, z: 0.4 }, { x: x + 0.05, y: yy + inward * 0.001, z: 0.4 }], R.posterInk);
-    });
-    const dx = L / 2 + (inward === 1 ? 0.25 : -0.25);
-    for (const [rad, ringCol] of [
-      [0.2, R.dartRim],
-      [0.17, R.dartA],
-      [0.12, R.dartB],
-      [0.07, R.dartA],
-      [0.025, R.dartBull],
-    ] as const)
-      wallDisc(b, cam, { x: dx, y: yy + inward * 0.002, z: 0.75 }, rad, ringCol);
-  }
-
-  // String lights sagging along both long walls, each bulb with a small glow.
-  for (const y of [Y0 + 0.15, Y1 - 0.15]) {
-    for (let i = 0; i <= 28; i++) {
-      const t = i / 28;
-      const x = X0 + 0.3 + t * (X1 - X0 - 0.6);
-      const sag = Math.sin(((t * 7) % 1) * Math.PI) * 0.12;
-      const p = project(cam, { x, y, z: ceilZ - 0.32 - sag });
-      if (!p) continue;
-      const col = R.stringLights[i % R.stringLights.length];
-      const glow = Math.max(2, p.scale * 0.07);
-      const g = b.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
-      g.addColorStop(0, col);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      b.globalAlpha = 0.45;
-      b.fillStyle = g;
-      b.fillRect(p.x - glow, p.y - glow, glow * 2, glow * 2);
-      b.globalAlpha = 1;
-      b.fillStyle = col;
-      const s = Math.max(1, Math.round(p.scale * 0.025));
-      b.fillRect(Math.round(p.x), Math.round(p.y), s, s);
-    }
-  }
-
-  // Corner props: a mini fridge and a trash can at each end.
-  for (const end of [X0, X1]) {
-    const inward = end === X0 ? 1 : -1;
-    const fx0 = end + inward * 0.05;
-    const fx1 = end + inward * 0.6;
-    box(b, cam, Math.min(fx0, fx1), Y0 + 0.08, floorZ, Math.max(fx0, fx1), Y0 + 0.62, floorZ + 0.85, R.fridgeTop, R.fridge, R.fridgeDark);
-    const tx0 = end + inward * 0.1;
-    const tx1 = end + inward * 0.45;
-    box(b, cam, Math.min(tx0, tx1), Y1 - 0.45, floorZ, Math.max(tx0, tx1), Y1 - 0.1, floorZ + 0.6, R.trashTop, R.trash, R.trashDark);
-  }
+  drawRoom(b, theme, cfg, cam, { X0, X1, Y0, Y1, floorZ, ceilZ });
 
   // --- People standing behind the far end of the table go first, so the table hides their legs.
   const viewDepth = (p: Vec3) => (p.x - cam.eye.x) * cam.f.x + (p.y - cam.eye.y) * cam.f.y + (p.z - cam.eye.z) * cam.f.z;
@@ -395,15 +290,15 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
   for (const { p, pos } of behindTable) drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
 
-  // --- Fine layer: the table, its markings, the ski, then cups, ball and lamp.
+  // --- Fine layer: the table, the ski, then cups and the ball.
   const ch = vp.camHi;
   drawTable3D(h, theme, cfg, ch);
 
-  // Light pool from the hanging lamp.
-  const lamp = project(ch, { x: L / 2, y: W / 2, z: 0 });
-  if (lamp) {
-    const g = h.createRadialGradient(lamp.x, lamp.y, 2, lamp.x, lamp.y, lamp.scale * 2.2);
-    g.addColorStop(0, R.lampGlow);
+  // Cool wash from the fluorescent tubes over the middle of the table.
+  const pool = project(ch, { x: L / 2, y: W / 2, z: 0 });
+  if (pool) {
+    const g = h.createRadialGradient(pool.x, pool.y, 2, pool.x, pool.y, pool.scale * 1.9);
+    g.addColorStop(0, R.lightPool);
     g.addColorStop(1, 'rgba(0,0,0,0)');
     h.fillStyle = g;
     h.fillRect(0, 0, vp.hi.width, vp.hi.height);
@@ -421,7 +316,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const st = game.engine.peek();
   for (const team of ['A', 'B'] as TeamId[]) if (ui && showsAim(game, vp, team)) drawAim(h, theme, game, ch, team);
 
-  // Depth-sorted fine objects: cups, ball, lamp.
+  // Depth-sorted fine objects: cups and the ball.
   type Item = { depth: number; draw: () => void };
   const items: Item[] = [];
   const depthOf = (p: Vec3) => (p.x - ch.eye.x) * ch.f.x + (p.y - ch.eye.y) * ch.f.y + (p.z - ch.eye.z) * ch.f.z;
@@ -431,8 +326,6 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(h, theme, cfg, ch, cup, cup === penaltyCup, game.time) });
   }
   if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, ball.pos, ball.vel, ball.fx) });
-  const lampAt = { x: L / 2, y: W / 2, z: 1.3 };
-  items.push({ depth: depthOf(lampAt), draw: () => drawLamp(h, theme, ch, lampAt, ceilZ) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
   if (ui) drawTimingRings(h, theme, game, ch);
@@ -446,24 +339,35 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
 }
 
 const textCache = new Map<string, HTMLCanvasElement>();
-/** Text rendered once to a small bitmap, so it can be painted onto a wall in perspective. */
+/**
+ * Text rendered once to a small bitmap (lines split on \n), so it can be
+ * painted onto a wall in perspective. An empty `shadow` draws no drop shadow.
+ */
 function textBitmap(text: string, font: string, fill: string, shadow: string): HTMLCanvasElement {
-  const key = `${text}|${font}|${fill}`;
+  const key = `${text}|${font}|${fill}|${shadow}`;
   let c = textCache.get(key);
   if (!c) {
     c = document.createElement('canvas');
     const probe = c.getContext('2d')!;
     probe.font = font;
-    c.width = Math.max(64, Math.ceil(probe.measureText(text).width) + 8);
-    c.height = 32;
+    const lines = text.split('\n');
+    const size = parseInt(/(\d+)px/.exec(font)?.[1] ?? '16', 10);
+    const lh = Math.round(size * 1.1);
+    c.width = Math.max(16, Math.ceil(Math.max(...lines.map((l) => probe.measureText(l).width))) + 6);
+    c.height = lh * lines.length + 4;
     const x = c.getContext('2d')!;
     x.font = font;
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.fillStyle = shadow;
-    x.fillText(text, c.width / 2 + 1, 18);
-    x.fillStyle = fill;
-    x.fillText(text, c.width / 2, 16);
+    lines.forEach((l, k) => {
+      const y = 2 + lh * k + lh / 2;
+      if (shadow) {
+        x.fillStyle = shadow;
+        x.fillText(l, c!.width / 2 + 1, y + 2);
+      }
+      x.fillStyle = fill;
+      x.fillText(l, c!.width / 2, y);
+    });
     textCache.set(key, c);
   }
   return c;
@@ -481,41 +385,294 @@ function wallImage(b: CanvasRenderingContext2D, cam: Camera, img: HTMLCanvasElem
   b.restore();
 }
 
-function drawEndWall(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, x: number, inward: 1 | -1, W: number, floorZ: number): void {
+// ------------------------------------------------------------ the room
+//
+// Modeled on the Zeta Psi basement:
+// - a rust-red stained concrete floor and a low, sooty black ceiling with fluorescent tubes;
+// - dark stained wood paneling covered in scratched names, with a bench ledge along the walls;
+// - a black painted header band with hand-lettered slogans;
+// - wood pillars with black painted tops;
+// - road signs, tombstones and a bar with a fridge.
+
+interface RoomBox {
+  X0: number;
+  X1: number;
+  Y0: number;
+  Y1: number;
+  floorZ: number;
+  ceilZ: number;
+}
+
+/** Height where the black painted header band starts on the walls. */
+const HEADER_Z = 1.5;
+
+/** A wall as a 2D surface: along-wall distance t (reading left to right from inside the room) and height z. */
+type WallMap = (t: number, z: number, out?: number) => Vec3;
+
+/** Whether the camera is on the room side of a wall (so its paint is visible). */
+function facesCamera(cam: Camera, m: WallMap, t: number, z: number): boolean {
+  const a = m(t, z, 0);
+  const n = m(t, z, 1);
+  return (cam.eye.x - a.x) * (n.x - a.x) + (cam.eye.y - a.y) * (n.y - a.y) + (cam.eye.z - a.z) * (n.z - a.z) > 0;
+}
+
+function wallQuad(m: WallMap, t0: number, t1: number, z0: number, z1: number, out = 0): Vec3[] {
+  return [m(t0, z0, out), m(t1, z0, out), m(t1, z1, out), m(t0, z1, out)];
+}
+
+/**
+ * Paint a text bitmap onto a wall, fitted (keeping its proportions) and
+ * centered in the box t0..t1 by z0..z1, pushed `out` meters into the room.
+ */
+function wallText(b: CanvasRenderingContext2D, cam: Camera, m: WallMap, text: string, font: string, fill: string, t0: number, t1: number, z0: number, z1: number, out = 0.004, shadow = ''): void {
+  if (!facesCamera(cam, m, (t0 + t1) / 2, (z0 + z1) / 2)) return;
+  const img = textBitmap(text, font, fill, shadow);
+  const aspect = img.width / img.height;
+  let w = t1 - t0;
+  let h = z1 - z0;
+  if (w / h > aspect) w = h * aspect;
+  else h = w / aspect;
+  const tc = (t0 + t1) / 2;
+  const zc = (z0 + z1) / 2;
+  wallImage(b, cam, img, m(tc - w / 2, zc + h / 2, out), m(tc + w / 2, zc + h / 2, out), m(tc - w / 2, zc - h / 2, out));
+}
+
+function drawRoom(b: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, rm: RoomBox): void {
   const R = theme.room;
-  const wx = x + inward * 0.01;
-  // y runs so the decor reads left-to-right from the camera facing this wall.
-  const Y = (t: number) => (inward === -1 ? W / 2 + t : W / 2 - t);
-  // House letters above the couch.
-  wallImage(b, cam, textBitmap(theme.houseLetters, 'bold 26px serif', R.letters, R.letterShadow), { x: wx, y: Y(-0.7), z: 0.66 }, { x: wx, y: Y(0.7), z: 0.66 }, { x: wx, y: Y(-0.7), z: 0.12 });
-  // Big Green flag to one side.
-  const fy0 = Y(1.3);
-  const fy1 = Y(2.0);
-  poly(b, cam, [{ x: wx, y: fy0, z: 0.85 }, { x: wx, y: fy1, z: 0.85 }, { x: wx, y: fy1, z: 0.35 }, { x: wx, y: fy0, z: 0.35 }], R.flag);
-  wallImage(b, cam, textBitmap('D', 'bold 30px serif', R.flagMark, R.flag), { x: wx, y: fy0, z: 0.85 }, { x: wx, y: fy1, z: 0.85 }, { x: wx, y: fy0, z: 0.35 });
-  // Paddle rack on the other side.
-  for (let i = 0; i < 3; i++) {
-    const py = Y(-1.4 - i * 0.22);
-    const p = project(cam, { x: wx, y: py, z: 0.55 });
+  const { X0, X1, Y0, Y1, floorZ, ceilZ } = rm;
+  const { length: L, width: W } = cfg.table;
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+  // Ceiling: sooty black with paler water stains.
+  poly(b, cam, [{ x: X0, y: Y0, z: ceilZ }, { x: X1, y: Y0, z: ceilZ }, { x: X1, y: Y1, z: ceilZ }, { x: X0, y: Y1, z: ceilZ }], R.ceiling);
+  for (let i = 0; i < 18; i++) disc(b, cam, { x: X0 + rnd() * (X1 - X0), y: Y0 + rnd() * (Y1 - Y0), z: ceilZ - 0.001 }, 0.2 + rnd() * 0.5, R.ceilingStain, 10);
+
+  // Floor: rust-red stained concrete, patchy, with worn and wet spots.
+  poly(b, cam, [{ x: X0, y: Y0, z: floorZ }, { x: X1, y: Y0, z: floorZ }, { x: X1, y: Y1, z: floorZ }, { x: X0, y: Y1, z: floorZ }], R.floor);
+  const patch = [R.floorDark, R.floorLight, R.floorWorn];
+  for (let i = 0; i < 46; i++) disc(b, cam, { x: X0 + rnd() * (X1 - X0), y: Y0 + rnd() * (Y1 - Y0), z: floorZ + 0.0005 }, 0.12 + rnd() * 0.5, patch[i % 3], 10);
+  for (const sp of floorSpecks(X0, X1, Y0, Y1)) {
+    const p = project(cam, { x: sp.x, y: sp.y, z: floorZ });
     if (!p) continue;
-    const r = Math.max(1, p.scale * 0.08);
-    b.fillStyle = R.paddleHandle;
-    b.fillRect(Math.round(p.x - r * 0.2), Math.round(p.y + r * 0.7), Math.max(1, Math.round(r * 0.4)), Math.max(1, Math.round(r * 1.2)));
-    b.fillStyle = R.paddle;
-    b.beginPath();
-    b.arc(p.x, p.y, r, 0, Math.PI * 2);
-    b.fill();
+    b.fillStyle = sp.light ? R.floorSpeck : R.floorDark;
+    b.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
   }
-  // Beat-up couch against the wall.
-  const cx0 = x + inward * 0.02;
-  const cx1 = x + inward * 0.75;
-  const [lo, hi] = [Math.min(cx0, cx1), Math.max(cx0, cx1)];
-  const yA = Math.min(Y(-1.0), Y(1.0));
-  const yB = Math.max(Y(-1.0), Y(1.0));
-  box(b, cam, lo, yA, floorZ, hi, yB, floorZ + 0.42, R.couch, R.couchDark);
-  const back0 = inward === 1 ? x + 0.02 : x - 0.25;
-  box(b, cam, back0, yA, floorZ, back0 + 0.23, yB, floorZ + 0.85, R.couchDark, R.couchDark, R.couch);
-  for (const ay of [yA, yB - 0.2]) box(b, cam, lo, ay, floorZ, hi, ay + 0.2, floorZ + 0.62, R.couch, R.couchDark);
+  // Light washes on the floor under the tubes, and the table's shadow.
+  for (const fx of FIXTURES(L, W)) {
+    const p = project(cam, { x: fx.x, y: fx.y, z: floorZ });
+    if (!p) continue;
+    const r = p.scale * 1.1;
+    const g = b.createRadialGradient(p.x, p.y, 1, p.x, p.y, r);
+    g.addColorStop(0, R.floorGlow);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    b.fillStyle = g;
+    b.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+  }
+  poly(b, cam, [{ x: -0.05, y: -0.08, z: floorZ + 0.001 }, { x: L + 0.05, y: -0.08, z: floorZ + 0.001 }, { x: L + 0.05, y: W + 0.08, z: floorZ + 0.001 }, { x: -0.05, y: W + 0.08, z: floorZ + 0.001 }], R.tableShadow);
+
+  // Walls, each mapped so its text reads left to right from inside the room.
+  const walls: { m: WallMap; len: number; key: 'left' | 'right' | 'endB' | 'endA' }[] = [
+    { m: (t, z, o = 0) => ({ x: X0 + t, y: Y0 + o, z }), len: X1 - X0, key: 'left' },
+    { m: (t, z, o = 0) => ({ x: X1 - t, y: Y1 - o, z }), len: X1 - X0, key: 'right' },
+    { m: (t, z, o = 0) => ({ x: X1 - o, y: Y0 + t, z }), len: Y1 - Y0, key: 'endB' },
+    { m: (t, z, o = 0) => ({ x: X0 + o, y: Y1 - t, z }), len: Y1 - Y0, key: 'endA' },
+  ];
+  for (const w of walls) drawPaneledWall(b, theme, cam, w.m, w.len, floorZ, ceilZ, rnd);
+
+  // Hand-lettered slogans on the black header band.
+  const hz0 = HEADER_Z + 0.06;
+  const hz1 = ceilZ - 0.05;
+  const [left, right, endB, endA] = walls;
+  wallText(b, cam, left.m, 'BIG BRIGGS', 'bold 30px sans-serif', R.paintWhite, 0.2, 1.9, hz0, hz1);
+  wallText(b, cam, left.m, 'THE CLASS OF 1962 ROOM', 'bold 22px serif', R.paintGold, 2.2, 5.0, hz0 + 0.05, hz1 - 0.05);
+  wallText(b, cam, left.m, 'RONA RUINED MY DAY', 'bold 18px sans-serif', R.paintGold, 5.4, 7.2, hz0 + 0.08, hz1 - 0.08);
+  wallText(b, cam, right.m, 'On the Seventh Cup, He Rested.', 'bold 22px serif', R.paintGold, 0.3, 3.4, hz0 + 0.06, hz1 - 0.06);
+  wallText(b, cam, right.m, 'TYRANNOSAURUS REX ON A BOAT', 'bold 20px sans-serif', R.paintGreen, 3.7, 6.9, hz0 + 0.07, hz1 - 0.07);
+  wallText(b, cam, endB.m, 'Brothers should be nicer to other brothers', 'bold 20px sans-serif', R.paintGold, 0.3, (Y1 - Y0) - 0.3, hz0 + 0.06, hz1 - 0.06);
+  wallText(b, cam, endA.m, 'STEP YOUR LEVEL UP', 'bold 26px sans-serif', R.paintPink, 0.4, (Y1 - Y0) - 0.4, hz0 + 0.04, hz1 - 0.04);
+
+  // Bench ledges along the long walls.
+  for (const [ya, yb] of [
+    [Y0, Y0 + 0.34],
+    [Y1 - 0.34, Y1],
+  ]) {
+    box(b, cam, X0, ya, floorZ, X1, yb, floorZ + 0.4, R.benchFront, R.benchFront, R.benchFront);
+    box(b, cam, X0, ya - 0.02, floorZ + 0.4, X1, yb + 0.02, floorZ + 0.46, R.benchTop, R.bench, R.bench);
+  }
+
+  // End-wall dressing: each camera sees the opposite end.
+  drawSignsEnd(b, theme, cam, endB.m, Y1 - Y0, floorZ);
+  drawBarEnd(b, theme, cam, endA.m, Y1 - Y0, floorZ, X0);
+
+  // Fluorescent fixtures, then the pillars (far to near).
+  for (const fx of FIXTURES(L, W)) drawFixture(b, theme, cam, fx.x, fx.y, ceilZ);
+  const depth = (p: Vec3) => (p.x - cam.eye.x) * cam.f.x + (p.y - cam.eye.y) * cam.f.y + (p.z - cam.eye.z) * cam.f.z;
+  PILLARS(L, W)
+    .sort((a, c) => depth({ x: c.x, y: c.y, z: 0 }) - depth({ x: a.x, y: a.y, z: 0 }))
+    .forEach((pl) => drawPillar(b, theme, cam, pl, floorZ, ceilZ));
+}
+
+/** Fixture centers: tube boxes running along the table, two rows. */
+const FIXTURES = (L: number, W: number) =>
+  [-1.4, 0.5, L - 0.5, L + 1.4].flatMap((x) => [
+    { x, y: -0.75 },
+    { x, y: W + 0.75 },
+  ]);
+
+/** Pillars beside the middle of the table, each with a painted slogan on the side facing each end. */
+const PILLARS = (L: number, W: number) => [
+  { x: L / 2, y: -1.45, a: 'SWEAT\nSAVES\nBLOOD', b: 'GET\nGOOFY\nNOW!' },
+  { x: L / 2, y: W + 1.45, a: 'IF I\nDIE,\nI DIE.', b: 'MY MOM\nSAYS\nWE\'RE\nA-SIDE' },
+];
+
+function drawPaneledWall(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, len: number, floorZ: number, ceilZ: number, rnd: () => number): void {
+  const R = theme.room;
+  poly(b, cam, wallQuad(m, 0, len, floorZ, HEADER_Z), R.wall);
+  // Raised panels: a lower row under the bench line and a tall upper row.
+  const rows: [number, number][] = [
+    [floorZ + 0.5, floorZ + 0.95],
+    [floorZ + 1.02, HEADER_Z - 0.1],
+  ];
+  const step = 0.62;
+  for (let t = 0.04; t + step <= len + 0.01; t += step) {
+    for (const [z0, z1] of rows) {
+      poly(b, cam, wallQuad(m, t + 0.05, t + step - 0.05, z0, z1, 0.002), R.panel);
+      line(b, cam, m(t + 0.05, z1, 0.003), m(t + step - 0.05, z1, 0.003), R.panelShade);
+      line(b, cam, m(t + 0.05, z0, 0.003), m(t + step - 0.05, z0, 0.003), R.panelLight);
+    }
+  }
+  // Rail under the header, and names scratched into the wood.
+  poly(b, cam, wallQuad(m, 0, len, HEADER_Z - 0.06, HEADER_Z, 0.003), R.rail);
+  for (let k = 0; k < len * 5; k++) {
+    const t = rnd() * (len - 0.4);
+    const z = floorZ + 1.05 + rnd() * (HEADER_Z - floorZ - 1.25);
+    const w = 0.08 + rnd() * 0.22;
+    const tilt = (rnd() - 0.5) * 0.03;
+    line(b, cam, m(t, z, 0.004), m(t + w, z + tilt, 0.004), rnd() < 0.8 ? R.scratch : R.scratchColor);
+    if (rnd() < 0.5) line(b, cam, m(t + 0.02, z - 0.035, 0.004), m(t + w * 0.7, z - 0.035 + tilt, 0.004), R.scratch);
+  }
+  // The black painted header band up to the ceiling.
+  poly(b, cam, wallQuad(m, 0, len, HEADER_Z, ceilZ, 0.004), R.header);
+  line(b, cam, m(0, HEADER_Z, 0.005), m(len, HEADER_Z, 0.005), R.headerEdge);
+}
+
+/** A flat polygon on a wall from (t, z) points. */
+function wallShape(b: CanvasRenderingContext2D, cam: Camera, m: WallMap, pts: [number, number][], fill: string, out = 0.006): void {
+  if (!facesCamera(cam, m, pts[0][0], pts[0][1])) return;
+  poly(b, cam, pts.map(([t, z]) => m(t, z, out)), fill);
+}
+
+function circlePts(t: number, z: number, r: number, n = 18, a0 = 0): [number, number][] {
+  return Array.from({ length: n }, (_, i) => [t + Math.cos(a0 + (i / n) * Math.PI * 2) * r, z + Math.sin(a0 + (i / n) * Math.PI * 2) * r] as [number, number]);
+}
+
+/** Far end behind Team B (what Team A's camera sees): road signs, the 74, the letters, tombstones, a caution sign. */
+function drawSignsEnd(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, len: number, floorZ: number): void {
+  const R = theme.room;
+  const c = len / 2;
+  // LEFT TURN YIELD ON GREEN.
+  wallShape(b, cam, m, [[c + 0.2, 0.42], [c + 0.72, 0.42], [c + 0.72, 1.12], [c + 0.2, 1.12]], R.signEdge);
+  wallShape(b, cam, m, [[c + 0.23, 0.45], [c + 0.69, 0.45], [c + 0.69, 1.09], [c + 0.23, 1.09]], R.signWhite, 0.007);
+  wallText(b, cam, m, 'LEFT TURN\nYIELD\nON GREEN', 'bold 18px sans-serif', R.signInk, c + 0.25, c + 0.67, 0.68, 1.06, 0.008);
+  wallShape(b, cam, m, circlePts(c + 0.46, 0.55, 0.07), R.smiley, 0.008);
+  // The 74, and the gold letters beside it.
+  wallShape(b, cam, m, circlePts(c - 0.75, 1.0, 0.22, 22), R.signEdge);
+  wallShape(b, cam, m, circlePts(c - 0.75, 1.0, 0.2, 22), R.signWhite, 0.007);
+  wallText(b, cam, m, '74', 'bold 28px sans-serif', R.signInk, c - 0.92, c - 0.58, 0.86, 1.14, 0.008);
+  wallText(b, cam, m, theme.houseLetters, 'bold 28px serif', R.letters, c - 0.42, c - 0.02, 0.92, 1.25, 0.006);
+  wallText(b, cam, m, 'ITS KCAO A WORLD', 'bold 20px sans-serif', R.paintBlue, c - 1.75, c - 0.6, 0.45, 0.68, 0.006);
+  // A faded STOP sign.
+  wallShape(b, cam, m, circlePts(c + 1.35, 0.95, 0.27, 8, Math.PI / 8), R.signWhite);
+  wallShape(b, cam, m, circlePts(c + 1.35, 0.95, 0.24, 8, Math.PI / 8), R.stop, 0.007);
+  wallText(b, cam, m, 'STOP', 'bold 22px sans-serif', R.signWhite, c + 1.17, c + 1.53, 0.86, 1.04, 0.008);
+  // Tombstones on the bench, and a caution sign on the floor in the corner.
+  for (const [t, label] of [
+    [0.35, 'RIP'],
+    [0.72, 'RIP'],
+  ] as const)
+    drawTombstone(b, theme, cam, m, t, floorZ + 0.46, label);
+  drawCaution(b, theme, cam, m, len - 0.45, floorZ);
+}
+
+/** Far end behind Team A (what Team B's camera sees): the bar with its fridge, and a sign. */
+function drawBarEnd(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, len: number, floorZ: number, X0: number): void {
+  const R = theme.room;
+  const c = len / 2;
+  // Bar counter out from the wall, with the painted KCAO on its front.
+  const t0 = c - 1.8;
+  const t1 = c + 0.5;
+  const a = m(t0, floorZ, 0);
+  const d = m(t1, floorZ, 0.55);
+  box(b, cam, Math.min(a.x, d.x), Math.min(a.y, d.y), floorZ, Math.max(a.x, d.x), Math.max(a.y, d.y), floorZ + 1.0, R.barTop, R.bar, R.bar);
+  wallText(b, cam, m, 'KCAO', 'bold 30px sans-serif', R.paintBlue, t0 + 0.3, t0 + 1.3, floorZ + 0.35, floorZ + 0.85, 0.56);
+  wallText(b, cam, m, 'Now Serving\nFrankenstein Family Ale', 'bold 16px serif', R.paintGold, t0 + 0.1, t1 - 0.1, 1.05, 1.42, 0.006);
+  // White fridge and a JOHNSON CONTROLS sign.
+  const f0 = m(c + 0.7, floorZ, 0);
+  const f1 = m(c + 1.3, floorZ, 0.6);
+  box(b, cam, Math.min(f0.x, f1.x), Math.min(f0.y, f1.y), floorZ, Math.max(f0.x, f1.x), Math.max(f0.y, f1.y), floorZ + 1.55, R.fridgeTop, R.fridgeDark, R.fridge);
+  wallShape(b, cam, m, [[c + 1.5, 0.55], [c + 2.05, 0.55], [c + 2.05, 0.95], [c + 1.5, 0.95]], R.signEdge);
+  wallShape(b, cam, m, [[c + 1.52, 0.57], [c + 2.03, 0.57], [c + 2.03, 0.93], [c + 1.52, 0.93]], R.signWhite, 0.007);
+  wallText(b, cam, m, 'JOHNSON\nCONTROLS', 'bold 16px sans-serif', R.signInk, c + 1.55, c + 2.0, 0.6, 0.9, 0.008);
+  drawTombstone(b, theme, cam, m, len - 0.5, floorZ + 0.46, 'RIP');
+  void X0;
+}
+
+function drawTombstone(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, t: number, z: number, label: string): void {
+  const R = theme.room;
+  const w = 0.13;
+  const h = 0.3;
+  const out = 0.2;
+  const pts: [number, number][] = [[t - w, z], [t + w, z]];
+  for (let i = 0; i <= 8; i++) pts.push([t + Math.cos((i / 8) * Math.PI) * w, z + h - w + Math.sin((i / 8) * Math.PI) * w]);
+  wallShape(b, cam, m, pts.map(([a, c]) => [a, c]), R.stoneDark, out);
+  wallShape(b, cam, m, pts.map(([a, c]) => [a + (a - t) * -0.12, z + (c - z) * 0.94]), R.stone, out + 0.002);
+  wallText(b, cam, m, label, 'bold 16px serif', R.stoneDark, t - w * 0.7, t + w * 0.7, z + h * 0.35, z + h * 0.62, out + 0.004);
+}
+
+function drawCaution(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, t: number, floorZ: number): void {
+  const R = theme.room;
+  const out = 0.35;
+  wallShape(b, cam, m, [[t - 0.16, floorZ], [t + 0.16, floorZ], [t + 0.1, floorZ + 0.62], [t - 0.1, floorZ + 0.62]], R.caution, out);
+  wallShape(b, cam, m, [[t - 0.1, floorZ + 0.62], [t + 0.1, floorZ + 0.62], [t + 0.08, floorZ + 0.66], [t - 0.08, floorZ + 0.66]], R.cautionDark, out);
+  wallText(b, cam, m, 'CAUTION', 'bold 14px sans-serif', R.signInk, t - 0.12, t + 0.12, floorZ + 0.42, floorZ + 0.52, out + 0.004);
+}
+
+/** A ceiling fluorescent fixture: dark housing, bright diffuser and a soft glow. */
+function drawFixture(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, x: number, y: number, ceilZ: number): void {
+  const R = theme.room;
+  const hl = 0.6;
+  const hw = 0.14;
+  const z0 = ceilZ - 0.07;
+  box(b, cam, x - hl, y - hw, z0, x + hl, y + hw, ceilZ, R.fixture, R.fixture, R.fixture);
+  poly(b, cam, [{ x: x - hl + 0.03, y: y - hw + 0.03, z: z0 - 0.001 }, { x: x + hl - 0.03, y: y - hw + 0.03, z: z0 - 0.001 }, { x: x + hl - 0.03, y: y + hw - 0.03, z: z0 - 0.001 }, { x: x - hl + 0.03, y: y + hw - 0.03, z: z0 - 0.001 }], R.tube);
+  const p = project(cam, { x, y, z: z0 });
+  if (!p) return;
+  const r = Math.max(4, p.scale * 0.9);
+  const g = b.createRadialGradient(p.x, p.y, 1, p.x, p.y, r);
+  g.addColorStop(0, R.tubeGlow);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  b.fillStyle = g;
+  b.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+}
+
+/** A square pillar: stained wood below, black painted above, a slogan painted on each end-facing side. */
+function drawPillar(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, pl: { x: number; y: number; a: string; b: string }, floorZ: number, ceilZ: number): void {
+  const R = theme.room;
+  const s = 0.17;
+  const mid = 0.8;
+  box(b, cam, pl.x - s, pl.y - s, floorZ, pl.x + s, pl.y + s, mid, R.pillarTop, R.pillarWood, R.pillarWoodLit);
+  box(b, cam, pl.x - s - 0.01, pl.y - s - 0.01, mid, pl.x + s + 0.01, pl.y + s + 0.01, ceilZ, R.header, R.header, R.headerLit);
+  // Panel lines on the wood, and a slogan on the face toward each end of the table.
+  for (const side of [-1, 1] as const) {
+    const fx = pl.x + side * (s + 0.012);
+    // Text reads left to right for someone facing this side: +y from the A end, -y from the B end.
+    const faceM: WallMap = (t, z, o = 0) => ({ x: fx + side * o, y: side === -1 ? pl.y - s + t : pl.y + s - t, z });
+    if (!facesCamera(cam, faceM, s, mid)) continue;
+    poly(b, cam, wallQuad(faceM, 0.05, 2 * s - 0.05, floorZ + 0.1, mid - 0.1, 0.002), R.pillarPanel);
+    wallText(b, cam, faceM, side === -1 ? pl.a : pl.b, 'bold 18px sans-serif', R.paintGold, 0.02, 2 * s - 0.02, mid + 0.08, mid + 0.68, 0.004);
+    void ceilZ;
+  }
 }
 
 function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, p: PlayerId, feet: Vec3, fromBehind: boolean, active: boolean): void {
@@ -800,47 +957,15 @@ function floorSpecks(x0: number, x1: number, y0: number, y1: number): { x: numbe
   return list;
 }
 
-/** A circle on a side wall (in the x–z plane at the given y). */
-function wallDisc(b: CanvasRenderingContext2D, cam: Camera, c: Vec3, r: number, fill: string, n = 16): void {
-  const pts: Vec3[] = [];
-  for (let i = 0; i < n; i++) pts.push({ x: c.x + Math.cos((i / n) * Math.PI * 2) * r, y: c.y, z: c.z + Math.sin((i / n) * Math.PI * 2) * r });
-  poly(b, cam, pts, fill);
-}
-
-/** The hanging lamp over the table: cord, shade and a glowing bulb. */
-function drawLamp(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, at: Vec3, ceilZ: number): void {
-  const R = theme.room;
-  line(b, cam, { ...at, z: ceilZ }, { ...at, z: at.z + 0.12 }, R.lampCord);
-  const top = project(cam, { ...at, z: at.z + 0.12 });
-  const bot = project(cam, at);
-  if (!top || !bot) return;
-  const wTop = 0.1 * top.scale;
-  const wBot = 0.26 * bot.scale;
-  b.fillStyle = R.lampShade;
-  b.beginPath();
-  b.moveTo(top.x - wTop, top.y);
-  b.lineTo(top.x + wTop, top.y);
-  b.lineTo(bot.x + wBot, bot.y);
-  b.lineTo(bot.x - wBot, bot.y);
-  b.closePath();
-  b.fill();
-  b.fillStyle = R.lampShadeLight;
-  b.fillRect(Math.round(bot.x - wBot), Math.round(bot.y) - 1, Math.round(wBot * 2), 1);
-  const glow = Math.max(3, bot.scale * 0.16);
-  const g = b.createRadialGradient(bot.x, bot.y + 1, 0, bot.x, bot.y + 1, glow);
-  g.addColorStop(0, R.bulb);
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  b.fillStyle = g;
-  b.fillRect(bot.x - glow, bot.y + 1 - glow, glow * 2, glow * 2);
-}
 
 // ------------------------------------------------------------ table art
 
 let tableTexture: HTMLCanvasElement | null = null;
 /**
- * Pixel-art plywood for the table top: boards running the length of the
- * table, staggered butt joints, wavy grain, knots, ring stains and darker worn
- * edges. Drawn once; mapped onto the table in perspective.
+ * The painted table top, after the real ones: a brushy blue field, a big
+ * hand-painted figure in red, green and gold across both halves, gold
+ * letters, and a chipped cream border. Drawn once; mapped onto the table in
+ * perspective. u runs along the table (Team A's end at 0), v across it.
  */
 function tableTex(theme: Theme): HTMLCanvasElement {
   if (tableTexture) return tableTexture;
@@ -853,59 +978,94 @@ function tableTex(theme: Theme): HTMLCanvasElement {
   const x = c.getContext('2d')!;
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const boards = 6;
-  const bh = H / boards;
-  for (let i = 0; i < boards; i++) {
-    const tone = T.boards[i % T.boards.length];
-    x.fillStyle = tone;
-    x.fillRect(0, Math.round(i * bh), W, Math.ceil(bh));
-    // Grain: wavy darker and lighter streaks along the board.
-    for (let k = 0; k < 9; k++) {
-      const y0 = i * bh + 2 + rnd() * (bh - 4);
-      const amp = 0.6 + rnd() * 1.4;
-      const freq = 0.02 + rnd() * 0.05;
-      const ph = rnd() * 6.28;
-      const start = rnd() * W * 0.3;
-      const len = W * (0.4 + rnd() * 0.6);
-      x.fillStyle = k % 3 === 0 ? T.grainLight : T.grain;
-      for (let px = start; px < Math.min(W, start + len); px++) x.fillRect(Math.round(px), Math.round(y0 + Math.sin(px * freq + ph) * amp), 1, 1);
-    }
-    // Board seam and a staggered butt joint.
-    x.fillStyle = T.seam;
-    x.fillRect(0, Math.round((i + 1) * bh) - 1, W, 1);
-    const joint = Math.round(((i * 0.37 + 0.2) % 1) * W);
-    x.fillRect(joint, Math.round(i * bh), 1, Math.round(bh));
+  x.fillStyle = T.paint;
+  x.fillRect(0, 0, W, H);
+  // Brush strokes in the blue.
+  for (let k = 0; k < 520; k++) {
+    x.fillStyle = k % 2 ? T.paintDark : T.paintLight;
+    x.globalAlpha = 0.35 + rnd() * 0.3;
+    x.fillRect(Math.round(rnd() * W), Math.round(rnd() * H), 2 + Math.round(rnd() * 7), 1);
   }
-  // Knots.
-  for (let k = 0; k < 7; k++) {
-    const kx = Math.round(rnd() * W);
-    const ky = Math.round(rnd() * H);
-    x.fillStyle = T.knot;
-    x.fillRect(kx - 2, ky - 1, 5, 3);
-    x.fillRect(kx - 1, ky - 2, 3, 5);
-    x.fillStyle = T.grain;
-    x.fillRect(kx - 3, ky, 1, 1);
-    x.fillRect(kx + 3, ky, 1, 1);
-  }
-  // Faint ring stains where cups have stood, near both ends.
-  x.strokeStyle = T.stain;
-  for (const [sx, sy] of [
-    [26, 60],
-    [40, 84],
-    [252, 52],
-    [262, 92],
-    [140, 30],
-  ]) {
+  x.globalAlpha = 1;
+  const [red, robe, gold, green, skin] = T.art;
+  const blob = (cx: number, cy: number, rx: number, ry: number, rot: number, fill: string) => {
     x.beginPath();
-    x.arc(sx, sy, 5, 0, Math.PI * 2);
+    x.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+    x.fillStyle = fill;
+    x.fill();
+    x.lineWidth = 2;
+    x.strokeStyle = T.artOutline;
     x.stroke();
+  };
+  const limb = (pts: [number, number][], w: number, fill: string) => {
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    x.strokeStyle = T.artOutline;
+    x.lineWidth = w + 3;
+    x.beginPath();
+    pts.forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b)));
+    x.stroke();
+    x.strokeStyle = fill;
+    x.lineWidth = w;
+    x.stroke();
+  };
+  // Team B's half: a reclining figure in a red cape and a green robe.
+  blob(208, 52, 60, 22, -0.35, red);
+  blob(214, 66, 42, 15, -0.3, robe);
+  limb([[178, 84], [160, 98], [150, 104]], 6, gold);
+  limb([[246, 40], [262, 30]], 6, gold);
+  blob(262, 82, 9, 8, 0, skin);
+  // Team A's half: a green hill and a reaching gold arm, toward the middle.
+  x.beginPath();
+  x.moveTo(30, H);
+  x.quadraticCurveTo(70, 70, 140, 98);
+  x.lineTo(140, H);
+  x.closePath();
+  x.fillStyle = green;
+  x.fill();
+  x.lineWidth = 2;
+  x.strokeStyle = T.artOutline;
+  x.stroke();
+  limb([[70, 60], [100, 52], [128, 46]], 7, gold);
+  limb([[92, 92], [112, 78]], 6, gold);
+  blob(140, 70, 8, 7, 0, skin);
+  // Gold letters: each team reads its own on the far half.
+  const letters = (text: string, cx: number, cy: number, rot: number, size: number) => {
+    x.save();
+    x.translate(cx, cy);
+    x.rotate(rot);
+    x.font = `bold ${size}px serif`;
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.lineWidth = 3;
+    x.strokeStyle = T.artOutline;
+    x.strokeText(text, 0, 0);
+    x.fillStyle = T.letters;
+    x.fillText(text, 0, 0);
+    x.restore();
+  };
+  letters(theme.houseLetters, 186, 104, Math.PI / 2, 24);
+  letters("'16X", 98, 28, -Math.PI / 2, 18);
+  // Scuffs and the chipped cream border.
+  for (let k = 0; k < 60; k++) {
+    x.fillStyle = T.edgeChip;
+    x.globalAlpha = 0.25 + rnd() * 0.3;
+    x.fillRect(Math.round(rnd() * W), Math.round(rnd() * H), 1 + Math.round(rnd() * 2), 1);
   }
-  // Worn, darker edges.
-  x.fillStyle = T.edgeWear;
-  x.fillRect(0, 0, W, 2);
-  x.fillRect(0, H - 2, W, 2);
-  x.fillRect(0, 0, 2, H);
-  x.fillRect(W - 2, 0, 2, H);
+  x.globalAlpha = 1;
+  x.fillStyle = T.edge;
+  x.fillRect(0, 0, W, 4);
+  x.fillRect(0, H - 4, W, 4);
+  x.fillRect(0, 0, 4, H);
+  x.fillRect(W - 4, 0, 4, H);
+  x.fillStyle = T.edgeChip;
+  for (let k = 0; k < 40; k++) {
+    const side = k % 4;
+    const t = rnd();
+    const px = side < 2 ? t * W : side === 2 ? 1 + rnd() * 2 : W - 3 + rnd() * 2;
+    const py = side >= 2 ? t * H : side === 0 ? 1 + rnd() * 2 : H - 3 + rnd() * 2;
+    x.fillRect(Math.round(px), Math.round(py), 2, 1);
+  }
   tableTexture = c;
   return c;
 }
@@ -918,15 +1078,19 @@ function texturedTop(h: CanvasRenderingContext2D, cam: Camera, img: HTMLCanvasEl
     const xa = (i / N) * L;
     const xb = ((i + 1) / N) * L;
     const tl = project(cam, { x: xa, y: 0, z: 0 });
+    // Each clip strip reaches a little into the next one, so no seams show between strips.
+    const xc = Math.min(L, xb + (L / N) * 0.35);
     const tr = project(cam, { x: xb, y: 0, z: 0 });
     const bl = project(cam, { x: xa, y: W, z: 0 });
     const br = project(cam, { x: xb, y: W, z: 0 });
-    if (!tl || !tr || !bl || !br) continue;
+    const trc = project(cam, { x: xc, y: 0, z: 0 });
+    const brc = project(cam, { x: xc, y: W, z: 0 });
+    if (!tl || !tr || !bl || !br || !trc || !brc) continue;
     h.save();
     h.beginPath();
     h.moveTo(tl.x, tl.y);
-    h.lineTo(tr.x, tr.y);
-    h.lineTo(br.x, br.y);
+    h.lineTo(trc.x, trc.y);
+    h.lineTo(brc.x, brc.y);
     h.lineTo(bl.x, bl.y);
     h.closePath();
     h.clip();
@@ -948,70 +1112,77 @@ function stripe(h: CanvasRenderingContext2D, cam: Camera, a: { x: number; y: num
   poly(h, cam, [{ x: a.x + nx, y: a.y + ny, z }, { x: b.x + nx, y: b.y + ny, z }, { x: b.x - nx, y: b.y - ny, z }, { x: a.x - nx, y: a.y - ny, z }], color);
 }
 
+/** A vertical cylinder (the trash can the table sits on), shaded by facing. */
+function cylinder(h: CanvasRenderingContext2D, theme: Theme, cam: Camera, cx: number, cy: number, r: number, z0: number, z1: number): void {
+  const T = theme.table;
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    const a1 = ((i + 1) / n) * Math.PI * 2;
+    const am = (a0 + a1) / 2;
+    const nx = Math.cos(am);
+    const ny = Math.sin(am);
+    const toCam = (cam.eye.x - (cx + nx * r)) * nx + (cam.eye.y - (cy + ny * r)) * ny;
+    if (toCam <= 0) continue;
+    // Lit from above-left of the room: a highlight band and a dark side.
+    const lit = 0.5 + 0.5 * Math.cos(am - 2.4);
+    const col = lit > 0.75 ? T.canLight : lit > 0.35 ? T.can : T.canDark;
+    poly(h, cam, [
+      { x: cx + Math.cos(a0) * r, y: cy + Math.sin(a0) * r, z: z0 },
+      { x: cx + Math.cos(a1) * r, y: cy + Math.sin(a1) * r, z: z0 },
+      { x: cx + Math.cos(a1) * r, y: cy + Math.sin(a1) * r, z: z1 },
+      { x: cx + Math.cos(a0) * r, y: cy + Math.sin(a0) * r, z: z1 },
+    ], col);
+  }
+  // Molded rings around the can.
+  for (const z of [z0 + (z1 - z0) * 0.3, z0 + (z1 - z0) * 0.62]) ring(h, cam, { x: cx, y: cy, z }, r + 0.004, T.canDark, 1, n);
+}
+
 function drawTable3D(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera): void {
   const T = theme.table;
   const { length: L, width: W } = cfg.table;
   const floorZ = -cfg.physics.tableHeight;
-  const th = 0.045; // top thickness
-  // Legs with a lighter lit face, and a stretcher between each pair.
-  const legs: [number, number][] = [
-    [0.1, 0.1],
-    [L - 0.18, 0.1],
-    [0.1, W - 0.18],
-    [L - 0.18, W - 0.18],
-    [L / 2 - 0.04, 0.1],
-    [L / 2 - 0.04, W - 0.18],
-  ];
-  for (const y of [0.13, W - 0.15]) box(h, cam, 0.12, y, floorZ + 0.14, L - 0.12, y + 0.03, floorZ + 0.19, T.legLight, T.leg, T.legDark);
-  for (const [x, y] of legs) box(h, cam, x, y, floorZ, x + 0.08, y + 0.08, -th, T.legLight, T.leg, T.legDark);
-  // Apron/edge of the top, then the textured surface.
-  box(h, cam, 0, 0, -th, L, W, 0, T.boards[0], T.side, T.sideDark);
+  const th = 0.035; // plywood thickness
+  // The trash can it sits on, then the plywood edge and the painted top.
+  cylinder(h, theme, cam, L / 2, W / 2, 0.3, floorZ, -th);
+  box(h, cam, 0, 0, -th, L, W, 0, T.paint, T.side, T.sideDark);
   texturedTop(h, cam, tableTex(theme), L, W);
-  // A lit bevel along every edge of the top.
-  for (const [a, b] of [
-    [{ x: 0, y: 0 }, { x: L, y: 0 }],
-    [{ x: 0, y: W }, { x: L, y: W }],
-    [{ x: 0, y: 0 }, { x: 0, y: W }],
-    [{ x: L, y: 0 }, { x: L, y: W }],
-  ])
-    line(h, cam, { ...a, z: 0.0005 }, { ...b, z: 0.0005 }, T.bevel, 1);
-  // Painted markings: border, the lengthwise and widthwise center lines.
-  const paint = theme.colors.tableLine;
-  const e = 0.025;
-  stripe(h, cam, { x: e, y: e }, { x: L - e, y: e }, 0.02, paint);
-  stripe(h, cam, { x: e, y: W - e }, { x: L - e, y: W - e }, 0.02, paint);
-  stripe(h, cam, { x: e, y: e }, { x: e, y: W - e }, 0.02, paint);
-  stripe(h, cam, { x: L - e, y: e }, { x: L - e, y: W - e }, 0.02, paint);
-  stripe(h, cam, { x: e, y: W / 2 }, { x: L - e, y: W / 2 }, 0.012, paint);
-  stripe(h, cam, { x: L / 2, y: e }, { x: L / 2, y: W - e }, 0.012, paint);
+  // Faint chalk center lines (the quarters matter for serves).
+  stripe(h, cam, { x: 0.04, y: W / 2 }, { x: L - 0.04, y: W / 2 }, 0.01, T.centerLine);
+  stripe(h, cam, { x: L / 2, y: 0.04 }, { x: L / 2, y: W - 0.04 }, 0.01, T.centerLine);
   drawSki(h, theme, cfg, cam);
 }
 
-/** The ski across the middle: a capsule with thickness, a center stripe and a highlight. */
+/**
+ * A real ski laid across the middle of the table, hanging over both sides,
+ * tip curled up at one end, with its graphics and a binding.
+ */
 function drawSki(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera): void {
+  const T = theme.table;
   const { length: L, width: W } = cfg.table;
-  const sk = cfg.ski;
-  const hz = cfg.physics.skiHeight;
-  const capsule = (half: number, rad: number, z: number): Vec3[] => {
-    const pts: Vec3[] = [];
-    const ends = [W / 2 - half + rad, W / 2 + half - rad];
-    for (let i = 0; i <= 8; i++) {
-      const a = Math.PI + (i / 8) * Math.PI;
-      pts.push({ x: L / 2 + Math.cos(a) * rad, y: ends[0] + Math.sin(a) * rad, z });
-    }
-    for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * Math.PI;
-      pts.push({ x: L / 2 + Math.cos(a) * rad, y: ends[1] + Math.sin(a) * rad, z });
-    }
-    return pts;
-  };
-  const half = sk.length / 2;
-  const rad = sk.width / 2;
-  poly(h, cam, capsule(half, rad * 1.05, 0.001), theme.table.skiShadow);
-  poly(h, cam, capsule(half, rad, hz * 0.4), theme.table.skiSide);
-  poly(h, cam, capsule(half, rad, hz), theme.colors.skiBody);
-  poly(h, cam, capsule(half * 0.92, rad * 0.28, hz + 0.0005), theme.colors.skiStripe);
-  line(h, cam, { x: L / 2 - rad * 0.6, y: W / 2 - half * 0.85, z: hz + 0.001 }, { x: L / 2 - rad * 0.6, y: W / 2 + half * 0.85, z: hz + 0.001 }, theme.table.skiShine, 1);
+  const hz = cfg.physics.skiHeight * 0.7;
+  const hw = cfg.ski.width / 2;
+  const x0 = L / 2 - hw;
+  const x1 = L / 2 + hw;
+  const y0 = -0.2;
+  const y1 = W + 0.24;
+  poly(h, cam, [{ x: x0 - 0.01, y: 0, z: 0.0008 }, { x: x1 + 0.02, y: 0, z: 0.0008 }, { x: x1 + 0.02, y: W, z: 0.0008 }, { x: x0 - 0.01, y: W, z: 0.0008 }], T.skiShadow);
+  box(h, cam, x0, y0, 0, x1, y1, hz, T.ski, T.skiSide, T.skiSide);
+  // Upturned tip.
+  const tip = (y: number, z: number): Vec3[] => [{ x: x0, y, z }, { x: x1, y, z }];
+  const t0 = tip(y0, hz);
+  const t1 = tip(y0 - 0.09, hz + 0.025);
+  const t2 = tip(y0 - 0.14, hz + 0.065);
+  poly(h, cam, [t0[0], t0[1], t1[1], t1[0]], T.ski);
+  poly(h, cam, [t1[0], t1[1], t2[1], t2[0]], T.skiSide);
+  // Graphics on the top: black bands, pale lettering dashes, and the binding.
+  const top = hz + 0.0006;
+  const band = (ya: number, yb: number, col: string, inset = 0) =>
+    poly(h, cam, [{ x: x0 + inset, y: ya, z: top }, { x: x1 - inset, y: ya, z: top }, { x: x1 - inset, y: yb, z: top }, { x: x0 + inset, y: yb, z: top }], col);
+  band(0.05, 0.32, T.skiStripe);
+  band(W - 0.3, W - 0.02, T.skiStripe);
+  for (let y = 0.09; y < 0.3; y += 0.05) band(y, y + 0.03, T.skiGraphic, hw * 0.55);
+  box(h, cam, x0 + 0.008, W / 2 - 0.09, hz, x1 - 0.008, W / 2 + 0.05, hz + 0.018, T.skiBinding, shadeHex(T.skiBinding, 0.7), shadeHex(T.skiBinding, 0.8));
 }
 
 /** Screen ellipse of a horizontal circle (center, radius) as seen by `cam`. */
@@ -1026,9 +1197,9 @@ function screenEllipse(cam: Camera, c: Vec3, r: number): { x: number; y: number;
 }
 
 /**
- * A party cup: shadow on the table, tapered body with banded shading and a
- * specular streak, ridges, a rolled rim, the pale inside wall and the water
- * surface at its level (lower for a half cup).
+ * A clear plastic cup: a faint glass body you can see the table through, the
+ * water inside at its level (low in a half cup, so it reads through the
+ * side), bright edge highlights, ridges and the rim.
  */
 function drawCup(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, cup: Cup, selected: boolean, time: number): void {
   const C = theme.cup;
@@ -1036,110 +1207,84 @@ function drawCup(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam
   const H = cfg.physics.cupHeight;
   const rb = r * 0.72;
   const radiusAt = (z: number) => rb + (r - rb) * (z / H);
-  const body = cup.team === 'A' ? theme.colors.cupTeamA : theme.colors.cupTeamB;
   const top = screenEllipse(cam, { x: cup.x, y: cup.y, z: H }, r);
   const bot = screenEllipse(cam, { x: cup.x, y: cup.y, z: 0 }, rb);
   if (!top || !bot) return;
   const { length: L, width: W } = cfg.table;
-  // Shadow, cast away from the lamp over the table's center.
+  // Soft shadow, cast away from the middle of the room.
   const dx = cup.x - L / 2;
   const dy = cup.y - W / 2;
   const dl = Math.hypot(dx, dy) || 1;
-  const sh = screenEllipse(cam, { x: cup.x + (dx / dl) * 0.03, y: cup.y + (dy / dl) * 0.03, z: 0.001 }, r * 1.05);
+  const sh = screenEllipse(cam, { x: cup.x + (dx / dl) * 0.025, y: cup.y + (dy / dl) * 0.025, z: 0.001 }, r * 1.02);
   if (sh) {
     h.fillStyle = C.shadow;
     h.beginPath();
     h.ellipse(sh.x, sh.y, sh.rx, sh.ry, 0, 0, Math.PI * 2);
     h.fill();
   }
-  // Body outline: rim edges down to the front half of the base.
-  const bodyPath = () => {
+  const taper = (a: { x: number; y: number; rx: number; ry: number }, b: { x: number; y: number; rx: number; ry: number }) => {
     h.beginPath();
-    h.moveTo(top.x - top.rx, top.y);
-    h.lineTo(bot.x - bot.rx, bot.y);
-    h.ellipse(bot.x, bot.y, bot.rx, bot.ry, 0, Math.PI, 0, true);
-    h.lineTo(top.x + top.rx, top.y);
+    h.moveTo(a.x - a.rx, a.y);
+    h.lineTo(b.x - b.rx, b.y);
+    h.ellipse(b.x, b.y, b.rx, b.ry, 0, Math.PI, 0, true);
+    h.lineTo(a.x + a.rx, a.y);
+    h.ellipse(a.x, a.y, a.rx, a.ry, 0, 0, Math.PI, true);
     h.closePath();
   };
-  h.save();
-  bodyPath();
-  h.clip();
-  const left = top.x - top.rx;
-  const span = top.rx * 2;
-  const bands: [number, number, number][] = [
-    [0, 0.1, 0.82],
-    [0.1, 0.22, 1.12],
-    [0.22, 0.3, 1.55],
-    [0.3, 0.55, 1.04],
-    [0.55, 0.78, 0.88],
-    [0.78, 1, 0.68],
-  ];
-  const yTop = top.y - 1;
-  const yBot = bot.y + bot.ry + 1;
-  for (const [a, b, k] of bands) {
-    h.fillStyle = shadeHex(body, k);
-    h.fillRect(Math.floor(left + a * span), yTop, Math.ceil((b - a) * span) + 1, yBot - yTop);
-  }
-  // Ridges (an embossed line pair around the body) and the foot ring.
-  for (const [z, k] of [
-    [0.3, 0.7],
-    [0.44, 0.7],
-    [0.06, 0.55],
-  ] as const) {
-    const e = screenEllipse(cam, { x: cup.x, y: cup.y, z: H * z }, radiusAt(H * z));
-    if (!e) continue;
-    h.strokeStyle = shadeHex(body, k);
-    h.lineWidth = 1;
-    h.beginPath();
-    h.ellipse(e.x, e.y, e.rx, e.ry, 0, Math.PI, 0, true);
-    h.stroke();
-    h.strokeStyle = shadeHex(body, 1.3);
-    h.beginPath();
-    h.ellipse(e.x, e.y + 1, e.rx, e.ry, 0, Math.PI * 0.85, Math.PI * 0.55, true);
-    h.stroke();
-  }
-  h.restore();
-  // Rolled rim, then the pale inside, then the water at its level.
-  h.fillStyle = shadeHex(body, 1.18);
-  h.beginPath();
-  h.ellipse(top.x, top.y, top.rx + 0.5, top.ry + 0.5, 0, 0, Math.PI * 2);
+  // Glass body.
+  h.fillStyle = C.glass;
+  taper(top, bot);
   h.fill();
-  const inner = { ...top, rx: top.rx * 0.87, ry: top.ry * 0.87 };
-  h.fillStyle = C.inside;
-  h.beginPath();
-  h.ellipse(inner.x, inner.y, inner.rx, inner.ry, 0, 0, Math.PI * 2);
-  h.fill();
-  // The far inside wall catches more light than the near one.
-  h.fillStyle = C.insideShade;
-  h.beginPath();
-  h.ellipse(inner.x, inner.y, inner.rx, inner.ry, 0, 0, Math.PI);
-  h.fill();
-  const zw = H * (cup.state === 'full' ? 0.8 : 0.42);
-  const wat = screenEllipse(cam, { x: cup.x, y: cup.y, z: zw }, radiusAt(zw) * 0.9);
+  // Water column and its surface.
+  const zw = H * (cup.state === 'full' ? 0.62 : 0.28);
+  const wat = screenEllipse(cam, { x: cup.x, y: cup.y, z: zw }, radiusAt(zw) * 0.94);
   if (wat) {
-    // Keep a strip of water in view even when the near rim would hide it, so half cups read clearly.
-    wat.y = Math.min(wat.y, inner.y + inner.ry * (cup.state === 'full' ? 0.35 : 0.85));
-    h.save();
-    h.beginPath();
-    h.ellipse(inner.x, inner.y, inner.rx, inner.ry, 0, 0, Math.PI * 2);
-    h.clip();
-    h.fillStyle = cup.state === 'full' ? theme.colors.water : theme.colors.waterHalf;
+    const wb = { ...bot, rx: bot.rx * 0.94, ry: bot.ry * 0.94 };
+    h.fillStyle = C.water;
+    taper(wat, wb);
+    h.fill();
+    h.fillStyle = C.waterTop;
     h.beginPath();
     h.ellipse(wat.x, wat.y, wat.rx, wat.ry, 0, 0, Math.PI * 2);
     h.fill();
     h.fillStyle = C.waterShine;
-    h.fillRect(Math.round(wat.x - wat.rx * 0.45), Math.round(wat.y - wat.ry * 0.35), Math.max(1, Math.round(wat.rx * 0.4)), 1);
-    h.strokeStyle = C.waterEdge;
-    h.lineWidth = 1;
-    h.beginPath();
-    h.ellipse(wat.x, wat.y, wat.rx, wat.ry, 0, Math.PI, 0, true);
-    h.stroke();
-    h.restore();
+    h.fillRect(Math.round(wat.x - wat.rx * 0.5), Math.round(wat.y - wat.ry * 0.3), Math.max(1, Math.round(wat.rx * 0.35)), 1);
   }
-  h.strokeStyle = shadeHex(body, 0.6);
+  // Edges: a bright lit side, a darker far side, a vertical shine, ridges.
   h.lineWidth = 1;
+  h.strokeStyle = C.glassEdge;
   h.beginPath();
-  h.ellipse(top.x, top.y, top.rx + 0.5, top.ry + 0.5, 0, 0, Math.PI);
+  h.moveTo(top.x - top.rx, top.y);
+  h.lineTo(bot.x - bot.rx, bot.y);
+  h.stroke();
+  h.strokeStyle = C.glassShade;
+  h.beginPath();
+  h.moveTo(top.x + top.rx, top.y);
+  h.lineTo(bot.x + bot.rx, bot.y);
+  h.stroke();
+  h.strokeStyle = C.glassEdge;
+  h.globalAlpha = 0.6;
+  h.beginPath();
+  h.moveTo(top.x - top.rx * 0.5, top.y + top.ry);
+  h.lineTo(bot.x - bot.rx * 0.5, bot.y + bot.ry * 0.6);
+  h.stroke();
+  h.globalAlpha = 1;
+  for (const z of [0.18, 0.82]) {
+    const e = screenEllipse(cam, { x: cup.x, y: cup.y, z: H * z }, radiusAt(H * z));
+    if (!e) continue;
+    h.strokeStyle = C.glassShade;
+    h.beginPath();
+    h.ellipse(e.x, e.y, e.rx, e.ry, 0, Math.PI, 0, true);
+    h.stroke();
+  }
+  h.strokeStyle = C.glassShade;
+  h.beginPath();
+  h.ellipse(bot.x, bot.y, bot.rx, bot.ry, 0, Math.PI, 0, true);
+  h.stroke();
+  // Rim.
+  h.strokeStyle = C.rim;
+  h.beginPath();
+  h.ellipse(top.x, top.y, top.rx, top.ry, 0, 0, Math.PI * 2);
   h.stroke();
   if (selected) {
     const pulse = 0.5 + 0.5 * Math.sin(time * 10);

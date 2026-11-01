@@ -36,9 +36,10 @@ export const COLOR_PARTS: PartKey[] = ['skin', 'hairColor', 'shirtColor', 'pants
 const OUTLINE = '#1a1410';
 const SHOE = '#1b1b1b';
 const SOLE = '#d8d2c4';
-const PADDLE_RED = '#c0392b';
-const PADDLE_BLACK = '#262626';
-const PADDLE_WOOD = '#d9b27c';
+/** Homemade wooden paddles, as in the basement: a lighter face, a darker back, a handle. */
+const PADDLE_RED = '#d2ad74';
+const PADDLE_BLACK = '#a9834f';
+const PADDLE_WOOD = '#7a5430';
 
 class Canvas {
   pixels: string[] = new Array(SPRITE_W * SPRITE_H).fill('');
@@ -182,7 +183,7 @@ export function composeSprite(parts: SpriteParts, facing: 'front' | 'back' = 'fr
         }
   }
 
-  // The paddle, in the right hand: red face toward you, black rubber from behind.
+  // The paddle, in the right hand: the light wooden face toward you, the darker back from behind.
   const hand = facing === 'front' ? tx1 + 1 : tx0 - 1;
   const step = facing === 'front' ? 1 : -1;
   const face = facing === 'front' ? PADDLE_RED : PADDLE_BLACK;
