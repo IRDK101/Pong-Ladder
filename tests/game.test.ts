@@ -28,7 +28,7 @@ function timedBot(slop: number, aim: Partial<TeamInput> = {}): Bot {
     if (st.phase === 'awaitServe' && st.server.team === team && g.ball.status !== 'flying' && !g.tossing) inp.hit = true;
     else if (st.phase === 'awaitServe' && st.server.team === team && g.tossing && off >= slop) inp.hit = true;
     else if (g.canSwing(team) && off >= slop) inp.hit = true;
-    if (st.phase === 'penalty' && st.penalty!.team === team) inp.hit = true;
+    if (st.phase === 'penalty' && st.penalty!.chooser === team) inp.hit = true;
     return inp;
   };
 }

@@ -37,12 +37,6 @@ interface Viewport {
   front: HTMLCanvasElement;
 }
 
-const PLAYERS: PlayerId[] = [
-  { team: 'A', side: 'left' },
-  { team: 'A', side: 'right' },
-  { team: 'B', side: 'left' },
-  { team: 'B', side: 'right' },
-];
 
 /** How tall people are drawn (m), feet on the floor. Stylized a little short so the table reads. */
 const PERSON_HEIGHT = 1.45;
@@ -214,7 +208,8 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const farEnd = viewDepth({ x: cam.f.x >= 0 ? L : 0, y: W / 2, z: 0 });
   const activeNow = [game.activePlayer('A'), game.activePlayer('B')];
   const isActive = (p: PlayerId) => activeNow.some((a) => a && a.team === p.team && a.side === p.side);
-  const behindTable = PLAYERS.map((p) => ({ p, pos: standSpot(game, p) }))
+  const shown = game.shownPlayers();
+  const behindTable = shown.map((p) => ({ p, pos: standSpot(game, p) }))
     .filter(({ pos }) => viewDepth(pos) > farEnd)
     .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
   for (const { p, pos } of behindTable) drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
@@ -261,7 +256,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   drawCelebrations3D(h, theme, game, ch);
 
   // --- Front coarse layer: everyone not behind the table (your own team, over its shoulders).
-  const nearPeople = PLAYERS.filter((p) => !behindTable.some((x) => x.p === p))
+  const nearPeople = shown.filter((p) => !behindTable.some((x) => x.p === p))
     .map((p) => ({ p, pos: standSpot(game, p) }))
     .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
   for (const { p, pos } of nearPeople) drawPerson(f, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
@@ -450,7 +445,7 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
   const floorZ = -game.cfg.physics.tableHeight;
   const minY = vp.y + theme.hudTop + 24;
   const maxY = vp.y + vp.h - theme.hudBottom - 24;
-  for (const p of PLAYERS) {
+  for (const p of game.shownPlayers()) {
     const who = game.participant(p);
     const head = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.16 });
     if (!head) continue;

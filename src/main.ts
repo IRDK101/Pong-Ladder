@@ -131,8 +131,25 @@ function recordGame(): void {
 
 /** Keyboard (and CPU) input for the current mode. */
 function liveInputs(g: Game): Record<TeamId, TeamInput> {
-  if (g.cfg.players.mode === 'coop') return { A: coopInput(g, 'A', keyboard.team('A'), keyboard.team('B')), B: cpu ? cpu.input(g) : idleInput() };
+  if (g.cfg.players.mode === 'coop') {
+    // 1v1 against the CPU: one human, who can use either set of keys.
+    const a = g.solo ? mergeInputs(keyboard.team('A'), keyboard.team('B')) : coopInput(g, 'A', keyboard.team('A'), keyboard.team('B'));
+    return { A: a, B: cpu ? cpu.input(g) : idleInput() };
+  }
   return { A: keyboard.team('A'), B: keyboard.team('B') };
+}
+
+/** Either of two key sets driving one player. */
+function mergeInputs(a: TeamInput, b: TeamInput): TeamInput {
+  return {
+    up: a.up || b.up,
+    down: a.down || b.down,
+    left: a.left || b.left,
+    right: a.right || b.right,
+    hit: a.hit || b.hit,
+    style: a.style || b.style,
+    nav: a.nav || b.nav,
+  };
 }
 
 function layoutFor(cfg: GameConfig): 'behindA' | 'split' {
@@ -150,14 +167,14 @@ function runMenuAction(action: MenuAction): void {
   const cfg = menu.config(baseCfg);
   switch (action) {
     case 'quick':
-      return startMatch(cfg, genericRoster());
+      return startMatch(cfg, genericRoster(cfg.teamSize));
     case 'draft':
       return openPanel(() =>
         new PrematchFlow(overlay, store, cfg, Math.random, {
           start: ({ roster }) => startMatch(cfg, roster),
           cancel: () => toMenu(),
           editCharacters: () => characters.showList(),
-          quickMatch: () => startMatch(cfg, genericRoster()),
+          quickMatch: () => startMatch(cfg, genericRoster(cfg.teamSize)),
         }).begin(),
       );
     case 'characters':
@@ -287,6 +304,9 @@ canvas.addEventListener('click', (e) => {
       }
     });
   } else if (screen === 'playing' && game) {
+    // Against the CPU, the human can't make the CPU's penalty choice for it.
+    const pen = game.engine.peek().penalty;
+    if (game.cfg.players.mode === 'coop' && pen && pen.chooser === 'B') return;
     const cup = game.cfg.view === 'topDown' ? cupAt(game.cfg, view, game.penaltyCups(), sx, sy) : pickCup3D(game, game.penaltyCups(), sx, sy);
     if (cup) game.chooseCup(cup.team, cup.id);
   }

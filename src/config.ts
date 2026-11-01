@@ -34,6 +34,8 @@ export interface GameConfig {
   draftFirstPick: FirstPick;
   /** Head-to-head (one human per team) or both humans on Team A against the CPU. */
   players: { mode: 'versus' | 'coop'; cpu: Difficulty };
+  /** Players per team: 2 (the standard four-player game) or 1 (1v1: one player covers both halves of their end). */
+  teamSize: 1 | 2;
   /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
   venue: Venue;
   /** Camera: behind Team A, split screen (each team's own view), or the classic top-down table. */
@@ -166,7 +168,7 @@ export interface HitTuning {
 
 export const defaultConfig: GameConfig = {
   formation: 'tree',
-  serveTableMissLimit: 3,
+  serveTableMissLimit: 2,
   // Measured from the table surface; ~shoulder height for a standing player.
   shoulderHeight: 0.6,
   matchFormat: 'single',
@@ -174,6 +176,7 @@ export const defaultConfig: GameConfig = {
   skiCollision: false,
   draftFirstPick: 'coinFlip',
   players: { mode: 'versus', cpu: 'medium' },
+  teamSize: 2,
   venue: 'saints',
   view: 'behindA',
   camera: { behind: 2.2, height: 1.9, lookAt: 0.55, lookHeight: 0.4, fovY: 52, pixelSize: 2, rows: 400, detail: 1 },

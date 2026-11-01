@@ -94,7 +94,7 @@ export class CpuController {
     const inp = idleInput();
     const st = game.engine.peek();
     if (st.phase === 'penalty') {
-      if (st.penalty!.team === this.team) inp.hit = true;
+      if (st.penalty!.chooser === this.team) inp.hit = true;
       return inp;
     }
     const key = this.ballKey(game);

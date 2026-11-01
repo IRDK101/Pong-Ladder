@@ -37,13 +37,21 @@ export type Roster = Record<PositionKey, Participant>;
 
 export const POSITIONS: PositionKey[] = ['A-left', 'A-right', 'B-left', 'B-right'];
 
-/** Generic players for a quick match: neutral stats, the placeholder styles, named by position, in team shirts. */
-export function genericRoster(): Roster {
+/**
+ * Generic players for a quick match: neutral stats, the placeholder styles, named by position, in team shirts.
+ * 1v1: one player per team, standing in both of its positions.
+ */
+export function genericRoster(teamSize: 1 | 2 = 2): Roster {
   const make = (team: TeamId, side: Side): Participant => {
     const i = (team === 'A' ? 0 : 2) + (side === 'left' ? 0 : 1);
     const parts = { skin: [1, 3, 0, 4][i], hairStyle: [1, 4, 6, 2][i], hairColor: [0, 1, 3, 2][i], shirtStyle: 2, shirtColor: team === 'A' ? 3 : 6, pantsColor: 1, build: [1, 2, 0, 1][i], accessory: 0 };
     return { ...generic(team, side), sprite: composeSprite(parts), spriteBack: composeSprite(parts, 'back') };
   };
+  if (teamSize === 1) {
+    const a = { ...make('A', 'left'), name: 'Player A' };
+    const b = { ...make('B', 'left'), name: 'Player B' };
+    return { 'A-left': a, 'A-right': a, 'B-left': b, 'B-right': b };
+  }
   return { 'A-left': make('A', 'left'), 'A-right': make('A', 'right'), 'B-left': make('B', 'left'), 'B-right': make('B', 'right') };
 }
 
@@ -178,8 +186,9 @@ export class Game {
     return this.participant(p).name;
   }
 
-  /** "Ari & Jo" (left & right) for a team. */
+  /** "Ari & Jo" (left & right) for a team; just the one name in 1v1. */
   teamLine(team: TeamId): string {
+    if (this.solo) return this.nameOf({ team, side: 'left' });
     return `${this.nameOf({ team, side: 'left' })} & ${this.nameOf({ team, side: 'right' })}`;
   }
 
@@ -202,15 +211,40 @@ export class Game {
     return this.styleFor(p, serving ? 'serve' : 'hit', this.selectedStyle[team]);
   }
 
-  /** Where a player stands: behind their end of the table, in their lane. */
+  /** 1v1: one player per team. */
+  get solo(): boolean {
+    return this.cfg.teamSize === 1;
+  }
+
+  /**
+   * Where a player stands: behind their end of the table, in their lane.
+   * 1v1: the lone player stands at the middle of their end, except when
+   * serving, which they do from the half the serve comes from.
+   */
   playerSpot(p: PlayerId): Vec3 {
     const { length: L, width: W } = this.cfg.table;
     const off = this.cfg.hitting.standOff;
+    const st = this.engine.peek();
+    const serving = st.phase === 'awaitServe' && st.server.team === p.team;
+    const lane = this.solo && serving ? st.server : p;
     return {
       x: p.team === 'A' ? -off : L + off,
-      y: laneOf(p) === 'low' ? W * 0.25 : W * 0.75,
+      y: this.solo && !serving ? W / 2 : laneOf(lane) === 'low' ? W * 0.25 : W * 0.75,
       z: this.cfg.hitting.tossHeight,
     };
+  }
+
+  /** The player to draw for each team: both in 2v2; in 1v1 one, in the position they are playing right now. */
+  shownPlayers(): PlayerId[] {
+    const all: PlayerId[] = [
+      { team: 'A', side: 'left' },
+      { team: 'A', side: 'right' },
+      { team: 'B', side: 'left' },
+      { team: 'B', side: 'right' },
+    ];
+    if (!this.solo) return all;
+    const st = this.engine.peek();
+    return (['A', 'B'] as TeamId[]).map((team) => (st.server.team === team ? st.server : this.activePlayer(team) ?? { team, side: st.rally?.nextSide[team] ?? 'left' }));
   }
 
   /** Which player on `team` the keyboard controls right now. */
@@ -373,7 +407,7 @@ export class Game {
       return;
     }
     if (st.phase === 'penalty') {
-      this.penaltyInput(inputs[st.penalty!.team]);
+      this.penaltyInput(inputs[st.penalty!.chooser]);
       return;
     }
     if (this.resumeAt !== null) {

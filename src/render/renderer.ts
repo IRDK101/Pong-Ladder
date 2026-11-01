@@ -87,12 +87,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, theme: Theme, v: View,
   }
 
   // Players.
-  const players: PlayerId[] = [
-    { team: 'A', side: 'left' },
-    { team: 'A', side: 'right' },
-    { team: 'B', side: 'left' },
-    { team: 'B', side: 'right' },
-  ];
+  const players: PlayerId[] = game.shownPlayers();
   const active = [game.activePlayer('A'), game.activePlayer('B')].filter(Boolean) as PlayerId[];
   for (const p of players) {
     const isActive = active.some((a) => a.team === p.team && a.side === p.side);

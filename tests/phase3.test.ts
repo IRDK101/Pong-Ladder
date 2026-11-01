@@ -101,11 +101,11 @@ describe('career stats derived from logs', () => {
 
   it('tracks the biggest comeback in a won game', () => {
     const s = new Script(BL, { formation: 'shrub', penaltyCupSelection: 'auto' });
-    // A falls 3 cups behind on serve penalties (6 half-cups = 18 table misses), then comes back.
+    // A falls 3 cups behind on serve penalties (6 half-cups, 2 table misses each), then comes back.
     s.goodServe(); // B-L → A-R
     s.hit(AR);
     s.out(); // A-R serves
-    for (let i = 0; i < 18; i++) s.tableMiss();
+    for (let i = 0; i < 12; i++) s.tableMiss();
     expect(s.eng.cupsRemaining('A')).toBe(4);
     // Now A-R serves and A sinks all 7 B cups.
     s.goodServe(); // A-R → B-L

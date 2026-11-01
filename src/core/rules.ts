@@ -91,7 +91,8 @@ export interface GameState {
   /** Bounces on the server's own side during the current serve flight. */
   serveOwnBounces: number;
   rally: RallyState | null;
-  penalty: { team: TeamId; reason: PenaltyReason } | null;
+  /** A half-cup penalty: `team` loses half a cup; `chooser` picks which (the opponents after a serve hits their cup). */
+  penalty: { team: TeamId; reason: PenaltyReason; chooser: TeamId } | null;
   sinkChain: { player: PlayerId; length: number } | null;
   winner: TeamId | null;
 }
@@ -138,6 +139,8 @@ export class RulesEngine {
   readonly cfg: GameConfig;
   private s: GameState;
   private _log: LogEntry[] = [];
+  /** 1v1: the side the last serve was made from, until the next server is placed. */
+  private servedFrom: Side | null = null;
   /** Display names by player key ("A-left"), for referee messages. Defaults to "A-L" etc. */
   private names: Record<string, string>;
 
@@ -205,7 +208,8 @@ export class RulesEngine {
     if (phase === 'penalty' && ev.type !== 'chooseCup') return reject('waiting for penalty cup choice');
     if (phase !== 'penalty' && ev.type === 'chooseCup') return reject('no penalty pending');
     if (phase === 'penalty' && ev.type === 'chooseCup') {
-      if (ev.team !== this.s.penalty!.team) return reject(`Team ${this.s.penalty!.team} chooses the penalty cup`);
+      // The event names the cup's team (always the penalized team); `penalty.chooser` says who picks it.
+      if (ev.team !== this.s.penalty!.team) return reject(`the penalty cup must be one of Team ${this.s.penalty!.team}'s`);
       const st = this.cupState(ev.team, ev.cupId);
       if (st === undefined || st === 'removed') return reject('cup is not on the table');
     }
@@ -233,6 +237,11 @@ export class RulesEngine {
         break;
     }
 
+    // 1v1: the lone player serves from alternating halves, swapping after every serve (re-serves included).
+    if (this.cfg.teamSize === 1 && this.servedFrom && (this.s.phase === 'awaitServe' || this.s.phase === 'penalty' || this.s.phase === 'gameOver')) {
+      this.s.server = { team: this.s.server.team, side: this.servedFrom === 'left' ? 'right' : 'left' };
+      this.servedFrom = null;
+    }
     for (const c of calls) this.record('call', c);
     return { accepted: true, calls };
   }
@@ -241,6 +250,7 @@ export class RulesEngine {
 
   private startServe(): void {
     const server = this.s.server;
+    this.servedFrom = server.side;
     const receiver = diagonalOf(server);
     this.s.phase = 'serveInFlight';
     this.s.serveOwnBounces = 0;
@@ -342,9 +352,10 @@ export class RulesEngine {
       team: server.team,
       cup: { team, cupId },
       nextServer: server,
-      text: `Serve hit a cup — no damage, Team ${server.team} loses half a cup, ${this.name(server)} re-serves`,
+      text: `Serve hit a cup — no damage, Team ${server.team} loses half a cup (Team ${team} picks which), ${this.name(server)} re-serves`,
     });
-    this.enterPenalty(server.team, 'serveHitCup', calls);
+    // The team whose cup was hit picks which of the server's cups loses half.
+    this.enterPenalty(server.team, 'serveHitCup', calls, team);
   }
 
   // ----------------------------------------------------------------- rally
@@ -519,13 +530,13 @@ export class RulesEngine {
 
   // ------------------------------------------------------------- penalty
 
-  private enterPenalty(team: TeamId, reason: PenaltyReason, calls: Call[]): void {
+  private enterPenalty(team: TeamId, reason: PenaltyReason, calls: Call[], chooser: TeamId = team): void {
     if (this.cfg.penaltyCupSelection === 'auto') {
       this.applyPenalty(team, this.autoPenaltyCup(team), calls);
       return;
     }
     this.s.phase = 'penalty';
-    this.s.penalty = { team, reason };
+    this.s.penalty = { team, reason, chooser };
   }
 
   /** Auto mode: the front-most remaining cup (point of the pyramid first). */

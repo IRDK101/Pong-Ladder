@@ -494,3 +494,21 @@ A visual-only pass: no features or gameplay changed.
   - clear cups with a thin team-colored ring, like the 3D cups;
   - the ski color follows the chosen table.
 - **HTML screens:** file inputs and placeholders are styled to match, and page titles get a gold underline.
+
+## 1v1 mode and two serve-rule changes
+
+These rule decisions were confirmed with the user.
+
+- **1v1 (`cfg.teamSize: 1`):** one player per team, who makes every hit.
+  - **Serving:** the diagonal-quarter rule stays. The lone server swaps halves after every serve, re-serves and table misses included. The engine flips `server.side` once a serve has been made and the ball is dead again.
+  - **Positions:** the player stands in both of the team's positions (the same participant in the left and right roster slots). That keeps the engine, careers and the log format unchanged, and careers already count one human in both slots once.
+  - **Where they stand:** at the middle of their end for reach. When serving, they stand at the half they serve from.
+  - **Drawing:** each team shows one figure (`Game.shownPlayers()`), and the HUD and labels use the single name.
+  - **Menu:** the Players row now offers 2v2 head-to-head, 2v2 same team vs CPU, 1v1 head-to-head and 1v1 vs CPU. In 1v1 vs CPU the human can use either set of keys.
+  - **Draft:** one pick each, so it needs only 2 characters. The lineup shows one character per team.
+  - **Saved records:** matches store `teamSize` in their rules, so replays and careers reproduce the serve alternation.
+- **Table-miss limit:** 2 (was 3). Two serves off the table in one serve sequence cost the serving team half a cup.
+- **Serve hits an opponent cup:** the server's team still loses half a cup, but the team whose cup was hit picks which one.
+  - The engine has `penalty.chooser`. Table-miss penalties are still chosen by the serving team.
+  - The keyboard cursor follows the chooser's keys.
+  - Against the CPU, the human can't click to pick for the CPU, and the CPU picks for itself.

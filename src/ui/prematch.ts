@@ -88,17 +88,18 @@ export class PrematchFlow {
     const usable = this.store.characters.list().filter((c) => validateCharacter(c).length === 0);
     this.chars = new Map(usable.map((c) => [c.id, c]));
     this.progress = progressFrom(this.cfg, this.store.matches.list());
-    if (usable.length < 4) return this.notEnough(usable.length);
+    if (usable.length < 2 * this.size) return this.notEnough(usable.length);
     this.showProfiles();
   }
 
   private notEnough(n: number): void {
+    const need = 2 * this.size;
     this.overlay.show(
       h(
         'div',
         { class: 'panel' },
-        h('h1', {}, 'Draft needs 4 characters'),
-        h('p', {}, n ? `You have ${n} character${n === 1 ? '' : 's'}. Create ${4 - n} more to draft, or play a quick match with generic players.` : 'There are no characters yet. Create at least 4, or play a quick match with generic players.'),
+        h('h1', {}, `Draft needs ${need} characters`),
+        h('p', {}, n ? `You have ${n} character${n === 1 ? '' : 's'}. Create ${need - n} more to draft, or play a quick match with generic players.` : `There are no characters yet. Create at least ${need}, or play a quick match with generic players.`),
         h(
           'div',
           { class: 'row' },
@@ -116,6 +117,11 @@ export class PrematchFlow {
     return this.cfg.players.mode === 'coop';
   }
 
+  /** Players per team (1 in 1v1). */
+  private get size(): 1 | 2 {
+    return this.cfg.teamSize;
+  }
+
   private showProfiles(): void {
     const profiles = this.store.profiles.list();
     const picker = (id: string, value: string, set: (v: string) => void) =>
@@ -130,7 +136,7 @@ export class PrematchFlow {
         }),
       );
     const select = (team: TeamId) => picker(`profile-${team}`, this.profiles[team], (v) => (this.profiles[team] = v));
-    if (this.coop) {
+    if (this.coop && this.size === 2) {
       const seat = (pos: 'A-left' | 'A-right', keys: string) =>
         h('div', { class: 'box card' }, h('h2', { class: 'teamA' }, pos === 'A-left' ? 'Left teammate' : 'Right teammate'), h('p', { class: 'dim' }, keys), picker(`profile-${pos}`, this.coopProfiles[pos], (v) => (this.coopProfiles[pos] = v)));
       this.overlay.show(
@@ -151,11 +157,21 @@ export class PrematchFlow {
         'div',
         { class: 'panel' },
         h('div', { class: 'row spread' }, h('h1', {}, 'Who is playing?'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
-        h('p', { class: 'dim' }, 'Each human picks their player profile, then the teams draft characters. Add profiles from the Players screen.'),
+        h(
+          'p',
+          { class: 'dim' },
+          this.coop
+            ? `1v1 against the CPU (${this.cfg.players.cpu}): pick your player profile, then you and the CPU draft one character each. Either set of keys plays.`
+            : `Each human picks their player profile, then the teams draft ${this.size === 1 ? 'one character each' : 'characters'}. Add profiles from the Players screen.`,
+        ),
         h(
           'div',
           { class: 'grid' },
-          ...(['A', 'B'] as TeamId[]).map((t) => h('div', { class: 'box card' }, h('h2', { class: teamClass(t) }, `Team ${t}`), select(t))),
+          ...(['A', 'B'] as TeamId[]).map((t) =>
+            this.coop && t === 'B'
+              ? h('div', { class: 'box card' }, h('h2', { class: teamClass(t) }, 'Team B'), h('p', { class: 'dim' }, `CPU (${this.cfg.players.cpu})`))
+              : h('div', { class: 'box card' }, h('h2', { class: teamClass(t) }, this.size === 1 ? `Player ${t}` : `Team ${t}`), select(t)),
+          ),
         ),
         this.error ? h('p', { class: 'error' }, this.error) : null,
         h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.toDraft() }, 'Flip the coin and draft')),
@@ -165,7 +181,8 @@ export class PrematchFlow {
 
   private toDraft(): void {
     const c = this.coopProfiles;
-    if (this.coop && c['A-left'] && c['A-left'] === c['A-right']) {
+    if (this.coop) this.profiles.B = GUEST; // the CPU's team has no human
+    if (this.coop && this.size === 2 && c['A-left'] && c['A-left'] === c['A-right']) {
       this.error = 'Both teammates picked the same player. Pick a different profile, or Guest.';
       return this.showProfiles();
     }
@@ -175,7 +192,7 @@ export class PrematchFlow {
     }
     this.error = '';
     this.first = firstPicker(this.cfg.draftFirstPick, this.rng);
-    this.draft = newDraft([...this.chars.keys()], this.first);
+    this.draft = newDraft([...this.chars.keys()], this.first, this.size);
     this.showDraft();
   }
 
@@ -184,7 +201,12 @@ export class PrematchFlow {
   private showDraft(): void {
     const d = this.draft!;
     if (isDone(d)) {
-      this.lineup = { A: teamPicks(d, 'A') as [string, string], B: teamPicks(d, 'B') as [string, string] };
+      // 1v1: the one character stands in both positions of its team.
+      const two = (t: TeamId) => {
+        const p = teamPicks(d, t);
+        return (this.size === 1 ? [p[0], p[0]] : p) as [string, string];
+      };
+      this.lineup = { A: two('A'), B: two('B') };
       return this.showLineup();
     }
     const team = onTheClock(d)!;
@@ -252,9 +274,12 @@ export class PrematchFlow {
         'div',
         { class: 'box card' },
         h('h2', { class: teamClass(t) }, `Team ${t}`),
-        spot('Left', l),
-        spot('Right', r),
-        this.coop && t === 'B' ? h('p', { class: 'dim' }, `CPU (${this.cfg.players.cpu})`) : h('button', { onclick: () => ((lu[t] = [lu[t][1], lu[t][0]]), this.showLineup()) }, 'Swap left and right'),
+        ...(this.size === 1 ? [spot('Plays both halves', l)] : [spot('Left', l), spot('Right', r)]),
+        this.coop && t === 'B'
+          ? h('p', { class: 'dim' }, `CPU (${this.cfg.players.cpu})`)
+          : this.size === 1
+            ? null
+            : h('button', { onclick: () => ((lu[t] = [lu[t][1], lu[t][0]]), this.showLineup()) }, 'Swap left and right'),
       );
     };
     this.overlay.show(
@@ -265,12 +290,14 @@ export class PrematchFlow {
         h(
           'p',
           { class: 'dim' },
-          this.coop
+          this.size === 1
+            ? 'One player a side: you make every hit, and serve from alternating halves into the diagonal quarter.'
+            : this.coop
             ? 'The left character is played with WASD + Space, the right one with the arrows + Enter. Positions are fixed for the whole game.'
             : 'Positions are fixed for the whole game. Left serves to the opponent on the right, diagonally.',
         ),
         h('div', { class: 'grid' }, side('A'), side('B')),
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.coop ? this.coopProfiles : this.profiles) }) }, 'Start match')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.coop && this.size === 2 ? this.coopProfiles : this.profiles) }) }, 'Start match')),
       ),
     );
   }

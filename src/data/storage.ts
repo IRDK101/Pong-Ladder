@@ -29,7 +29,7 @@ export interface MatchRecord {
   startedAt: string;
   finishedAt: string | null;
   /** House-rule values in force (tuning omitted). */
-  rules: Pick<GameConfig, 'formation' | 'serveTableMissLimit' | 'shoulderHeight' | 'matchFormat' | 'penaltyCupSelection' | 'skiCollision'>;
+  rules: Pick<GameConfig, 'formation' | 'serveTableMissLimit' | 'shoulderHeight' | 'matchFormat' | 'penaltyCupSelection' | 'skiCollision'> & Partial<Pick<GameConfig, 'teamSize'>>;
   roster: Record<'A-left' | 'A-right' | 'B-left' | 'B-right', RosterSlot>;
   games: GameRecord[];
   winner: TeamId | null;
@@ -70,12 +70,12 @@ export function emptyRoster(): MatchRecord['roster'] {
 }
 
 export function newMatchRecord(cfg: GameConfig, now = new Date(), id = `m-${now.getTime()}-${Math.floor(Math.random() * 1e6)}`): MatchRecord {
-  const { formation, serveTableMissLimit, shoulderHeight, matchFormat, penaltyCupSelection, skiCollision } = cfg;
+  const { formation, serveTableMissLimit, shoulderHeight, matchFormat, penaltyCupSelection, skiCollision, teamSize } = cfg;
   return {
     id,
     startedAt: now.toISOString(),
     finishedAt: null,
-    rules: { formation, serveTableMissLimit, shoulderHeight, matchFormat, penaltyCupSelection, skiCollision },
+    rules: { formation, serveTableMissLimit, shoulderHeight, matchFormat, penaltyCupSelection, skiCollision, teamSize },
     roster: emptyRoster(),
     games: [],
     winner: null,

@@ -101,7 +101,7 @@ describe('local storage and backups', () => {
     store.matches.save({ ...rec, winner: 'A' });
     expect(store.matches.list()).toHaveLength(1);
     expect(store.matches.list()[0].winner).toBe('A');
-    expect(store.matches.list()[0].rules).toMatchObject({ formation: 'tree', serveTableMissLimit: 3 });
+    expect(store.matches.list()[0].rules).toMatchObject({ formation: 'tree', serveTableMissLimit: 2 });
     expect(Object.keys(store.matches.list()[0].roster)).toEqual(['A-left', 'A-right', 'B-left', 'B-right']);
     store.matches.remove('m-1');
     expect(store.matches.list()).toEqual([]);

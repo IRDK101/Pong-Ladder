@@ -16,9 +16,12 @@ function toBCups(s: Script) {
 
 /** Team B's server misses until Team B has a HALF r3c0 (choose mode). */
 function halfBPoint(s: Script) {
-  for (let i = 0; i < 3; i++) s.tableMiss();
+  for (let i = 0; i < LIMIT; i++) s.tableMiss();
   s.choose('B', 'r3c0');
 }
+
+/** Table misses before the serving team loses half a cup (default rules). */
+const LIMIT = makeConfig().serveTableMissLimit;
 
 describe('1. setup and first serve', () => {
   it('1.1 starts with every cup full: tree 11, shrub 7', () => {
@@ -116,23 +119,23 @@ describe('3. serving: table misses', () => {
     expect(s.s.missCount).toBe(1);
     s.hit(AL);
     s.out(); // straight off the table, no bounce at all
-    expect(s.s.missCount).toBe(2);
+    expect(s.last).toMatchObject({ kind: 'missPenalty' });
   });
 
-  it('3.2 two misses → no penalty', () => {
+  it('3.2 one miss → no penalty; the default limit is 2', () => {
+    expect(LIMIT).toBe(2);
     const s = new Script(AL);
     s.tableMiss();
-    s.tableMiss();
-    expect(s.s.missCount).toBe(2);
+    expect(s.s.missCount).toBe(1);
     expect(s.s.phase).toBe('awaitServe');
   });
 
-  it('3.3 third miss → serving team chooses a cup to lose half; counter resets; same server', () => {
+  it('3.3 second miss → serving team chooses a cup to lose half; counter resets; same server', () => {
     const s = new Script(AL);
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.last).toMatchObject({ kind: 'missPenalty', team: 'A' });
     expect(s.s.phase).toBe('penalty');
-    expect(s.s.penalty).toEqual({ team: 'A', reason: 'tableMisses' });
+    expect(s.s.penalty).toEqual({ team: 'A', reason: 'tableMisses', chooser: 'A' });
     s.choose('A', 'r0c1');
     expect(s.cupState('A', 'r0c1')).toBe('half');
     expect(s.s.missCount).toBe(0);
@@ -144,7 +147,7 @@ describe('3. serving: table misses', () => {
   it('3.4 penalty on a HALF cup removes it', () => {
     const s = new Script(AL);
     for (let k = 0; k < 2; k++) {
-      for (let i = 0; i < 3; i++) s.tableMiss();
+      for (let i = 0; i < LIMIT; i++) s.tableMiss();
       s.choose('A', 'trunk');
     }
     expect(s.cupState('A', 'trunk')).toBe('removed');
@@ -153,10 +156,10 @@ describe('3. serving: table misses', () => {
   it('3.5 penalty choice rejects removed cups, unknown cups and the other team', () => {
     const s = new Script(AL);
     for (let k = 0; k < 2; k++) {
-      for (let i = 0; i < 3; i++) s.tableMiss();
+      for (let i = 0; i < LIMIT; i++) s.tableMiss();
       s.choose('A', 'trunk');
     }
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.choose('A', 'trunk').accepted).toBe(false);
     expect(s.choose('A', 'nope').accepted).toBe(false);
     expect(s.choose('B', 'r3c0').accepted).toBe(false);
@@ -166,18 +169,17 @@ describe('3. serving: table misses', () => {
 
   it('3.6 auto selection applies the penalty to the front-most live cup with no choice step', () => {
     const s = new Script(AL, { penaltyCupSelection: 'auto' });
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.s.phase).toBe('awaitServe');
     expect(s.cupState('A', 'r3c0')).toBe('half');
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.cupState('A', 'r3c0')).toBe('removed');
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.cupState('A', 'r2c1')).toBe('half');
   });
 
   it('3.7 a successful serve resets the counter; the next sequence starts at 1', () => {
     const s = new Script(AL);
-    s.tableMiss();
     s.tableMiss();
     s.goodServe();
     s.rallyHit(BR);
@@ -197,15 +199,17 @@ describe('3. serving: table misses', () => {
   });
 
   it('3.9 respects serveTableMissLimit from config', () => {
-    const s = new Script(AL, { serveTableMissLimit: 2 });
+    const s = new Script(AL, { serveTableMissLimit: 3 });
     s.tableMiss();
+    s.tableMiss();
+    expect(s.s.phase).toBe('awaitServe');
     s.tableMiss();
     expect(s.s.phase).toBe('penalty');
   });
 
   it('3.10 a penalty that removes the last cup ends the game', () => {
     const s = new Script(AL, { formation: 'shrub', penaltyCupSelection: 'auto' });
-    for (let i = 0; i < 7 * 2 * 3; i++) s.tableMiss();
+    for (let i = 0; i < 7 * 2 * LIMIT; i++) s.tableMiss();
     expect(s.s.phase).toBe('gameOver');
     expect(s.s.winner).toBe('B');
   });
@@ -218,7 +222,8 @@ describe('4. serving: serve hits an opponent cup', () => {
     s.cup('B', 'r3c0');
     expect(s.last).toMatchObject({ kind: 'serveCupPenalty', team: 'A', nextServer: AL });
     expect(s.cupState('B', 'r3c0')).toBe('full');
-    expect(s.s.penalty).toEqual({ team: 'A', reason: 'serveHitCup' });
+    // Team B, whose cup was hit, picks which Team A cup loses half.
+    expect(s.s.penalty).toEqual({ team: 'A', reason: 'serveHitCup', chooser: 'B' });
     s.choose('A', 'trunk');
     expect(s.cupState('A', 'trunk')).toBe('half');
     expect(s.s.phase).toBe('awaitServe');
@@ -246,7 +251,7 @@ describe('4. serving: serve hits an opponent cup', () => {
     s.choose('A', 'trunk');
     expect(s.s.missCount).toBe(1);
     s.tableMiss();
-    expect(s.s.missCount).toBe(2);
+    expect(s.last).toMatchObject({ kind: 'missPenalty' }); // the earlier miss still counts
   });
 
   it('4.4 legal landing then a cup before the receiver hits → serve-cup penalty [Q2]', () => {
@@ -681,7 +686,7 @@ describe('8. sinks', () => {
     const s = new Script(AL);
     toBCups(s);
     s.sink('B', 'r3c0');
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     s.choose('B', 'trunk');
     s.goodServe();
     s.hit(AR);
@@ -714,8 +719,8 @@ describe('8. sinks', () => {
     const s = new Script(AL);
     toBCups(s);
     s.sink('B', 'r3c0');
-    for (let i = 0; i < 3; i++) s.tableMiss();
-    expect(s.s.penalty).toEqual({ team: 'B', reason: 'tableMisses' });
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
+    expect(s.s.penalty).toEqual({ team: 'B', reason: 'tableMisses', chooser: 'B' });
   });
 
   it('8.8 sinking in your own cup counts as missing the table', () => {
@@ -730,7 +735,7 @@ describe('8. sinks', () => {
 describe('9. penalty flow', () => {
   it('9.1 play events are rejected while a penalty is pending', () => {
     const s = new Script(AL);
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.hit(AL).accepted).toBe(false);
     expect(s.bounce('A').accepted).toBe(false);
     expect(s.s.phase).toBe('penalty');
@@ -738,7 +743,7 @@ describe('9. penalty flow', () => {
 
   it('9.2 only the penalized team may choose', () => {
     const s = new Script(BR);
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     expect(s.choose('A', 'trunk').accepted).toBe(false);
     expect(s.choose('B', 'trunk').accepted).toBe(true);
   });
@@ -779,11 +784,11 @@ describe('10. game and match end', () => {
     s.out(); // B-R serves
     for (const id of ['trunk', 'r0c0', 'r0c1', 'r0c2', 'r1c0', 'r1c1']) {
       for (let k = 0; k < 2; k++) {
-        for (let i = 0; i < 3; i++) s.tableMiss();
+        for (let i = 0; i < LIMIT; i++) s.tableMiss();
         s.choose('B', id);
       }
     }
-    for (let i = 0; i < 3; i++) s.tableMiss();
+    for (let i = 0; i < LIMIT; i++) s.tableMiss();
     s.choose('B', 'r2c0'); // last cup: HALF
     expect(s.eng.cupsRemaining('B')).toBe(1);
     s.goodServe(); // B-R → A-L

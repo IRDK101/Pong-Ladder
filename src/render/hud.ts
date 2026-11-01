@@ -48,7 +48,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
       break;
     }
     case 'penalty':
-      status = `Team ${st.penalty!.team}: pick a cup to lose half`;
+      status = st.penalty!.chooser === st.penalty!.team ? `Team ${st.penalty!.team}: pick a cup to lose half` : `Team ${st.penalty!.chooser}: pick which Team ${st.penalty!.team} cup loses half`;
       break;
     case 'gameOver':
       status = `Team ${st.winner} wins the game`;
@@ -75,7 +75,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
     st.phase === 'gameOver'
       ? ''
       : st.phase === 'penalty'
-      ? `Team ${st.penalty!.team}: aim keys pick a cup, hit key confirms (or click it)`
+      ? `Team ${st.penalty!.chooser}: aim keys pick a cup, hit key confirms (or click it)`
       : st.phase === 'awaitServe'
         ? 'Aim, then hit to toss · hit again as the rings meet · hold a direction for spin'
         : 'Aim before the ball arrives · hit as the rings meet · hold a direction for spin';
@@ -104,8 +104,13 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
       ctx.textAlign = 'center';
       ctx.fillText(text, x0 + w / 2, v.height - M - 13);
     };
-    tag(coop ? 'Left teammate: WASD · Space' : 'Team A: WASD · Space', M, 'left', c.teamA);
-    tag(coop ? 'Right teammate: Arrows · Enter' : 'Team B: Arrows · Enter', W - M, 'right', c.teamB);
+    if (coop && game.solo) {
+      tag('You: WASD or arrows · Space or Enter', M, 'left', c.teamA);
+      tag('CPU', W - M, 'right', c.teamB);
+    } else {
+      tag(coop ? 'Left teammate: WASD · Space' : 'Team A: WASD · Space', M, 'left', c.teamA);
+      tag(coop ? 'Right teammate: Arrows · Enter' : 'Team B: Arrows · Enter', W - M, 'right', c.teamB);
+    }
   }
 }
 

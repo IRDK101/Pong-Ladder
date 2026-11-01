@@ -19,15 +19,24 @@ const speed = (timeScale: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
 };
 
-const players = (mode: GameConfig['players']['mode']) => (cfg: GameConfig) => {
+const players = (mode: GameConfig['players']['mode'], teamSize: 1 | 2 = 2) => (cfg: GameConfig) => {
   cfg.players.mode = mode;
+  cfg.teamSize = teamSize;
 };
 const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
   cfg.players.cpu = d;
 };
 
 const CHOICES: Choice[] = [
-  { label: 'Players', values: [{ label: 'Head-to-head', apply: players('versus') }, { label: 'Same team vs CPU', apply: players('coop') }] },
+  {
+    label: 'Players',
+    values: [
+      { label: '2v2 head-to-head', apply: players('versus') },
+      { label: '2v2 same team vs CPU', apply: players('coop') },
+      { label: '1v1 head-to-head', apply: players('versus', 1) },
+      { label: '1v1 vs CPU', apply: players('coop', 1) },
+    ],
+  },
   { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
   { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }, { label: 'Classic top-down', apply: set('view', 'topDown') }] },
   { label: 'Table', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].name, apply: set('venue', v) })) },
@@ -180,7 +189,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
   ctx.fillStyle = m.accent;
   ctx.fillRect(SETUP_X, 182, 120, 3);
   ctx.fillStyle = c.textDim;
-  ctx.fillText('ZETA PSI BASEMENT RULES  ·  PADDLE PONG FOR FOUR', SETUP_X + 132, 184);
+  ctx.fillText('ZETA PSI BASEMENT RULES  ·  PADDLE PONG, 2V2 OR 1V1', SETUP_X + 132, 184);
 
   // Column headings and panels.
   const heading = (text: string, x: number, y: number) => {
@@ -306,11 +315,11 @@ const HELP: [string, string][] = [
   ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
   ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long. Fast balls, long rallies and balls far from you leave less time.'],
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too.'],
-  ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Three serves off the table cost half a cup.'],
+  ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
-  ['Modes', 'Head-to-head: one of you per team (split screen gives each team its own camera). Same team: you two against the CPU; WASD plays the left teammate, the arrows the right one.'],
+  ['Modes', '2v2 head-to-head: one of you per team (split screen gives each team its own camera). 2v2 same team: you two against the CPU; WASD plays the left teammate, the arrows the right one. 1v1: one player a side, who makes every hit and serves from alternating halves (head-to-head, or you against the CPU with either set of keys).'],
 ];
 
 /** Split text into lines no wider than maxWidth with the current font. */
