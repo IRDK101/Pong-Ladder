@@ -21,12 +21,28 @@ export function showBackup(overlay: Overlay, store: AppStore, onClose: () => voi
       status.className = 'dim';
     }
   };
-  const download = () => {
+  const filename = `pong-zimulator-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const download = async () => {
+    // Inside the claude.ai viewer, files go through its own save prompt; elsewhere, a plain download.
+    const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
+    const dl = claude?.use ? ((await claude.use('downloads').catch(() => null)) as { save(r: { filename: string; data: string }): Promise<unknown> } | null) : null;
+    if (dl) {
+      try {
+        await dl.save({ filename, data: json });
+        status.textContent = 'Saved the backup file.';
+        status.className = 'ok';
+      } catch (e) {
+        const code = (e as { code?: string }).code;
+        status.textContent = code === 'declined' ? 'Download cancelled.' : 'The download did not work here. Use Copy backup instead.';
+        status.className = 'dim';
+      }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-    a.download = `dartmouth-pong-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
   const input = h('textarea', { id: 'backup-in', placeholder: 'Paste a backup here', 'aria-label': 'Paste a backup' });
@@ -55,7 +71,7 @@ export function showBackup(overlay: Overlay, store: AppStore, onClose: () => voi
       'div',
       { class: 'panel' },
       h('div', { class: 'row spread' }, h('h1', {}, 'Back up and restore'), h('button', { onclick: onClose }, 'Back to menu')),
-      h('p', { class: 'dim' }, `Everything is saved in this browser only: ${counts}. Keep a backup to move it to another computer or share characters with friends.`),
+      h('p', { class: 'dim' }, `This browser holds ${counts}. Signed-in players' levels and unlocks are also saved online; a backup moves everything else (characters you made here, players, match history) to another browser.`),
       note ? status : null,
       h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:10px' }, h('h2', {}, 'Back up'), out, h('div', { class: 'row' }, h('button', { class: 'primary', onclick: copy }, 'Copy backup'), h('button', { onclick: download }, 'Download file')), note ? null : status),
       h(

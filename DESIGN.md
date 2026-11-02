@@ -705,3 +705,13 @@ Decided with the owner (asked first):
   - That character's Profile button is highlighted.
   - Opening the profile clears its count.
 - **Saved table pick:** it is restored even while it reads as locked, because online unlocks arrive after the menu loads.
+
+## QOL and bug pass
+
+- **Fixed: XP from a match's last game.** The account was updated before the match result was recorded, so it missed game, win and match XP (the end screen showed +13 where the summary showed +63). The deciding game now records the match winner first.
+- **Fixed: backup download.** It goes through the viewer's save prompt (the `downloads` capability), and falls back to a plain download outside claude.ai.
+- **How to play** is now an HTML screen, scrollable and readable at any size (it used to be drawn on the canvas).
+- **Portrait title screen (phones):** one column, in the order progress card, Play, Match, House rules, More. The panels are fitted around their rows in both layouts.
+- **HUD on narrow screens:** the team panels shrink and their cup dots tighten, the status pill drops below them, and all HUD text is clamped to its panel.
+- **Rendering:** the three low-resolution scene layers are flattened before the single upscale to the screen.
+- **Checked:** every screen opens at 1280×720 and 390×760 with no console errors, and a full game plays through the end screens and the summary.

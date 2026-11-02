@@ -102,10 +102,47 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   backup: { x: RX, y: 492, w: RW, h: 29 },
 };
 
-/** Design-space rectangle of a menu row. */
-export function rowRect(id: RowId) {
-  return RECTS[id];
+// Portrait (phones): one column on a 560-wide design — progress, play, match, rules, more.
+const PX = 28;
+const PW = 504;
+const PCELL = (PW - 8) / 2;
+const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = {
+  collection: { x: PX, y: 200, w: PW, h: 132 },
+  quick: { x: PX, y: 372, w: PW, h: 54 },
+  draft: { x: PX, y: 432, w: PW, h: 54 },
+  players: { x: PX, y: 528, w: PW, h: 29 },
+  cpu: { x: PX, y: 562, w: PW, h: 29 },
+  playingAs: { x: PX, y: 596, w: PW, h: 46 },
+  table: { x: PX, y: 647, w: PW, h: 46 },
+  spot: { x: PX, y: 698, w: PW, h: 29 },
+  formation: { x: PX, y: 768, w: PCELL, h: 29 },
+  match: { x: PX + PCELL + 8, y: 768, w: PCELL, h: 29 },
+  speed: { x: PX, y: 802, w: PCELL, h: 29 },
+  ski: { x: PX + PCELL + 8, y: 802, w: PCELL, h: 29 },
+  view: { x: PX, y: 836, w: PCELL, h: 29 },
+  characters: { x: PX, y: 906, w: PW, h: 29 },
+  profiles: { x: PX, y: 940, w: PW, h: 29 },
+  help: { x: PX, y: 974, w: PW, h: 29 },
+  backup: { x: PX, y: 1008, w: PW, h: 29 },
+};
+
+/** Narrow screens get the portrait layout. */
+export function isPortrait(v: { width: number; height: number }): boolean {
+  return v.width < v.height * 0.9;
 }
+
+/** Design-space rectangle of a menu row (for the screen's layout). */
+export function rowRect(id: RowId, portrait = false) {
+  return (portrait ? PORTRAIT : RECTS)[id];
+}
+
+/** The panels around groups of rows, with their headings. */
+const GROUPS: { title: string; ids: RowId[] }[] = [
+  { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
+  { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
+  { title: 'PLAY', ids: ['quick', 'draft'] },
+  { title: 'MORE', ids: ['characters', 'profiles', 'help', 'backup'] },
+];
 
 export class Menu {
   private picks: number[] = CHOICES.map(() => 0);
@@ -239,12 +276,22 @@ export class Menu {
   }
 }
 
-/** The menu is laid out on a 1131×660 design and scaled (uniformly, centered) to the screen. */
+/** The menu is laid out on a 1131×660 design (560×1070 in portrait) and scaled (uniformly, centered) to the screen. */
 export const MENU_W = 1131;
 export const MENU_H = 660;
-export function menuLayout(v: View): { s: number; ox: number; oy: number } {
-  const s = Math.min(v.width / MENU_W, v.height / MENU_H);
-  return { s, ox: (v.width - MENU_W * s) / 2, oy: (v.height - MENU_H * s) / 2 };
+export function menuLayout(v: View): { s: number; ox: number; oy: number; portrait: boolean } {
+  const portrait = isPortrait(v);
+  const W = portrait ? 560 : MENU_W;
+  const H = portrait ? 1070 : MENU_H;
+  const s = Math.min(v.width / W, v.height / H);
+  return { s, ox: (v.width - W * s) / 2, oy: portrait ? Math.max(0, (v.height - H * s) / 2) : (v.height - H * s) / 2, portrait };
+}
+
+/** The end screens keep the landscape design (they're small panels). */
+function endLayout(v: View): { s: number; ox: number; oy: number } {
+  const s = Math.min(v.width / MENU_W, v.height / MENU_H) * (isPortrait(v) ? 1.6 : 1);
+  const sc = Math.min(s, v.width / 680);
+  return { s: sc, ox: (v.width - MENU_W * sc) / 2, oy: (v.height - MENU_H * sc) / 2 };
 }
 
 let logoCache: HTMLCanvasElement | null = null;
@@ -318,7 +365,7 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: Vi
   ctx.save();
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);
-  drawMenuBody(ctx, theme, menu, note, extras);
+  drawMenuBody(ctx, theme, menu, note, extras, L.portrait);
   ctx.restore();
 }
 
@@ -383,21 +430,23 @@ function crate(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number
   }
 }
 
-function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, note: string, ex: MenuExtras): void {
+function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, note: string, ex: MenuExtras, portrait: boolean): void {
+  const RR = portrait ? PORTRAIT : RECTS;
+  const X0 = portrait ? PX : LX;
   const c = theme.colors;
   const m = theme.menu;
 
   // Logo and subtitle.
   ctx.imageSmoothingEnabled = false;
   const lg = logo(theme);
-  ctx.drawImage(lg, LX - 4, 34, lg.width * 4, lg.height * 4);
+  ctx.drawImage(lg, X0 - 4, 34, lg.width * 4, lg.height * 4);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = m.accent;
-  ctx.fillRect(LX, 182, 120, 3);
+  ctx.fillRect(X0, 182, 120, 3);
   ctx.fillStyle = c.textDim;
-  ctx.fillText('ZETA PSI BASEMENT RULES  ·  2V2 OR 1V1', LX + 132, 184);
+  ctx.fillText('ZETA PSI BASEMENT RULES  ·  2V2 OR 1V1', X0 + 132, 184);
 
   const heading = (text: string, x: number, y: number) => {
     ctx.textAlign = 'left';
@@ -405,19 +454,20 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.fillStyle = m.accent;
     ctx.fillText(text, x, y);
   };
-  // Panels: the same dark, 2px-bordered boxes as the in-game HUD.
-  panel(ctx, theme, LX - 14, 200, LW + 28, 240, c.uiEdge, m.panel);
-  panel(ctx, theme, LX - 14, 446, LW + 28, 140, c.uiEdge, m.panel);
-  panel(ctx, theme, RX - 14, 200, RW + 28, 156, c.uiEdge, m.panel);
-  panel(ctx, theme, RX - 14, 362, RW + 28, 172, c.uiEdge, m.panel);
-  heading('MATCH', LX, 214);
-  heading('HOUSE RULES', LX, 452 + 1);
-  heading('PLAY', RX, 214);
-  heading('MORE', RX, 376);
+  // Panels: the same dark, 2px-bordered boxes as the in-game HUD, fitted around each group of rows.
+  for (const g of GROUPS) {
+    const rs = g.ids.map((id) => RR[id]);
+    const x0 = Math.min(...rs.map((r) => r.x));
+    const y0 = Math.min(...rs.map((r) => r.y));
+    const x1 = Math.max(...rs.map((r) => r.x + r.w));
+    const y1 = Math.max(...rs.map((r) => r.y + r.h));
+    panel(ctx, theme, x0 - 14, y0 - 28, x1 - x0 + 28, y1 - y0 + 42, c.uiEdge, m.panel);
+    heading(g.title, x0, y0 - 14);
+  }
 
   const rows = menu.rows();
   rows.forEach((row, i) => {
-    const r = RECTS[row.id];
+    const r = RR[row.id];
     const on = i === menu.cursor;
     const play = row.id === 'quick' || row.id === 'draft';
     const card = row.id === 'collection';
@@ -435,7 +485,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     const mid = r.y + r.h / 2 - 1;
     ctx.textBaseline = 'middle';
     if (row.value !== undefined) {
-      const cell = r.w < LW;
+      const cell = r.w < 300;
       ctx.textAlign = 'left';
       ctx.font = cell ? theme.fonts.label : theme.fonts.bar;
       ctx.fillStyle = on ? ink : row.dim ? 'rgba(200, 190, 170, 0.35)' : c.textDim;
@@ -498,6 +548,13 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     }
   });
 
+  if (portrait) {
+    ctx.textAlign = 'left';
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = c.textDim;
+    ctx.fillText(note || 'Tap a row to choose. Playing needs a keyboard: WASD + Space, arrows + Enter.', PX, 1054);
+    return;
+  }
   // Controls legend.
   let x = LX;
   const y = 622;
@@ -581,7 +638,7 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
   const m = theme.menu;
   ctx.fillStyle = c.overlay;
   ctx.fillRect(0, 0, screen.width, screen.height);
-  const L = menuLayout(screen);
+  const L = endLayout(screen);
   ctx.save();
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);
@@ -606,7 +663,7 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
   ctx.restore();
 }
 
-const HELP: [string, string][] = [
+export const HELP: [string, string][] = [
   ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles.'],
   ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
   ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long. Fast balls, long rallies and balls far from you leave less time.'],
@@ -639,7 +696,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, theme: Theme, screen: Vi
   ctx.fillStyle = c.overlay;
   ctx.fillRect(0, 0, screen.width, screen.height);
   ctx.fillRect(0, 0, screen.width, screen.height);
-  const L = menuLayout(screen);
+  const L = endLayout(screen);
   ctx.save();
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);

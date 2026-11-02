@@ -159,7 +159,13 @@ export function renderGame3D(ctx: CanvasRenderingContext2D, theme: Theme, v: Vie
     });
     drawScene(layers[0], layers[1], layers[2], theme, game, vp, labels);
     ctx.imageSmoothingEnabled = false;
-    for (const c of [vp.buf, vp.hi, vp.front]) ctx.drawImage(c, vp.x, vp.y, vp.w, vp.h);
+    // Flatten the layers at low resolution when they match (the usual case), so the
+    // full-screen upscale happens once a frame instead of three times.
+    if (vp.hi.width === vp.buf.width && vp.hi.height === vp.buf.height) {
+      layers[0].drawImage(vp.hi, 0, 0);
+      layers[0].drawImage(vp.front, 0, 0);
+      ctx.drawImage(vp.buf, vp.x, vp.y, vp.w, vp.h);
+    } else for (const c of [vp.buf, vp.hi, vp.front]) ctx.drawImage(c, vp.x, vp.y, vp.w, vp.h);
     // Vignette, in screen space over all layers.
     const vg = ctx.createRadialGradient(vp.x + vp.w / 2, vp.y + vp.h * 0.55, vp.h * 0.35, vp.x + vp.w / 2, vp.y + vp.h * 0.55, vp.w * 0.75);
     vg.addColorStop(0, 'rgba(0,0,0,0)');

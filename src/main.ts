@@ -13,11 +13,11 @@ import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
 import { makeView } from './render/renderer';
 import { renderHud } from './render/hud';
-import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
+import { HELP, Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
 import { playerLevel } from './progress/unlocks';
 import { characterSprite } from './core/sprite';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
-import { injectStyles, Overlay } from './ui/dom';
+import { h, injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
 import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
@@ -123,6 +123,7 @@ if (location.hash === '#debug') {
     art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
     sprite: composeSprite,
     parts: PART_OPTIONS,
+    run: (a: MenuAction) => runMenuAction(a),
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
   };
 }
@@ -164,7 +165,13 @@ let xpNote = '';
 /** Persist the finished game (and match, if decided), and give the player their XP. */
 function recordGame(): void {
   if (!game || !record) return;
-  record.games.push({ winner: game.engine.peek().winner, log: game.engine.log });
+  const winner = game.engine.peek().winner;
+  record.games.push({ winner, log: game.engine.log });
+  // If this game decides the match, record the result now, so the XP shown and given include the win.
+  if (winner && game.match.wins[winner] + 1 >= game.match.gamesToWin) {
+    record.winner = winner;
+    record.finishedAt = new Date().toISOString();
+  }
   store.matches.save(record);
   const side = game.cfg.players.mode === 'coop' ? 'A' : (game.cfg.players.mySide ?? 'A');
   const before = Object.values(counted).reduce((a, b) => a + b, 0);
@@ -243,6 +250,18 @@ function quickFor(cfg: GameConfig): Roster {
   return quickRoster(mine, cfg.teamSize, Math.random, pins);
 }
 
+/** How to play, as a scrollable screen like the others (readable on any size). */
+function showHelp(): void {
+  overlay.show(
+    h(
+      'div',
+      { class: 'panel' },
+      h('div', { class: 'row spread' }, h('h1', {}, 'How to play'), h('button', { class: 'primary', onclick: () => toMenu() }, 'Back to menu')),
+      h('div', { class: 'help' }, ...HELP.flatMap(([k, t]) => [h('h2', {}, k), h('p', {}, t)])),
+    ),
+  );
+}
+
 const tablePicker = new TablePicker(
   overlay,
   account,
@@ -285,8 +304,7 @@ function runMenuAction(action: MenuAction): void {
     case 'backup':
       return openPanel(() => showBackup(overlay, store, () => toMenu()));
     case 'help':
-      screen = 'help';
-      return;
+      return openPanel(() => showHelp());
   }
 }
 
@@ -408,7 +426,7 @@ canvas.addEventListener('click', (e) => {
     const mx = (sx - L.ox) / L.s;
     const my = (sy - L.oy) / L.s;
     menu.rows().forEach((row, i) => {
-      const r = rowRect(row.id);
+      const r = rowRect(row.id, L.portrait);
       if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
         menu.cursor = i;
         runMenuAction(menu.activate());

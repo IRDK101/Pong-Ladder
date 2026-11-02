@@ -186,6 +186,9 @@ export function injectStyles(theme: Theme): void {
   #ui .slot-random { display: grid; place-items: center; width: 34px; height: 46px; border: 2px dashed ${c.uiEdge}; color: ${c.gold}; font-weight: bold; font-size: 20px; }
   #ui .slot-random.big { width: 48px; height: 66px; font-size: 28px; }
   #ui .side-toggle { display: flex; flex-direction: column; gap: 4px; justify-content: center; margin-left: auto; }
+  #ui .help { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px 18px; align-items: baseline; }
+  #ui .help p { line-height: 1.55; }
+  @media (max-width: 560px) { #ui .help { grid-template-columns: minmax(0, 1fr); gap: 4px; } #ui .help h2 { margin-top: 10px; } }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));

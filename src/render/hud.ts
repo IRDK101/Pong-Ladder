@@ -29,11 +29,12 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
 
   // --- Team panels in the top corners.
   const cupsW = Math.max(st.cups.A.length, st.cups.B.length) * 18 + 24;
-  const teamW = Math.max(230, cupsW);
+  // On narrow screens the panels shrink (and the cup dots tighten) so they never overlap.
+  const teamW = Math.min(Math.max(230, cupsW), Math.floor((W - 3 * M) / 2));
   panel(ctx, theme, M, M, teamW, 76, c.teamA);
   panel(ctx, theme, W - M - teamW, M, teamW, 76, c.teamB);
-  drawTeamCups(ctx, theme, 'A', st.cups.A, M + 12, 'left', false, game.teamLine('A'));
-  drawTeamCups(ctx, theme, 'B', st.cups.B, W - M - 12, 'right', game.cfg.players.mode === 'coop', game.teamLine('B'));
+  drawTeamCups(ctx, theme, 'A', st.cups.A, M + 12, 'left', false, game.teamLine('A'), teamW - 24);
+  drawTeamCups(ctx, theme, 'B', st.cups.B, W - M - 12, 'right', game.cfg.players.mode === 'coop', game.teamLine('B'), teamW - 24);
 
   // --- Status pill, top center.
   let status: string;
@@ -58,16 +59,20 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   if (game.cfg.matchFormat === 'bestOf3') bits.push(`Games A ${game.match.wins.A}–${game.match.wins.B} B`);
   if (st.sinkChain && st.sinkChain.length > 1) bits.push(`Chain ${game.nameOf(st.sinkChain.player)} x${st.sinkChain.length}`);
   ctx.font = theme.fonts.title;
-  const sw = Math.min(W - 2 * (teamW + M * 2), Math.max(ctx.measureText(status).width, 260) + 40);
+  const want = Math.max(ctx.measureText(status).width, 260) + 40;
+  // On narrow screens the pill drops below the team panels instead of squeezing between them.
+  const narrow = W - 2 * (teamW + M * 2) < Math.min(want, 300);
+  const sw = narrow ? Math.min(W - 2 * M, want) : Math.min(W - 2 * (teamW + M * 2), want);
+  const sy = narrow ? M + 76 + 8 : M;
   const urgent = st.phase === 'penalty' || !!st.rally?.cupAtRisk;
-  panel(ctx, theme, W / 2 - sw / 2, M, sw, 52, urgent ? c.penaltyCursor : c.uiEdge);
+  panel(ctx, theme, W / 2 - sw / 2, sy, sw, 52, urgent ? c.penaltyCursor : c.uiEdge);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = urgent ? c.penaltyCursor : c.text;
-  ctx.fillText(status, W / 2, M + 18);
+  ctx.fillText(status, W / 2, sy + 18, sw - 16);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText(bits.join('  ·  '), W / 2, M + 38);
+  ctx.fillText(bits.join('  ·  '), W / 2, sy + 38, sw - 16);
 
   // --- Bottom bar: the newest referee call, with a one-line hint under it.
   const coop = game.cfg.players.mode === 'coop';
@@ -89,10 +94,10 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
   ctx.font = theme.fonts.bar;
-  ctx.fillText(newest, W / 2, my + 16);
+  ctx.fillText(newest, W / 2, my + 16, mw - 16);
   ctx.font = theme.fonts.small;
   ctx.fillStyle = st.phase === 'penalty' ? c.penaltyCursor : c.textDim;
-  ctx.fillText(hint, W / 2, my + 33);
+  ctx.fillText(hint, W / 2, my + 33, mw - 16);
   // Keys in the bottom corners, when there is room beside the bar.
   if (W - mw > 2 * 230) {
     ctx.font = theme.fonts.label;
@@ -114,7 +119,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   }
 }
 
-function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId, cups: Cup[], x: number, align: 'left' | 'right', cpuTeam = false, names = ''): void {
+function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId, cups: Cup[], x: number, align: 'left' | 'right', cpuTeam = false, names = '', room = 999): void {
   const c = theme.colors;
   const live = cups.filter((k) => k.state !== 'removed').length;
   ctx.textBaseline = 'middle';
@@ -125,11 +130,11 @@ function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId,
   if (names) {
     ctx.font = theme.fonts.label;
     ctx.fillStyle = c.textDim;
-    ctx.fillText(names, x, 46);
+    ctx.fillText(names, x, 46, room);
   }
   // One mini cup per cup, showing its water level.
-  const r = 6;
-  const step = r * 2 + 4;
+  const step = Math.min(16, room / Math.max(1, cups.length));
+  const r = Math.min(6, (step - 2) / 2);
   cups.forEach((cup, i) => {
     const cx = align === 'left' ? x + r + i * step : x - r - i * step;
     const cy = 66;
