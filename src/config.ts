@@ -9,6 +9,8 @@ export type MatchFormat = 'single' | 'bestOf3';
 export type PenaltyCupSelection = 'choose' | 'auto';
 /** The playable tables of the basement (see render/basement.ts). */
 export type Venue = 'saints' | 'spirits' | 'chain';
+/** The painted top played on: the three original tables, plus the rest (render/designs.ts). */
+export type TableDesign = Venue | 'plain' | 'goofy' | 'gummy' | 'pitch' | 'larks' | 'deco' | 'retro' | 'scribble' | 'cans';
 
 export interface TeamControls {
   up: string;
@@ -39,6 +41,8 @@ export interface GameConfig {
   teamSize: 1 | 2;
   /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
   venue: Venue;
+  /** The design of the table being played on (the other tables keep their own). */
+  design: TableDesign;
   /** Camera: behind Team A, or split screen (each team's own view). */
   view: 'behindA' | 'split';
   /** Behind-the-shoulders camera placement (meters, relative to the table). */
@@ -181,6 +185,7 @@ export const defaultConfig: GameConfig = {
   players: { mode: 'versus', cpu: 'medium' },
   teamSize: 2,
   venue: 'saints',
+  design: 'plain',
   view: 'behindA',
   camera: { behind: 2.3, height: 1.7, lookAt: 0.55, lookHeight: 0.5, fovY: 46, pixelSize: 2, rows: 400, detail: 1 },
   controls: {

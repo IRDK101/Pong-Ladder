@@ -5,6 +5,7 @@ import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
 import { panel } from '../render/hud';
 import { VENUE_ORDER, VENUES } from '../render/basement';
+import { DESIGN_ORDER, DESIGNS } from '../render/designs';
 
 interface Choice {
   label: string;
@@ -40,7 +41,8 @@ const CHOICES: Choice[] = [
   },
   { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
   { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }] },
-  { label: 'Table', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].name, apply: set('venue', v) })) },
+  { label: 'Table', values: DESIGN_ORDER.map((d) => ({ label: DESIGNS[d].name, apply: set('design', d) })) },
+  { label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
   { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
@@ -74,8 +76,8 @@ export class Menu {
   /** The picked table, or the first unlocked one if the pick is locked. */
   private tablePick(): number {
     const p = this.picks[TABLE_ROW];
-    if (!this.tableLocked(VENUE_ORDER[p])) return p;
-    const free = VENUE_ORDER.findIndex((v) => !this.tableLocked(v));
+    if (!this.tableLocked(DESIGN_ORDER[p])) return p;
+    const free = DESIGN_ORDER.findIndex((v) => !this.tableLocked(v));
     return free < 0 ? 0 : free;
   }
 
@@ -106,7 +108,7 @@ export class Menu {
       // Locked tables are skipped.
       for (let n = 0; n < k; n++) {
         this.picks[this.cursor] = (this.picks[this.cursor] + dx + k) % k;
-        if (this.cursor !== TABLE_ROW || !this.tableLocked(VENUE_ORDER[this.picks[TABLE_ROW]])) break;
+        if (this.cursor !== TABLE_ROW || !this.tableLocked(DESIGN_ORDER[this.picks[TABLE_ROW]])) break;
       }
     }
   }

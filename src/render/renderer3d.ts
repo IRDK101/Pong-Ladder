@@ -216,7 +216,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
 
   // --- Fine layer: the table, the ski, then cups and the ball.
   const ch = vp.camHi;
-  drawTableAt(h, theme, cfg, ch, cfg.venue, IDENTITY, false);
+  drawTableAt(h, theme, cfg, ch, cfg.venue, IDENTITY, false, cfg.design);
 
   // Cool wash from the fluorescent tubes over the middle of the table.
   const pool = project(ch, { x: L / 2, y: W / 2, z: 0 });

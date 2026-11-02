@@ -1,6 +1,7 @@
 // App shell: menu → (draft) → match (one or more games) → win screen. Owns the DOM.
 
-import { makeConfig, type GameConfig } from './config';
+import { makeConfig, type GameConfig, type TableDesign } from './config';
+import { tableArt } from './render/basement3d';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
 import { Game, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
@@ -106,6 +107,7 @@ if (location.hash === '#debug') {
       return account;
     },
     openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
+    art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
   };
 }
@@ -239,7 +241,9 @@ function drawBackdrop(dt: number): void {
   }
   const d = demo;
   // The demo plays at whichever table is picked in the menu (the venue is visual only).
-  d.game.cfg.venue = menu.config(baseCfg).venue;
+  const pick = menu.config(baseCfg);
+  d.game.cfg.venue = pick.venue;
+  d.game.cfg.design = pick.design;
   d.game.update(dt, { A: d.a.input(d.game), B: d.b.input(d.game) });
   renderGame3D(ctx, theme, view, d.game, 'behindA', false);
 }

@@ -10,12 +10,12 @@ import { quickRoster } from '../src/ui/prematch';
 import { addXp, boxesWaiting, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, playerLevel, playerXp } from '../src/progress/unlocks';
 
 const cfg = makeConfig();
-const TABLES = ['saints', 'spirits', 'chain'];
+const TABLES = ['plain', 'saints', 'spirits'];
 
 describe('player progress and loot boxes', () => {
-  it('starts with the Saints table and tops up to 4 starting characters', () => {
+  it('starts with the plain table and tops up to 4 starting characters', () => {
     const p = emptyProgress();
-    expect(p.tables).toEqual(['saints']);
+    expect(p.tables).toEqual(['plain']);
     const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
     expect(ensureStarters(p, ids, Math.random)).toBe(true);
     expect(p.characters).toHaveLength(4);
@@ -63,7 +63,7 @@ describe('player progress and loot boxes', () => {
   it('repairs saved progress', () => {
     const p = normalizeProgress({ charXp: { a: 5, b: 'x' }, tables: ['chain'], characters: ['a', 'a'], opened: [{ kind: 'nope', id: 1 }] });
     expect(p.charXp).toEqual({ a: 5 });
-    expect(p.tables.sort()).toEqual(['chain', 'saints']);
+    expect(p.tables.sort()).toEqual(['chain', 'plain']);
     expect(p.characters).toEqual(['a']);
     expect(p.opened).toEqual([]);
   });

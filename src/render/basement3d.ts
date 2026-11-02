@@ -4,7 +4,8 @@
 // other tables, the pillars and beams, the bar, the stage, the doors — sits
 // around the game.
 
-import type { GameConfig, Venue } from '../config';
+import type { GameConfig, TableDesign, Venue } from '../config';
+import { DESIGNS, paintDesign } from './designs';
 import { buildFormation } from '../core/formation';
 import type { Vec3 } from '../core/physics';
 import type { Theme } from '../theme';
@@ -582,15 +583,15 @@ function drawChair(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: X
  * its trash-can base, plywood edge, painted top and ski. Scenery tables
  * (not the one being played) also get a set of clear cups at each end.
  */
-export function drawTableAt(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, venue: Venue, place: Xf, scenery: boolean): void {
-  const V = theme.venues[venue];
+export function drawTableAt(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, venue: Venue, place: Xf, scenery: boolean, design: TableDesign = venue): void {
+  const V = DESIGNS[design];
   const T = theme.table;
   const { length: L, width: W } = cfg.table;
   const floorZ = -cfg.physics.tableHeight;
   const th = 0.035;
   cylinder(h, cam, place({ x: L / 2, y: W / 2, z: 0 }), 0.3, floorZ, -th, { light: T.canLight, mid: T.can, dark: T.canDark });
-  xbox(h, cam, place, 0, 0, -th, L, W, 0, V.base, V.side, V.sideDark);
-  texturedTop(h, cam, tableArt(theme, venue), L, W, place, scenery ? 24 : 48);
+  xbox(h, cam, place, 0, 0, -th, L, W, 0, V.side, V.side, V.sideDark);
+  texturedTop(h, cam, tableArt(theme, design), L, W, place, scenery ? 24 : 48);
   // Faint chalk center lines (the quarters matter for serves).
   stripe(h, cam, { x: 0.04, y: W / 2 }, { x: L - 0.04, y: W / 2 }, 0.01, T.centerLine, place);
   stripe(h, cam, { x: L / 2, y: 0.04 }, { x: L / 2, y: W - 0.04 }, 0.01, T.centerLine, place);
@@ -663,7 +664,7 @@ function drawSki(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam
 
 // ------------------------------------------------------------ table art
 
-const artCache = new Map<Venue, HTMLCanvasElement>();
+const artCache = new Map<TableDesign, HTMLCanvasElement>();
 /**
  * The painted top of each table, drawn once (288 x 144 px; u runs along the
  * table from Team A's end, v across it). Each follows its real table:
@@ -673,16 +674,18 @@ const artCache = new Map<Venue, HTMLCanvasElement>();
  * - Chain: black, flames at one end, icicles at the other, a big chain down the
  *   middle, a gold emblem and a yellow border.
  */
-export function tableArt(theme: Theme, venue: Venue): HTMLCanvasElement {
+export function tableArt(theme: Theme, venue: TableDesign): HTMLCanvasElement {
   let c = artCache.get(venue);
   if (c) return c;
   c = document.createElement('canvas');
   c.width = 288;
   c.height = 144;
   const x = c.getContext('2d')!;
-  let seed = venue === 'saints' ? 7 : venue === 'spirits' ? 19 : 31;
+  let seed = venue === 'saints' ? 7 : venue === 'spirits' ? 19 : 31 + venue.length * 13;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  if (venue === 'saints') saintsArt(x, theme, rnd);
+  if (paintDesign(x, venue, rnd)) {
+    /* one of the newer designs */
+  } else if (venue === 'saints') saintsArt(x, theme, rnd);
   else if (venue === 'spirits') spiritsArt(x, theme, rnd);
   else chainArt(x, theme, rnd);
   artCache.set(venue, c);

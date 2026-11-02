@@ -8,16 +8,16 @@
 //   table or character the player doesn't have yet, so there are no
 //   duplicates. When there's nothing left to unlock, boxes wait until
 //   something new is added.
-// - A new player starts with the Saints table and 4 random characters.
+// - A new player starts with the plain table and 4 random characters.
 
-import type { GameConfig, Venue } from '../config';
+import type { GameConfig, TableDesign } from '../config';
 import type { Cosmetics } from '../core/character';
 import type { TeamId } from '../core/types';
 import type { MatchRecord } from '../data/storage';
 import { deriveCareers } from './careers';
 import { levelFor, xpFor, type LevelInfo } from './levels';
 
-export const STARTER_TABLE: Venue = 'saints';
+export const STARTER_TABLE: TableDesign = 'plain';
 export const STARTER_CHARACTERS = 4;
 
 export interface LootItem {

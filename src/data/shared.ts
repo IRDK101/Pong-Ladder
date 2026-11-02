@@ -13,7 +13,7 @@
 import type { GameConfig } from '../config';
 import { validateCharacter, type Character, type Cosmetics } from '../core/character';
 import type { TeamId } from '../core/types';
-import { VENUE_ORDER } from '../render/basement';
+import { DESIGN_ORDER } from '../render/designs';
 import { addXp, boxesWaiting, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
 import type { AppStore, KeyValueStore, MatchRecord } from './storage';
 
@@ -410,8 +410,9 @@ export class Account {
 
   // ---------------------------------------------------------- progress
 
+  /** Every table design (the plain one is everyone's default). */
   tables(): string[] {
-    return VENUE_ORDER;
+    return DESIGN_ORDER;
   }
 
   tableUnlocked(v: string): boolean {

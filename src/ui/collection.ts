@@ -2,13 +2,13 @@
 // level and loot boxes, and (for the owner) the review queue of characters
 // other players have submitted.
 
-import { makeConfig, type GameConfig, type Venue } from '../config';
+import { makeConfig, type GameConfig, type TableDesign } from '../config';
 import type { Character, Sprite } from '../core/character';
 import { characterSprite } from '../core/sprite';
 import type { Account, PlayerSubmissions } from '../data/shared';
 import type { AppStore } from '../data/storage';
 import { Game } from '../game/game';
-import { VENUES } from '../render/basement';
+import { DESIGNS } from '../render/designs';
 import { makeView } from '../render/renderer';
 import { renderGame3D } from '../render/renderer3d';
 import { playerLevel, type LootItem } from '../progress/unlocks';
@@ -26,12 +26,12 @@ function silhouette(s: Sprite): Sprite {
   return { w: s.w, h: s.h, pixels: s.pixels.map((p) => (p ? '#0b0907' : '')) };
 }
 
-const tableShots = new Map<Venue, string>();
-/** A picture of a table, rendered once from the game's own camera. */
-function tableShot(venue: Venue): string {
-  const hit = tableShots.get(venue);
+const tableShots = new Map<TableDesign, string>();
+/** A picture of a table design (played in the middle of the room), rendered once from the game's own camera. */
+function tableShot(design: TableDesign): string {
+  const hit = tableShots.get(design);
   if (hit) return hit;
-  const cfg = makeConfig({ venue, formation: 'tree' });
+  const cfg = makeConfig({ venue: 'saints', design, formation: 'tree' });
   const c = document.createElement('canvas');
   c.width = 320;
   c.height = 180;
@@ -42,7 +42,7 @@ function tableShot(venue: Venue): string {
     /* a blank card is fine */
   }
   const url = c.toDataURL();
-  tableShots.set(venue, url);
+  tableShots.set(design, url);
   return url;
 }
 
@@ -126,12 +126,12 @@ export class CollectionScreen {
   private revealCard(item: LootItem): HTMLElement {
     const art =
       item.kind === 'table'
-        ? h('img', { class: 'table-shot', src: tableShot(item.id as Venue), alt: '' })
+        ? h('img', { class: 'table-shot', src: tableShot(item.id as TableDesign), alt: '' })
         : (() => {
             const c = this.store.characters.get(item.id);
             return c ? spriteImage(characterSprite(c.sprite, null), 4) : h('span');
           })();
-    const name = item.kind === 'table' ? VENUES[item.id as Venue]?.name ?? item.id : this.store.characters.get(item.id)?.name ?? 'A new character';
+    const name = item.kind === 'table' ? DESIGNS[item.id as TableDesign]?.name ?? item.id : this.store.characters.get(item.id)?.name ?? 'A new character';
     return h(
       'div',
       { class: 'box loot-reveal', role: 'status' },
@@ -139,13 +139,13 @@ export class CollectionScreen {
       h('h2', {}, item.kind === 'table' ? 'New table unlocked!' : 'New character unlocked!'),
       h('div', { class: 'reveal-art' }, art),
       h('p', { class: 'name', style: 'font-size:20px' }, name),
-      h('p', { class: 'dim' }, item.kind === 'table' ? 'Pick it from the Table row in the menu.' : 'You can draft them now.'),
+      h('p', { class: 'dim' }, item.kind === 'table' ? 'Pick it from the Table row in the menu, and set up at any spot in the room.' : 'You can draft them now.'),
     );
   }
 
   private tables(): HTMLElement {
     const a = this.account;
-    const list = a.tables() as Venue[];
+    const list = a.tables() as TableDesign[];
     const have = list.filter((t) => a.tableUnlocked(t)).length;
     return h(
       'div',
@@ -156,13 +156,13 @@ export class CollectionScreen {
         { class: 'grid wide' },
         ...list.map((t) => {
           const open = a.tableUnlocked(t);
-          const v = VENUES[t];
+          const v = DESIGNS[t];
           return h(
             'div',
             { class: `box card${open ? '' : ' locked'}` },
-            h('img', { class: 'table-shot', src: tableShot(t), alt: '' }),
+            h('img', { class: 'table-shot', src: tableShot(t), alt: '', loading: 'lazy' }),
             h('span', { class: 'name' }, open ? v.name : `${v.name} · locked`),
-            h('p', { class: 'dim', style: 'font-size:12px' }, open ? `In the basement ${v.where}.` : 'Unlock it from a loot box.'),
+            h('p', { class: 'dim', style: 'font-size:12px' }, open ? v.blurb : 'Unlock it from a loot box.'),
           );
         }),
       ),

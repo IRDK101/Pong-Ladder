@@ -643,3 +643,21 @@ Decided with the owner (asked first):
   - `characters`: everyone reads, only the owner writes.
   - `submissions`: only the owner reads and writes.
   - `submissions/{self}`: each player (Contributor and up) writes their own.
+
+## Table designs
+
+- The table being played on now has its own design (`cfg.design`, painted in render/designs.ts), separate from where it stands (`cfg.venue`, the menu's Spot row). The other tables in the room keep their own designs.
+- There are 12 designs: the plain dark wood table (everyone's default), the three original tables, and 8 from the owner's photos:
+  - Get Goofy
+  - Gummy (26X)
+  - Pitch
+  - Larks
+  - Art deco
+  - Retro logo
+  - Scribble
+  - Pop-art cans
+- Every design except the plain one is unlocked from loot boxes. Players who already had the Saints table keep it.
+- Left out:
+  - The cartoon characters on the orange table: the paint is kept and the figures are left off.
+  - The beer brand's name on the cans: the wordmark is drawn as plain slanted bars.
+  - The players' names signed on the gummy table.

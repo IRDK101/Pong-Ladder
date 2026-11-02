@@ -26,8 +26,10 @@ export const PILLAR_OFFSET = 2.05;
 
 export interface VenueInfo {
   id: Venue;
-  /** Menu name. */
+  /** Name of the table that stands here. */
   name: string;
+  /** Menu name for the spot. */
+  spot: string;
   /** One line about where it is. */
   where: string;
   /** Table center in the basement. */
@@ -38,9 +40,9 @@ export interface VenueInfo {
 }
 
 export const VENUES: Record<Venue, VenueInfo> = {
-  chain: { id: 'chain', name: 'Chain table', where: 'between the bar and the first pillars', cx: 2.6, cy: ROW_Y, rot: 1 },
-  saints: { id: 'saints', name: 'Saints table', where: 'in the middle, between the two sets of pillars', cx: 5.6, cy: ROW_Y, rot: 1 },
-  spirits: { id: 'spirits', name: 'Night sky table', where: 'between the last pillars and the bathroom and exit doors', cx: 8.6, cy: ROW_Y, rot: 1 },
+  chain: { id: 'chain', name: 'Chain table', spot: 'By the bar', where: 'between the bar and the first pillars', cx: 2.6, cy: ROW_Y, rot: 1 },
+  saints: { id: 'saints', name: 'Saints table', spot: 'Middle of the room', where: 'in the middle, between the two sets of pillars', cx: 5.6, cy: ROW_Y, rot: 1 },
+  spirits: { id: 'spirits', name: 'Night sky table', spot: 'By the doors', where: 'between the last pillars and the bathroom and exit doors', cx: 8.6, cy: ROW_Y, rot: 1 },
 };
 
 export const VENUE_ORDER: Venue[] = ['saints', 'spirits', 'chain'];

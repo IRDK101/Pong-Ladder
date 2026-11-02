@@ -13,15 +13,15 @@ describe('pre-game menu', () => {
 
   it('skips locked tables and never hands out a locked one', () => {
     const m = new Menu();
-    m.tableLocked = (v) => v !== 'saints' && v !== 'chain';
-    expect(m.config().venue).toBe('saints');
+    m.tableLocked = (v) => v !== 'plain' && v !== 'pitch';
+    expect(m.config().design).toBe('plain');
     m.move(3, 0); // the Table row
     m.move(0, 1);
-    expect(m.config().venue).toBe('chain');
+    expect(m.config().design).toBe('pitch');
     m.move(0, 1);
-    expect(m.config().venue).toBe('saints');
-    m.tableLocked = (v) => v !== 'spirits';
-    expect(m.config().venue).toBe('spirits');
+    expect(m.config().design).toBe('plain');
+    m.tableLocked = (v) => v !== 'larks';
+    expect(m.config().design).toBe('larks');
   });
 
   it('defaults to head-to-head, medium CPU, behind-Team-A view', () => {
@@ -39,7 +39,7 @@ describe('pre-game menu', () => {
 
   it('changes options with left/right and wraps', () => {
     const m = new Menu();
-    m.move(4, 0); // to Formation, after Players / CPU level / View / Table
+    m.move(5, 0); // to Formation, after Players / CPU level / View / Table / Spot
     m.move(0, 1); // formation → shrub
     m.move(1, 0);
     m.move(0, -1); // match → best of 3 (wraps backwards)
@@ -57,7 +57,7 @@ describe('pre-game menu', () => {
   it('game speed: normal is the default, quick is faster', () => {
     const m = new Menu();
     expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
-    m.move(6, 0);
+    m.move(7, 0);
     m.move(0, 1);
     expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
   });
@@ -65,7 +65,7 @@ describe('pre-game menu', () => {
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
     const actions: string[] = [];
-    m.move(9, 0); // first action row, after the 9 option rows
+    m.move(10, 0); // first action row, after the 10 option rows
     for (let i = 0; i < 7; i++) {
       actions.push(m.activate()!);
       m.move(1, 0);
@@ -76,11 +76,15 @@ describe('pre-game menu', () => {
     expect(m.activate()).toBe('backup');
   });
 
-  it('the Table row picks which basement table to play at', () => {
+  it('the Table row picks the design; the Spot row picks where in the basement', () => {
     const m = new Menu();
-    expect(m.config().venue).toBe('saints');
+    expect(m.config()).toMatchObject({ design: 'plain', venue: 'saints' });
     m.move(3, 0);
     expect(m.rows()[3].label).toBe('Table');
+    m.move(0, 1);
+    expect(m.config().design).toBe('saints');
+    m.move(1, 0);
+    expect(m.rows()[4].label).toBe('Spot');
     m.move(0, 1);
     expect(m.config().venue).toBe('spirits');
     m.move(0, 1);
