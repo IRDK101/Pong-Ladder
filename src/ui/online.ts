@@ -134,7 +134,7 @@ export class OnlineScreen {
             'div',
             { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' },
             h('h2', {}, 'Online play isn’t available here'),
-            h('p', {}, 'Live play needs the game open on claude.ai, signed in, with more than view-only access (a public link from outside the organization can only view). Ask the moderator for access. Everything else works offline.'),
+            h('p', {}, 'Live play needs the game open on claude.ai from an invite. If you opened the public link from outside the moderator’s claude.ai organization, claude.ai doesn’t let this visit connect, even while you’re signed in. Ask the moderator to invite your email, then open the game from that invite. Everything else works offline.'),
           ),
         ),
       );

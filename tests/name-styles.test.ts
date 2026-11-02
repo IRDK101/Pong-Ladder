@@ -124,3 +124,41 @@ describe('loading an account on a new device', () => {
     }
   });
 });
+
+describe('profile requests', () => {
+  it('reports a request as sent only once the server accepts it, and handles a refusal', async () => {
+    const a = new Account(new AppStore(memoryStore()), cfg, memoryStore());
+    (a as unknown as { db: unknown }).db = { doc: () => ({ set: async () => {} }) };
+    a.mode = 'online';
+    a.uid = 'u1';
+    expect(a.createProfile('Ari')).toBeNull();
+    expect(a.profileState).toBe('sending');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(a.profileState).toBe('sent');
+    expect(a.role).toBe('pending');
+
+    const b = new Account(new AppStore(memoryStore()), cfg, memoryStore());
+    (b as unknown as { db: unknown }).db = { doc: () => ({ set: async () => { throw { code: 'invalid_argument' }; } }) };
+    b.mode = 'online';
+    b.uid = 'u2';
+    b.createProfile('Sam');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(b.profileState).toBe('refused');
+    expect(b.myProfile).toBeNull();
+    expect(b.role).toBe('viewonly');
+  });
+
+  it('a signed-in visitor with no account id (outside public link) is view-only, not a guest', async () => {
+    const db = { doc: () => ({ onSnapshot: () => () => {}, set: async () => {} }), collection: () => ({ onSnapshot: () => () => {} }) };
+    const user = { isOwner: async () => false, id: async () => null, me: async () => ({ name: '', email: null }), can: async () => null, profiles: async () => ({}) };
+    (globalThis as unknown as { window: unknown }).window = { claude: { use: async (n: string) => (n === 'db' ? db : n === 'user' ? user : null) } };
+    try {
+      const a = new Account(new AppStore(memoryStore()), cfg, memoryStore());
+      await a.connect();
+      expect(a.role).toBe('viewonly');
+      expect(a.createProfile('X')).toMatch(/Sign in|access/);
+    } finally {
+      delete (globalThis as unknown as { window?: unknown }).window;
+    }
+  });
+});

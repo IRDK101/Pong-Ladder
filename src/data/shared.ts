@@ -139,7 +139,10 @@ const plain = <T>(x: T): Record<string, unknown> => JSON.parse(JSON.stringify(x)
 class Writer {
   private pending = new Map<string, () => Promise<void>>();
   private busy = new Set<string>();
-  constructor(private failed: (code: string | undefined) => void) {}
+  constructor(
+    private failed: (code: string | undefined, key: string) => void,
+    private saved: (key: string) => void = () => {},
+  ) {}
   queue(key: string, write: () => Promise<void>): void {
     this.pending.set(key, write);
     void this.flush(key);
@@ -152,8 +155,9 @@ class Writer {
     this.busy.add(key);
     try {
       await w();
+      this.saved(key);
     } catch (e) {
-      this.failed((e as { code?: string })?.code);
+      this.failed((e as { code?: string })?.code, key);
     } finally {
       this.busy.delete(key);
       void this.flush(key);
@@ -192,10 +196,29 @@ export class Account {
   private listeners = new Set<() => void>();
   /** The account's saved progress has been read (until then nothing is written to it). */
   private progressLoaded = false;
-  private writer = new Writer((code) => {
-    this.problem = code === 'quota_exceeded' ? 'The online collection is full.' : code === 'invalid_argument' ? 'You do not have permission to change that.' : 'Could not save online; trying again later.';
-    this.changed();
-  });
+  /** Where this player's profile request stands: written to the server ('sent') or refused. */
+  profileState: 'none' | 'sending' | 'sent' | 'refused' = 'none';
+  private writer = new Writer(
+    (code, key) => {
+      if (code === 'invalid_argument' && key === `profiles/${this.uid}` && !this.owner) {
+        // The platform refused: this visitor can read but not save (view-only access).
+        this.canWrite = false;
+        this.mode = 'local';
+        this.profileState = 'refused';
+        if (this.uid) this.profiles.delete(this.uid);
+        this.problem = '';
+        return this.changed();
+      }
+      this.problem = code === 'quota_exceeded' ? 'The online collection is full.' : code === 'invalid_argument' ? 'You do not have permission to change that.' : 'Could not save online; trying again later.';
+      this.changed();
+    },
+    (key) => {
+      if (key === `profiles/${this.uid}` && this.profileState !== 'sent') {
+        this.profileState = 'sent';
+        this.changed();
+      }
+    },
+  );
   private sharedLoaded = false;
 
   constructor(
@@ -259,7 +282,9 @@ export class Account {
       this.me = me ? { name: me.name || '', email: me.email ?? null } : null;
       // View-only access (e.g. a public link from outside the organization) can read but never save.
       const w = this.user ? await this.user.can('data.write') : null;
-      this.canWrite = this.owner || w !== false;
+      // No account id: signed in, but here by a public link from outside the
+      // organization. The platform lets such visitors read, never save.
+      this.canWrite = this.owner || (w !== false && !!this.uid);
     } catch {
       /* treated as a guest */
     }
@@ -313,6 +338,7 @@ export class Account {
             ...(typeof b.renamedFrom === 'string' && b.renamedFrom ? { renamedFrom: cleanProfileName(b.renamedFrom) } : {}),
           });
         }
+        if (this.uid && this.profiles.has(this.uid) && this.profileState === 'none') this.profileState = 'sent';
         void this.nameIds([...this.profiles.keys()]);
         this.changed();
       },
@@ -451,7 +477,8 @@ export class Account {
   /** Moderator (the game's owner), signed-in player, or guest (offline / signed out). */
   get role(): Role {
     if (this.owner) return 'moderator';
-    if (this.mode !== 'online') return this.uid && !this.canWrite ? 'viewonly' : 'guest';
+    // With the database but no way to save: view-only access (a public link from outside the organization).
+    if (this.mode !== 'online') return this.db && !this.canWrite ? 'viewonly' : 'guest';
     if (this.approvedProfile) return 'player';
     return this.myProfile ? 'pending' : 'unregistered';
   }
@@ -499,6 +526,7 @@ export class Account {
       ...(this.owner ? { moderator: true } : {}),
     };
     this.profiles.set(this.uid, card);
+    if (this.profileState !== 'sent' || !old) this.profileState = 'sending';
     this.writeProfile(this.uid, card);
     this.changed();
     return null;

@@ -781,3 +781,10 @@ Decided with the owner: players keep making and submitting their own characters,
 - A character in the shared collection can only be edited by the moderator. Players (and guests) get no Edit button for it, and the editor refuses to open or save it. That includes a player's own character once it's approved.
 - For everyone but the moderator, a shared character always reads exactly as the moderator saved it: `CharacterCollection.sharedWins` ignores any local copy with the same id (an old local edit or a restored backup), however new. In the moderator's browser the newest copy still wins, so their edits upload as before.
 - The only per-player differences are the level-up cosmetics a player has earned and equipped (name color, badges, sprite item, sink celebration).
+
+## Signing in, profile requests, and who can save
+
+- **Platform rule:** claude.ai lets a visitor save data and join live play only when they're the owner, a member of the owner's organization, or an outside person invited by email as an Editor while the game has no public link. A signed-in visitor who opens the public link from outside the organization gets no account id and can only read, so they can't make a profile or play online. Inviting outsiders as Contributor doesn't help: they still only read. This can't be worked around from the page.
+- Such a visitor (database available, but no id or no write access) is now **view-only** with a clear explanation, instead of being told to sign in when they already are.
+- A profile request shows **Sending…** until the server accepts the write, then **Sent to the moderator**. If claude.ai refuses it, the request is dropped, the player switches to view-only, and the screen says it wasn't sent. Accepted requests appear in Moderator tools → Profiles and on the moderator's menu badge.
+- The moderator's profile screen has a **Letting friends in** note with these steps, including that Editors can also publish page versions.

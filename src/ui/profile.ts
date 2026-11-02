@@ -24,9 +24,20 @@ const ROLE_INFO: Record<Role, { label: string; blurb: string }> = {
   player: { label: 'PLAYER', blurb: 'Your profile is approved. Your level, unlocks, loot boxes, character levels, cosmetics, the characters you make and your home-screen picks are saved to this account, and you’re on the leaderboard.' },
   pending: { label: 'WAITING FOR APPROVAL', blurb: 'Your profile is waiting for the moderator. Until it’s approved you can play every mode, but games don’t earn XP yet.' },
   unregistered: { label: 'NO PROFILE YET', blurb: 'You can play straight away. To earn XP, level up, unlock tables and characters, and get on the leaderboard, make a profile; the moderator approves new profiles.' },
-  viewonly: { label: 'VIEW-ONLY ACCESS', blurb: 'You opened the game by a view-only link, so nothing can be saved online: you can play, but no XP or profile. Ask the moderator for access to make a profile.' },
-  guest: { label: 'GUEST', blurb: 'Not signed in (or opened outside claude.ai). You can play the default game; games don’t earn XP. Open the link while signed in to claude.ai to make a profile.' },
+  viewonly: { label: 'VIEW-ONLY ACCESS', blurb: 'You’re signed in, but you opened the game by a public link from outside the moderator’s claude.ai organization. claude.ai lets these visitors play but never save anything, so you can’t make a profile, earn XP or play online yet. Ask the moderator to invite your email to the game, then open it from that invite (not the public link) and make your profile.' },
+  guest: { label: 'GUEST', blurb: 'Not signed in to claude.ai (or the game was opened outside claude.ai). You can play every offline mode; games don’t earn XP. Sign in to claude.ai and open the game again to make a profile.' },
 };
+
+/** For the moderator: how to let friends make profiles and play online. */
+function inviteHelp(): HTMLElement {
+  return h(
+    'div',
+    { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' },
+    h('h2', {}, 'Letting friends in'),
+    h('p', { style: 'font-size:13px' }, 'claude.ai only lets people save data and join live play when they’re invited to this game. Someone who opens the public link from outside your organization can play offline, but can’t make a profile or play online, however they’re signed in.'),
+    h('p', { class: 'dim', style: 'font-size:13px' }, 'To let a friend in: open the game’s Share menu, invite their email as an Editor, and turn the public link off (claude.ai only lets invited Editors from outside your organization save while there’s no public link). They open the game from the invite, make a profile, and it appears under Moderator tools → Profiles for you to approve. Editors can also publish new versions of the page, so invite people you trust.'),
+  );
+}
 
 export class ProfileScreen {
   private panel: HTMLElement | null = null;
@@ -63,7 +74,7 @@ export class ProfileScreen {
           'div',
           { style: 'display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px' },
           h('div', { class: 'row' }, h('span', { class: `role-badge role-${a.role}` }, role.label), a.myProfile ? h('span', { style: 'font-size:18px' }, styledName(a.myProfile.name, a.myStyle)) : a.me ? h('span', { class: 'name', style: 'font-size:18px' }, a.me.name || 'Signed in') : h('span', { class: 'name' }, 'Not signed in')),
-          a.role !== 'guest' ? h('span', { class: 'dim' }, a.me?.email ? `Saved to ${a.me.email}` : 'Saved to your claude.ai account (the email you sign in with)') : null,
+          a.role !== 'guest' && a.role !== 'viewonly' ? h('span', { class: 'dim' }, a.me?.email ? `Saved to ${a.me.email}` : 'Saved to your claude.ai account (the email you sign in with)') : null,
           h('p', { class: 'dim', style: 'font-size:13px' }, role.blurb),
         ),
         h(
@@ -74,6 +85,8 @@ export class ProfileScreen {
         ),
       ),
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
+      a.profileState === 'refused' ? h('p', { class: 'error' }, 'claude.ai didn’t let this visit save your profile request, so it was not sent. See above for how to get access.') : null,
+      a.role === 'moderator' ? inviteHelp() : null,
       this.profileForm(),
       h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', {}, 'Player level'), levelBar(lvl), h('p', { class: 'dim', style: 'font-size:12px' }, `${playerXp(a.progress)} XP in total from all your characters.`)),
       h(
@@ -125,7 +138,9 @@ export class ProfileScreen {
         ? h('p', { class: 'error' }, `Turned down${decision.note ? `: ${decision.note}` : '.'} You can change the name and ask again.`)
         : decision?.status === 'revoked'
           ? h('p', { class: 'error' }, `The moderator paused your profile${decision.note ? `: ${decision.note}` : '.'}`)
-          : h('p', { class: 'dim' }, `Requested as “${card.name}”. You’ll start earning XP as soon as the moderator approves it.`);
+          : a.profileState === 'sending'
+            ? h('p', { class: 'dim' }, `Sending “${card.name}” to the moderator…`)
+            : h('p', { class: 'ok' }, `Sent to the moderator as “${card.name}”. You’ll start earning XP as soon as they approve it. You can keep playing meanwhile.`);
     return h(
       'div',
       { class: 'box', style: 'display:flex;flex-direction:column;gap:8px;border-color:var(--gold, #e6c45a)' },
