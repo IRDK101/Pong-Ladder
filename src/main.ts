@@ -3,13 +3,13 @@
 import { makeConfig, type GameConfig } from './config';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
-import { Game, genericRoster, idleInput, POSITIONS, TOP_DOWN_FRAME, type Roster, type TeamInput } from './game/game';
+import { Game, genericRoster, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
 import { CpuController } from './game/ai';
 import { coopInput } from './game/controllers';
 import { cameraFrame, teamCamera } from './render/camera';
 import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
-import { cupAt, makeView, renderGame } from './render/renderer';
+import { makeView } from './render/renderer';
 import { renderHud } from './render/hud';
 import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, menuRowRect, type MenuAction } from './ui/menu';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
@@ -111,8 +111,7 @@ function startMatch(cfg: GameConfig, roster: Roster): void {
   game = new Game(cfg, Math.random, roster);
   // Aim keys follow the screen each human is looking at.
   const frameFor = (team: 'A' | 'B') => cameraFrame(teamCamera(cfg, team, 16, 9));
-  if (cfg.view === 'topDown') game.controlFrames = { A: TOP_DOWN_FRAME, B: TOP_DOWN_FRAME };
-  else if (cfg.view === 'split' && cfg.players.mode === 'versus') game.controlFrames = { A: frameFor('A'), B: frameFor('B') };
+  if (cfg.view === 'split' && cfg.players.mode === 'versus') game.controlFrames = { A: frameFor('A'), B: frameFor('B') };
   else game.controlFrames = { A: frameFor('A'), B: frameFor('A') };
   cpu = cfg.players.mode === 'coop' ? new CpuController('B', cfg.players.cpu, Math.random) : null;
   record = newMatchRecord(cfg);
@@ -246,8 +245,7 @@ function frame(dt: number): void {
     g.update(dt, { A: idleInput(), B: idleInput() });
   }
 
-  if (g.cfg.view === 'topDown') renderGame(ctx, theme, view, g);
-  else renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
+  renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
   renderHud(ctx, theme, view, g);
 
   // Short pause so the final call is readable before the overlay accepts input.
@@ -309,7 +307,7 @@ canvas.addEventListener('click', (e) => {
     // Against the CPU, the human can't make the CPU's penalty choice for it.
     const pen = game.engine.peek().penalty;
     if (game.cfg.players.mode === 'coop' && pen && pen.chooser === 'B') return;
-    const cup = game.cfg.view === 'topDown' ? cupAt(game.cfg, view, game.penaltyCups(), sx, sy) : pickCup3D(game, game.penaltyCups(), sx, sy);
+    const cup = pickCup3D(game, game.penaltyCups(), sx, sy);
     if (cup) game.chooseCup(cup.team, cup.id);
   }
 });

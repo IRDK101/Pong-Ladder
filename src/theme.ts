@@ -49,17 +49,6 @@ export const theme = {
     activeText: '#1a1410',
     masterGlow: 'rgba(255, 200, 60, 0.9)',
   },
-  /** Top-down view scenery: the basement's rust-red concrete floor and dark wood walls with black trim. */
-  basement: {
-    floor: '#6a311f',
-    floorSeam: '#5a2a1b',
-    stain: 'rgba(30, 12, 6, 0.3)',
-    brick: '#4a2c17',
-    brickDark: '#3b2312',
-    mortar: '#121212',
-    lightGlow: 'rgba(235, 242, 255, 0.12)',
-    wallDepth: 26,
-  },
 
   /**
    * The 3D basement room, after the real Zeta Psi basement (reference
@@ -293,12 +282,12 @@ export const theme = {
     logoShadow: '#0a0908',
     accent: '#e6c45a',
     accentWarm: '#ffe08a',
-    panel: 'rgba(10, 9, 8, 0.82)',
-    row: 'rgba(30, 28, 26, 0.92)',
-    rowPlay: 'rgba(62, 50, 22, 0.94)',
+    panel: 'rgba(10, 9, 8, 0.72)',
+    row: 'rgba(18, 16, 14, 0.82)',
+    rowPlay: 'rgba(40, 32, 14, 0.9)',
     rowActive: 'rgba(92, 74, 30, 0.96)',
-    shadeLeft: 'rgba(6, 5, 4, 0.82)',
-    shadeRight: 'rgba(6, 5, 4, 0.4)',
+    shadeLeft: 'rgba(6, 5, 4, 0.62)',
+    shadeRight: 'rgba(6, 5, 4, 0.22)',
     key: '#2a2724',
     keyEdge: '#0d0c0b',
   },
@@ -326,16 +315,8 @@ export const theme = {
     label: 'bold 12px monospace',
     title: 'bold 20px monospace',
   },
-  /** Screen pixels per table meter. */
-  pixelsPerMeter: 320,
-  /** Padding around the table in screen pixels (left/right, top, bottom). */
-  tablePadding: 175,
   hudTop: 70,
   hudBottom: 64,
-  ballPixelRadius: 6,
-  playerPixelRadius: 13,
-  /** Screen pixels per sprite pixel for characters on the table. */
-  spriteScale: 2,
   lineWidth: 2,
   sprites: {},
 } as const;

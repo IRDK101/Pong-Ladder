@@ -3,6 +3,7 @@
 import { makeConfig, type GameConfig } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
+import { panel } from '../render/hud';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 
 interface Choice {
@@ -38,12 +39,11 @@ const CHOICES: Choice[] = [
     ],
   },
   { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
-  { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }, { label: 'Classic top-down', apply: set('view', 'topDown') }] },
+  { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }] },
   { label: 'Table', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].name, apply: set('venue', v) })) },
   { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
-  { label: 'Penalty cup', values: [{ label: 'Team chooses', apply: set('penaltyCupSelection', 'choose') }, { label: 'Automatic', apply: set('penaltyCupSelection', 'auto') }] },
   { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
@@ -151,11 +151,8 @@ function logo(theme: Theme): HTMLCanvasElement {
 
 function keyCap(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, label: string): number {
   ctx.font = theme.fonts.label;
-  const w = Math.max(24, ctx.measureText(label).width + 12);
-  ctx.fillStyle = theme.menu.key;
-  ctx.fillRect(x, y, w, 22);
-  ctx.fillStyle = theme.menu.keyEdge;
-  ctx.fillRect(x, y + 19, w, 3);
+  const w = Math.max(26, ctx.measureText(label).width + 14);
+  panel(ctx, theme, x, y - 2, w, 26, theme.colors.uiEdge, theme.menu.key);
   ctx.fillStyle = theme.colors.text;
   ctx.textAlign = 'center';
   ctx.fillText(label, x + w / 2, y + 10);
@@ -202,15 +199,10 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
     ctx.fillStyle = m.accent;
     ctx.fillText(text, x, y);
   };
-  const box = (x: number, y: number, w: number, h: number) => {
-    ctx.fillStyle = m.panel;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = c.uiEdge;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  };
-  box(SETUP_X - 12, TOP - 30, SETUP_W + 24, OPTION_ROWS * ROW + 40);
-  box(ACTION_X - 12, TOP - 30, ACTION_W + 24, PLAY_ROWS * 58 + 34 + 4 * ROW + 40);
+  // Same pieces as the in-game HUD: dark panels with 2px borders, and the bright turn-tag
+  // style (yellow, dark text) for whatever row is selected.
+  panel(ctx, theme, SETUP_X - 14, TOP - 32, SETUP_W + 28, OPTION_ROWS * ROW + 44, c.uiEdge, m.panel);
+  panel(ctx, theme, ACTION_X - 14, TOP - 32, ACTION_W + 28, PLAY_ROWS * 58 + 34 + 4 * ROW + 44, c.uiEdge, m.panel);
   heading('MATCH SETUP', SETUP_X, TOP - 14);
   heading('PLAY', ACTION_X, TOP - 14);
   heading('MORE', ACTION_X, TOP + PLAY_ROWS * 58 + 14);
@@ -219,30 +211,34 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
     const r = menuRowRect(v, i);
     const on = i === menu.cursor;
     const play = row.action === 'draft' || row.action === 'quick';
-    ctx.fillStyle = on ? m.rowActive : play ? m.rowPlay : m.row;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
     if (on) {
-      ctx.fillStyle = m.accentWarm;
-      ctx.fillRect(r.x, r.y, 4, r.h);
-    }
-    const mid = r.y + r.h / 2;
+      // The selected row looks like the in-game "HIT · name" tag.
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      ctx.fillStyle = c.activeRing;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fillRect(r.x, r.y + r.h - 3, r.w, 3);
+    } else panel(ctx, theme, r.x, r.y, r.w, r.h, play ? m.accent : c.uiEdge, play ? m.rowPlay : m.row);
+    const ink = on ? c.activeText : c.text;
+    const mid = r.y + r.h / 2 - 1;
     ctx.textBaseline = 'middle';
     if (row.value !== undefined) {
       ctx.textAlign = 'left';
-      ctx.font = theme.fonts.hud;
-      ctx.fillStyle = on ? c.text : c.textDim;
-      ctx.fillText(row.label, r.x + 16, mid);
+      ctx.font = theme.fonts.bar;
+      ctx.fillStyle = on ? ink : c.textDim;
+      ctx.fillText(row.label, r.x + 14, mid);
       ctx.textAlign = 'right';
-      ctx.fillStyle = on ? m.accentWarm : c.text;
+      ctx.fillStyle = on ? ink : c.text;
       ctx.fillText(on ? `◀  ${row.value}  ▶` : row.value, r.x + r.w - 14, mid);
     } else {
       ctx.textAlign = 'left';
-      ctx.font = play ? theme.fonts.title : theme.fonts.hud;
-      ctx.fillStyle = on ? m.accentWarm : c.text;
+      ctx.font = play ? theme.fonts.title : theme.fonts.bar;
+      ctx.fillStyle = on ? ink : play ? m.accentWarm : c.text;
       ctx.fillText(`${on ? '▶ ' : ''}${row.label}`, r.x + 16, mid);
       if (play) {
         ctx.font = theme.fonts.label;
-        ctx.fillStyle = c.textDim;
+        ctx.fillStyle = on ? ink : c.textDim;
         ctx.textAlign = 'right';
         ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'generic players, straight in', r.x + r.w - 14, mid);
       }
@@ -291,13 +287,7 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
   const h = 150 + lines.length * 30;
   const x = (MENU_W - w) / 2;
   const y = (MENU_H - h) / 2;
-  ctx.fillStyle = m.panel;
-  ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = c.uiEdge;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  ctx.fillStyle = m.accent;
-  ctx.fillRect(x, y, w, 4);
+  panel(ctx, theme, x, y, w, h, m.accent, m.panel);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = c.text;
@@ -321,7 +311,7 @@ const HELP: [string, string][] = [
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too.'],
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
-  ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again.'],
+  ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head: one of you per team (split screen gives each team its own camera). 2v2 same team: you two against the CPU; WASD plays the left teammate, the arrows the right one. 1v1: one player a side, who makes every hit and serves from alternating halves (head-to-head, or you against the CPU with either set of keys).'],
 ];
@@ -366,13 +356,7 @@ function drawHelpBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View): voi
   const blocks = HELP.map(([k, t]) => ({ k, lines: wrap(ctx, t, maxW) }));
   const bodyH = blocks.reduce((a, b) => a + b.lines.length * 19 + 12, 0);
   const top = Math.max(16, (v.height - (bodyH + 120)) / 2);
-  ctx.fillStyle = m.panel;
-  ctx.fillRect(x, top, w, bodyH + 120);
-  ctx.strokeStyle = c.uiEdge;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, top + 0.5, w - 1, bodyH + 119);
-  ctx.fillStyle = m.accent;
-  ctx.fillRect(x, top, w, 4);
+  panel(ctx, theme, x, top, w, bodyH + 120, m.accent, m.panel);
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillStyle = c.text;

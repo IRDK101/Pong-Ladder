@@ -30,6 +30,8 @@ export type CallKind =
   | 'missPenalty'
   | 'serveCupPenalty'
   | 'penaltyApplied'
+  /** A penalty that would take a team's last (half) cup is not applied: that cup must be hit off by the opponents. */
+  | 'penaltyWaived'
   | 'doubleBounce'
   | 'missedReturn'
   | 'hitOut'
@@ -531,6 +533,18 @@ export class RulesEngine {
   // ------------------------------------------------------------- penalty
 
   private enterPenalty(team: TeamId, reason: PenaltyReason, calls: Call[], chooser: TeamId = team): void {
+    // A team's last half cup can't be lost to a penalty: the opponents have to hit it (or sink it).
+    const live = this.s.cups[team].filter((c) => c.state !== 'removed');
+    if (live.length === 1 && live[0].state === 'half') {
+      calls.push({
+        kind: 'penaltyWaived',
+        team,
+        cup: { team, cupId: live[0].id },
+        nextServer: this.s.server,
+        text: `Team ${team}'s last half cup is safe from penalties — ${this.name(this.s.server)} serves`,
+      });
+      return;
+    }
     if (this.cfg.penaltyCupSelection === 'auto') {
       this.applyPenalty(team, this.autoPenaltyCup(team), calls);
       return;

@@ -207,11 +207,28 @@ describe('3. serving: table misses', () => {
     expect(s.s.phase).toBe('penalty');
   });
 
-  it('3.10 a penalty that removes the last cup ends the game', () => {
+  it('3.10 penalties can take a team down to one half cup, never the last one', () => {
     const s = new Script(AL, { formation: 'shrub', penaltyCupSelection: 'auto' });
-    for (let i = 0; i < 7 * 2 * LIMIT; i++) s.tableMiss();
-    expect(s.s.phase).toBe('gameOver');
-    expect(s.s.winner).toBe('B');
+    for (let i = 0; i < 7 * 2 * LIMIT + 4 * LIMIT; i++) s.tableMiss();
+    expect(s.s.phase).toBe('awaitServe');
+    const live = s.s.cups.A.filter((c) => c.state !== 'removed');
+    expect(live).toHaveLength(1);
+    expect(live[0].state).toBe('half');
+    expect(s.last).toMatchObject({ kind: 'penaltyWaived', team: 'A' });
+    expect(s.s.missCount).toBe(0);
+  });
+
+  it('3.11 the same holds for a serve that hits a cup, and in choose mode no choice is asked for', () => {
+    const s = new Script(AL, { formation: 'shrub' });
+    for (let k = 0; k < 13; k++) {
+      for (let i = 0; i < LIMIT; i++) s.tableMiss();
+      if (s.s.phase === 'penalty') s.choose('A', s.s.cups.A.find((c) => c.state !== 'removed')!.id);
+    }
+    expect(s.s.cups.A.filter((c) => c.state !== 'removed')).toHaveLength(1);
+    s.serveToBounce();
+    s.cup('B', 'r2c0');
+    expect(s.last?.kind).toBe('penaltyWaived');
+    expect(s.s.phase).toBe('awaitServe');
   });
 });
 
@@ -826,10 +843,24 @@ describe('10. game and match end', () => {
       server = eng.state.server;
     }
     expect(server.team).toBe(loser);
-    while (eng.state.phase !== 'gameOver') {
+    // Table misses take the loser down to one half cup (penalties can't take that last one).
+    for (let i = 0; i < 100 && eng.state.phase !== 'gameOver'; i++) {
+      const live = eng.state.cups[loser].filter((c) => c.state !== 'removed');
+      if (live.length === 1 && live[0].state === 'half') break;
       ev({ type: 'hit', player: server, peak: HIGH });
       ev({ type: 'ballOut' });
     }
+    // Then the winners hit it off: a legal serve, their return clips the cup, and it is not saved.
+    const last = eng.state.cups[loser].find((c) => c.state !== 'removed')!;
+    server = eng.state.server;
+    ev({ type: 'hit', player: server, peak: HIGH });
+    ownBounce(server);
+    const rec = diagonalOf(server);
+    ev({ type: 'bounce', x: rec.team === 'A' ? L * 0.25 : L * 0.75, y: rec.side === 'left' ? W * 0.25 : W * 0.75 });
+    ev({ type: 'hit', player: rec, peak: HIGH });
+    ev({ type: 'cupContact', team: loser, cupId: last.id });
+    ev({ type: 'ballOut' });
+    expect(eng.state.phase).toBe('gameOver');
     expect(eng.state.winner).not.toBe(loser);
   }
 

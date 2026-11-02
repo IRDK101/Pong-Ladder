@@ -78,7 +78,7 @@ export function injectStyles(theme: Theme): void {
   #ui .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
   #ui .cols { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; }
   @media (max-width: 760px) { #ui .cols { grid-template-columns: minmax(0, 1fr); } }
-  #ui .box { background: ${c.button}; border: 1px solid ${c.uiEdge}; border-radius: 4px; padding: 12px; min-width: 0; }
+  #ui .box { background: ${c.button}; border: 2px solid ${c.uiEdge}; border-radius: 0; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.35); padding: 12px; min-width: 0; }
   #ui .card { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   #ui .card.pick { cursor: pointer; }
   #ui .card.pick:hover, #ui .card.pick:focus-visible { border-color: ${c.gold}; background: ${c.buttonActive}; }
@@ -92,7 +92,7 @@ export function injectStyles(theme: Theme): void {
   #ui .kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-variant-numeric: tabular-nums; }
   #ui .kv > span:last-child { text-align: right; }
   #ui button, #ui select, #ui input[type=text], #ui textarea {
-    font: inherit; color: ${c.text}; background: ${c.uiField}; border: 1px solid ${c.uiEdge}; border-radius: 3px; padding: 6px 10px; }
+    font: inherit; color: ${c.text}; background: ${c.uiField}; border: 2px solid ${c.uiEdge}; border-radius: 0; padding: 5px 10px; }
   #ui input[type=file] { font: inherit; color: ${c.textDim}; }
   #ui input[type=file]::file-selector-button { font: inherit; color: ${c.text}; background: ${c.uiField}; border: 1px solid ${c.uiEdge}; border-radius: 3px; padding: 6px 10px; margin-right: 10px; cursor: pointer; }
   #ui input::placeholder, #ui textarea::placeholder { color: ${c.textDim}; opacity: 0.7; }
@@ -102,7 +102,7 @@ export function injectStyles(theme: Theme): void {
   #ui button.primary:hover { background: ${theme.menu.accentWarm}; }
   #ui button.danger { border-color: ${c.bad}; color: ${c.bad}; }
   #ui button:disabled { opacity: 0.4; cursor: default; }
-  #ui button.on { background: ${c.buttonActive}; border-color: ${c.activeRing}; }
+  #ui button.on { background: ${c.activeRing}; color: ${c.activeText}; border-color: ${c.activeRing}; font-weight: bold; }
   #ui :focus-visible { outline: 2px solid ${c.activeRing}; outline-offset: 2px; }
   #ui textarea { width: 100%; min-height: 220px; font-size: 12px; }
   #ui input[type=range] { width: 100%; accent-color: ${c.gold}; }

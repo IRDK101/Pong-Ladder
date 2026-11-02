@@ -562,3 +562,16 @@ These rule decisions were confirmed with the user.
   - "Brothers should be nicer to other brothers" sits between the beams behind the saints table.
   - "THE CLASS OF 1962 ROOM" moved from a beam (only ever seen edge-on from the table ends) to the stage wall's header behind the saints table.
   - "STEP YOUR LEVELS UP" sits over the Supreme Court line, behind the night sky table, as in the photo.
+
+## Last half cup safe from penalties; top-down view and penalty toggle removed; menu restyle
+
+- **New rule:** a penalty (table misses, or a serve hitting a cup) never takes a team's last half cup. When the penalized team is down to one half cup, the penalty is waived: a `penaltyWaived` call, no choice step, and the miss counter resets as usual. That cup has to be hit off (or sunk) by the opponents. A last *full* cup can still be halved by a penalty.
+- **Removed:**
+  - The "Classic top-down" view: the option, the `view: 'topDown'` value, and the 2D table renderer. `render/renderer.ts` now only holds the screen size.
+  - The "Penalty cup: Team chooses / Automatic" menu row. Players always choose. `penaltyCupSelection: 'auto'` stays in the config for tests and the CPU demo.
+- **Menu:** built from the in-game HUD's pieces.
+  - The selected row is the bright yellow "turn tag", with dark text.
+  - Option rows and key caps are HUD panels with 2 px borders and an inner shadow; Play rows have gold borders.
+  - Help and end screens use the same panel.
+  - The live basement behind the menu is less darkened.
+  - The HTML screens' boxes, fields and toggles use the same square 2 px style.

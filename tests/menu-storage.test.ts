@@ -21,8 +21,7 @@ describe('pre-game menu', () => {
     m.move(0, 1); // hard
     m.move(1, 0);
     m.move(0, 1); // split
-    m.move(0, 1); // top-down
-    expect(m.config()).toMatchObject({ players: { mode: 'coop', cpu: 'hard' }, view: 'topDown' });
+    expect(m.config()).toMatchObject({ players: { mode: 'coop', cpu: 'hard' }, view: 'split' });
   });
 
   it('changes options with left/right and wraps', () => {
@@ -34,11 +33,11 @@ describe('pre-game menu', () => {
     m.move(1, 0);
     m.move(0, -1); // speed → relaxed (wraps backwards)
     m.move(1, 0);
-    m.activate(); // penalty → auto (activate cycles an option row)
-    m.move(1, 0);
-    m.move(0, 1); // ski → on
+    m.activate(); // ski → on (activate cycles an option row)
     const cfg = m.config();
-    expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'auto', skiCollision: true });
+    expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'choose', skiCollision: true });
+    // There is no penalty-cup toggle and no top-down view any more.
+    expect(m.rows().map((r) => r.label)).not.toContain('Penalty cup');
     expect(cfg.physics.timeScale).toBeLessThan(makeConfig().physics.timeScale);
   });
 
@@ -53,7 +52,7 @@ describe('pre-game menu', () => {
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
     const actions: string[] = [];
-    m.move(9, 0); // first action row, after the 9 option rows
+    m.move(8, 0); // first action row, after the 8 option rows
     for (let i = 0; i < 6; i++) {
       actions.push(m.activate()!);
       m.move(1, 0);

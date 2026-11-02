@@ -8,9 +8,9 @@ import type { View } from './renderer';
 
 const teamColor = (theme: Theme, t: TeamId) => (t === 'A' ? theme.colors.teamA : theme.colors.teamB);
 
-/** A pixel-style HUD panel: dark fill with a 2px colored border and a darker inner edge. */
-function panel(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, w: number, h: number, border: string): void {
-  ctx.fillStyle = theme.colors.hudPanel3d;
+/** A pixel-style HUD panel: dark fill with a 2px colored border and a darker inner edge (shared with the menus). */
+export function panel(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, w: number, h: number, border: string, fill: string = theme.colors.hudPanel3d): void {
+  ctx.fillStyle = fill;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = border;
   ctx.fillRect(x, y, w, 2);

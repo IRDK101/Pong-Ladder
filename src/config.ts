@@ -38,8 +38,8 @@ export interface GameConfig {
   teamSize: 1 | 2;
   /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
   venue: Venue;
-  /** Camera: behind Team A, split screen (each team's own view), or the classic top-down table. */
-  view: 'behindA' | 'split' | 'topDown';
+  /** Camera: behind Team A, or split screen (each team's own view). */
+  view: 'behindA' | 'split';
   /** Behind-the-shoulders camera placement (meters, relative to the table). */
   camera: {
     /** Distance behind the team's end of the table. */
