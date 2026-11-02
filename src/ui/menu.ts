@@ -350,6 +350,8 @@ export interface MenuExtras {
   /** Owner: characters waiting for review. */
   pending: number;
   offline: boolean;
+  /** The moderator: everything is unlocked, no loot boxes. */
+  allAccess?: boolean;
   /** The picked characters' sprites (null = random). */
   team: (Sprite | null)[];
   /** The picked table's painted top. */
@@ -630,13 +632,13 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   // What's waiting.
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.bar;
-  let msg = ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
+  let msg = ex.allAccess ? 'Moderator: every table and character unlocked' : ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
   if (ex.pending) msg += `  ·  ${ex.pending} to review`;
   ctx.fillStyle = alert ? m.accentWarm : ex.pending ? m.accentWarm : c.textDim;
   ctx.fillText(msg, r.x, r.y + 92);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText(alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
+  ctx.fillText(ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
   crate(ctx, theme, r.x + r.w - 54, r.y + 22, alert);
   if (alert) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.boxes));
   else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));

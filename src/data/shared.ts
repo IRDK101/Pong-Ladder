@@ -393,6 +393,7 @@ export class Account {
 
   /** Can this player draft and pick a character? */
   canUse(id: string): boolean {
+    if (this.owner) return true; // the moderator has everything
     if (!this.store.characters.isShared(id)) return true; // made in this browser
     if (this.progress.characters.includes(id)) return true;
     // Whoever made a character always has it: the owner made every character without a creator.
@@ -525,7 +526,7 @@ export class Account {
   }
 
   tableUnlocked(v: string): boolean {
-    return this.progress.tables.includes(v);
+    return this.owner || this.progress.tables.includes(v);
   }
 
   /** Approved characters a box can unlock. */
@@ -551,15 +552,18 @@ export class Account {
   }
 
   boxes(): number {
-    return boxesWaiting(this.cfg, this.progress);
+    // The moderator already has everything, so no boxes pile up for them.
+    return this.owner ? 0 : boxesWaiting(this.cfg, this.progress);
   }
 
   /** Nothing left to unlock right now. */
   allUnlocked(): boolean {
+    if (this.owner) return true;
     return this.tables().every((t) => this.progress.tables.includes(t)) && this.lootCharacters().every((c) => this.progress.characters.includes(c));
   }
 
   openBox(): LootItem | null {
+    if (this.owner) return null;
     const item = openBox(this.cfg, this.progress, this.tables(), this.lootCharacters(), this.rng);
     if (item) {
       this.saveProgress();
@@ -584,6 +588,7 @@ export class Account {
 
   /** A player always has a few characters to start with. */
   private topUp(): boolean {
+    if (this.owner) return false;
     const ids = this.lootCharacters();
     return ids.length ? ensureStarters(this.progress, ids, this.rng) : false;
   }

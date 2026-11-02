@@ -134,3 +134,30 @@ describe('new reward alerts', () => {
     expect(newRewards(cfg, p)).toBe(1);
   });
 });
+
+describe('who has what', () => {
+  const sharedSix = () => ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((n) => newCharacter(n));
+
+  it('the moderator has every table and character, and no loot boxes', () => {
+    const store = new AppStore(memoryStore());
+    const a = new Account(store, cfg, memoryStore(), () => 0.3);
+    a.owner = true;
+    store.characters.setShared(sharedSix());
+    addXp(a.progress, { x: 5000 });
+    expect(TABLES.every((t) => a.tableUnlocked(t))).toBe(true);
+    expect(a.usable()).toHaveLength(6);
+    expect(a.boxes()).toBe(0);
+    expect(a.allUnlocked()).toBe(true);
+    expect(a.openBox()).toBeNull();
+  });
+
+  it('every other player starts with the plain table and 4 random characters', () => {
+    const store = new AppStore(memoryStore());
+    const a = new Account(store, cfg, memoryStore(), Math.random);
+    store.characters.setShared(sharedSix());
+    (a as unknown as { topUp(): boolean }).topUp();
+    expect(a.progress.tables).toEqual(['plain']);
+    expect(a.tableUnlocked('saints')).toBe(false);
+    expect(a.usable()).toHaveLength(4);
+  });
+});

@@ -261,6 +261,7 @@ function menuExtras(): MenuExtras {
     newRewards: account.newRewards(),
     pending: account.owner ? account.pendingCount() : 0,
     offline: account.mode === 'local',
+    allAccess: account.owner,
     team: mySlots(cfg).map((k) => {
       const c = pins[k];
       if (!c) return null;

@@ -730,3 +730,9 @@ Decided with the owner (asked first):
   - What you can do: the moderator's and players' powers.
 - **Local players** (the old "Players" row) are only names for a shared keyboard.
 - **Fixed: shared characters copied into players' storage.** `Collection.save` and `remove` read the merged list, so every save copied the shared collection into the player's browser storage. They now use only the store's own records, and copies that already leaked are dropped for non-owners when the collection loads.
+
+## The moderator has everything
+
+- The owner's account counts every table and character as unlocked. It gets no loot boxes and no starter top-up, and the menu card and the Collection say so.
+- Every other account starts with the plain table and 4 random characters from the collection (not their own creations, which they always have), and unlocks the rest from loot boxes.
+- Players who started before the plain table became the default keep the Saints table they were given.

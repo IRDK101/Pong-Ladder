@@ -95,11 +95,13 @@ export class CollectionScreen {
         'div',
         { class: 'loot-box-col' },
         h('div', { class: `loot-box${boxes ? ' ready' : ''}`, 'aria-hidden': 'true' }, h('i'), h('b'), boxes ? h('span', { class: 'count' }, String(boxes)) : null),
-        h(
-          'button',
-          { class: 'primary', disabled: !boxes || nothingLeft, onclick: () => this.open() },
-          boxes ? (nothingLeft ? 'Box saved for later' : `Open a loot box (${boxes})`) : 'No boxes yet',
-        ),
+        a.owner
+          ? h('p', { class: 'dim', style: 'font-size:12px;max-width:220px;text-align:center' }, 'Moderator: every table and character is unlocked for you. Players start with 4 characters and the plain table.')
+          : h(
+              'button',
+              { class: 'primary', disabled: !boxes || nothingLeft, onclick: () => this.open() },
+              boxes ? (nothingLeft ? 'Box saved for later' : `Open a loot box (${boxes})`) : 'No boxes yet',
+            ),
         boxes && nothingLeft ? h('p', { class: 'dim', style: 'font-size:12px;max-width:220px;text-align:center' }, 'You have everything. Boxes wait here until new tables or characters are added.') : null,
       ),
     );
