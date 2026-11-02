@@ -5,7 +5,7 @@
 import type { GameConfig } from '../config';
 import { Match } from '../core/match';
 import { BallPhysics, type PhysicsEvent, type Vec3 } from '../core/physics';
-import type { Call, RulesEvent } from '../core/rules';
+import type { Call, GameState, RulesEvent } from '../core/rules';
 import type { Sprite } from '../core/character';
 import { composeSprite } from '../core/sprite';
 import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
@@ -88,6 +88,31 @@ export interface TeamInput {
   side?: Side;
   /** Direction pressed this frame, for menus / cup selection: -1 prev, +1 next. */
   nav: -1 | 0 | 1;
+  /**
+   * Online play: the timing quality (and seconds off the ideal moment) the
+   * player saw on their own device when they pressed hit. The host uses these
+   * instead of measuring again, so network delay doesn't make hits late.
+   */
+  q?: number | null;
+  off?: number;
+}
+
+/** The compact game state the host sends to the other device in online play. */
+export interface NetState {
+  t: number;
+  st: GameState;
+  ball: { p: Vec3; v: Vec3; s: BallPhysics['status']; sb: number; fx: BallPhysics['fx'] };
+  aim: Record<TeamId, Aim>;
+  hs: Record<TeamId, SpinChoice | null>;
+  sel: Record<TeamId, 0 | 1 | 2>;
+  toss: [boolean, boolean];
+  sw: Record<TeamId, boolean>;
+  bo: Record<TeamId, boolean>;
+  fb: Feedback | null;
+  msg: Message[];
+  fxs: Game['cupFx'];
+  cel: Game['celebrations'];
+  pc: number;
 }
 
 export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, style: 0, nav: 0 });
@@ -380,9 +405,11 @@ export class Game {
     return (st.phase === 'rally' || st.phase === 'serveInFlight') && st.rally?.target === team;
   }
 
-  private moveAim(realDt: number, inputs: Record<TeamId, TeamInput>): void {
+  private moveAim(realDt: number, inputs: Record<TeamId, TeamInput>, only?: TeamId): void {
     const step = this.cfg.hitting.aimSpeed * realDt;
     for (const team of ['A', 'B'] as TeamId[]) {
+      if (only && team !== only) continue;
+      if (this.remoteAim[team] && !only) continue;
       // Once the timing ring is up, the crosshair freezes: direction keys now pick spin.
       if (this.timingCue(team)) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
@@ -392,6 +419,78 @@ export class Game {
       a.x = Math.max(-1, Math.min(1, a.x + d.x * step));
       a.y = Math.max(-1, Math.min(1, a.y + d.y * step));
     }
+  }
+
+  /** Online play: set on both devices (each shows only its own crosshair). */
+  online = false;
+  /** Online play: teams whose crosshair is steered on another device (the host just takes the aim it's sent). */
+  remoteAim: Partial<Record<TeamId, boolean>> = {};
+
+  /** Online play (host): everything the other device needs to draw the game. */
+  netState(): NetState {
+    const r = (v: Vec3): Vec3 => ({ x: +v.x.toFixed(4), y: +v.y.toFixed(4), z: +v.z.toFixed(4) });
+    return {
+      t: +this.time.toFixed(3),
+      st: this.engine.state,
+      ball: { p: r(this.ball.pos), v: r(this.ball.vel), s: this.ball.status, sb: Number.isFinite(this.ball.sinceBounce) ? +this.ball.sinceBounce.toFixed(3) : -1, fx: this.ball.fx },
+      aim: { A: { ...this.aim.A }, B: { ...this.aim.B } },
+      hs: { ...this.heldSpin },
+      sel: { ...this.selectedStyle },
+      toss: [this.tossing, this.tossSwung],
+      sw: { ...this.swung },
+      bo: { ...this.bounced },
+      fb: this.feedback,
+      msg: this.messages.slice(-3),
+      fxs: this.cupFx.filter((f) => this.time - f.time < 1.5).slice(-4),
+      cel: this.celebrations.filter((k) => this.time - k.time < 2).slice(-2),
+      pc: this.penaltyCursor,
+    };
+  }
+
+  /** Online play (guest): take the host's state. `own` is this device's team: its crosshair stays local. */
+  applyNet(n: NetState, own: TeamId): void {
+    this.time = n.t;
+    this.engine.restore(n.st);
+    this.ball.pos = { ...n.ball.p };
+    this.ball.vel = { ...n.ball.v };
+    this.ball.status = n.ball.s;
+    this.ball.sinceBounce = n.ball.sb < 0 ? Infinity : n.ball.sb;
+    this.ball.fx = n.ball.fx;
+    for (const t of ['A', 'B'] as TeamId[]) if (t !== own) this.aim[t] = { ...n.aim[t] };
+    this.heldSpin = { ...n.hs };
+    this.selectedStyle = { ...n.sel, [own]: this.selectedStyle[own] };
+    [this.tossing, this.tossSwung] = n.toss;
+    this.swung = { ...n.sw };
+    this.bounced = { ...n.bo };
+    this.feedback = n.fb;
+    for (const m of n.msg) if (!this.messages.some((x) => x.time === m.time && x.text === m.text)) this.messages.push(m);
+    if (this.messages.length > 50) this.messages.splice(0, this.messages.length - 50);
+    for (const f of n.fxs) if (!this.cupFx.some((x) => x.time === f.time && x.cupId === f.cupId)) this.cupFx.push(f);
+    for (const k of n.cel) if (!this.celebrations.some((x) => x.time === k.time)) this.celebrations.push(k);
+    this.penaltyCursor = n.pc;
+  }
+
+  /** Online play (guest): between host updates, move the ball on and steer this device's own crosshair. */
+  netTick(realDt: number, own: TeamId, inp: TeamInput): void {
+    const dt = realDt * this.cfg.physics.timeScale;
+    this.time += dt;
+    if (this.ball.status === 'flying') this.ball.step(dt, []);
+    const st = this.engine.peek();
+    if (st.phase !== 'penalty') this.moveAim(realDt, { A: own === 'A' ? inp : idleInput(), B: own === 'B' ? inp : idleInput() }, own);
+    this.selectedStyle[own] = inp.style;
+  }
+
+  /** The timing the player sees right now, for sending with a hit in online play. */
+  timingNow(team: TeamId): { q: number | null; off: number } | null {
+    const cue = this.timingCue(team);
+    if (!cue) return null;
+    const st = this.engine.peek();
+    const tossing = st.phase === 'awaitServe';
+    const p = this.activePlayer(team);
+    if (!p) return null;
+    const style = this.styleFor(p, tossing ? 'serve' : 'hit', this.selectedStyle[team]);
+    const ctx = this.swingContext(p, !tossing && st.rally?.cupAtRisk != null, tossing);
+    return { q: timingQuality(this.cfg, style, cue.offset, ctx), off: cue.offset };
   }
 
   update(realDt: number, inputs: Record<TeamId, TeamInput>): void {
@@ -516,9 +615,9 @@ export class Game {
     }
     if (hit && !this.tossSwung) {
       this.tossSwung = true;
-      const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
+      const off = inp.off ?? apexOffset(this.ball.vel, this.cfg.physics.gravity);
       const ctx = this.swingContext(server, false, true);
-      const q = timingQuality(this.cfg, style, off, ctx);
+      const q = inp.q !== undefined ? inp.q : timingQuality(this.cfg, style, off, ctx);
       const spin = this.spinChoice(server.team, inp);
       this.feedback = { team: server.team, player: server, label: withSpin(timingLabel(q, off), q, spin), quality: q, time: this.time };
       if (q !== null) return this.serve(server, style, q, this.aim[server.team], spin, off / timingWindow(this.cfg, style, ctx));
@@ -551,9 +650,9 @@ export class Game {
     const player = side !== undefined && saving ? { team, side } : this.activePlayer(team)!;
     const style = this.styleFor(player, 'hit', styleIndex);
     this.swung[team] = true;
-    const off = apexOffset(this.ball.vel, this.cfg.physics.gravity);
+    const off = inp.off ?? apexOffset(this.ball.vel, this.cfg.physics.gravity);
     const ctx = this.swingContext(player, saving);
-    const q = timingQuality(this.cfg, style, off, ctx);
+    const q = inp.q !== undefined ? inp.q : timingQuality(this.cfg, style, off, ctx);
     const w = timingWindow(this.cfg, style, ctx);
     const spin = this.spinChoice(team, inp);
     this.feedback = { team, player, label: withSpin(timingLabel(q, off, w <= 0), q, spin), quality: q, time: this.time };

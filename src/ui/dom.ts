@@ -198,6 +198,15 @@ export function injectStyles(theme: Theme): void {
   #ui .stat-tile { display: flex; flex-direction: column; gap: 4px; }
   #ui .stat-tile b { font-size: 18px; }
   #ui ul.powers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  #ui .board { display: flex; flex-direction: column; gap: 4px; }
+  #ui .board-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 70px 100px; gap: 10px; align-items: center; padding: 8px 12px; background: ${c.button}; border: 2px solid ${c.uiEdge}; font-variant-numeric: tabular-nums; }
+  #ui .board-row > span:nth-child(n+3) { text-align: right; }
+  #ui .board-row.head { background: transparent; border-color: transparent; color: ${c.gold}; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  #ui .board-row.me { border-color: ${c.gold}; background: #3a321e; }
+  #ui .board-row.top1 .rank, #ui .board-row.top2 .rank, #ui .board-row.top3 .rank { font-size: 20px; }
+  #ui .board-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #ui .lobby-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  #ui .invite { border-color: ${c.gold}; background: #3a321e; animation: reveal-in 0.4s both; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));

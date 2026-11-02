@@ -31,7 +31,7 @@ const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
 };
 
 type OptionId = 'players' | 'cpu' | 'view' | 'table' | 'spot' | 'formation' | 'match' | 'speed' | 'ski';
-export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'characters' | 'account' | 'profiles' | 'help' | 'backup';
+export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'online' | 'characters' | 'account' | 'leaderboard' | 'profiles' | 'help' | 'backup';
 
 const CHOICES: (Choice & { id: OptionId })[] = [
   {
@@ -57,7 +57,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
 const TABLE_ROW = CHOICES.findIndex((c) => c.id === 'table');
 const choiceIndex = (id: RowId) => CHOICES.findIndex((c) => c.id === id);
 
-export type MenuAction = 'draft' | 'quick' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'profiles' | 'help' | 'backup' | null;
+export type MenuAction = 'draft' | 'quick' | 'online' | 'leaderboard' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   id: RowId;
@@ -94,13 +94,15 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   ski: { x: LX + CELL + 8, y: RULES_Y + 34, w: CELL, h: 29 },
   view: { x: LX, y: RULES_Y + 68, w: CELL, h: 29 },
   collection: { x: RX, y: 40, w: RW, h: 132 },
-  quick: { x: RX, y: 228, w: RW, h: 54 },
-  draft: { x: RX, y: 288, w: RW, h: 54 },
-  characters: { x: RX, y: 390, w: RW, h: 29 },
-  account: { x: RX, y: 424, w: RW, h: 29 },
-  profiles: { x: RX, y: 458, w: RW, h: 29 },
-  help: { x: RX, y: 492, w: RW, h: 29 },
-  backup: { x: RX, y: 526, w: RW, h: 29 },
+  quick: { x: RX, y: 228, w: RW, h: 44 },
+  draft: { x: RX, y: 277, w: RW, h: 44 },
+  online: { x: RX, y: 326, w: RW, h: 44 },
+  characters: { x: RX, y: 412, w: RW, h: 27 },
+  account: { x: RX, y: 443, w: RW, h: 27 },
+  leaderboard: { x: RX, y: 474, w: RW, h: 27 },
+  profiles: { x: RX, y: 505, w: RW, h: 27 },
+  help: { x: RX, y: 536, w: RW, h: 27 },
+  backup: { x: RX, y: 567, w: RW, h: 27 },
 };
 
 // Portrait (phones): one column on a 560-wide design — progress, play, match, rules, more.
@@ -109,23 +111,25 @@ const PW = 504;
 const PCELL = (PW - 8) / 2;
 const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   collection: { x: PX, y: 200, w: PW, h: 132 },
-  quick: { x: PX, y: 372, w: PW, h: 54 },
-  draft: { x: PX, y: 432, w: PW, h: 54 },
-  players: { x: PX, y: 528, w: PW, h: 29 },
-  cpu: { x: PX, y: 562, w: PW, h: 29 },
-  playingAs: { x: PX, y: 596, w: PW, h: 46 },
-  table: { x: PX, y: 647, w: PW, h: 46 },
-  spot: { x: PX, y: 698, w: PW, h: 29 },
-  formation: { x: PX, y: 768, w: PCELL, h: 29 },
-  match: { x: PX + PCELL + 8, y: 768, w: PCELL, h: 29 },
-  speed: { x: PX, y: 802, w: PCELL, h: 29 },
-  ski: { x: PX + PCELL + 8, y: 802, w: PCELL, h: 29 },
-  view: { x: PX, y: 836, w: PCELL, h: 29 },
-  characters: { x: PX, y: 906, w: PW, h: 29 },
-  account: { x: PX, y: 940, w: PW, h: 29 },
-  profiles: { x: PX, y: 974, w: PW, h: 29 },
-  help: { x: PX, y: 1008, w: PW, h: 29 },
-  backup: { x: PX, y: 1042, w: PW, h: 29 },
+  quick: { x: PX, y: 372, w: PW, h: 46 },
+  draft: { x: PX, y: 424, w: PW, h: 46 },
+  online: { x: PX, y: 476, w: PW, h: 46 },
+  players: { x: PX, y: 564, w: PW, h: 29 },
+  cpu: { x: PX, y: 598, w: PW, h: 29 },
+  playingAs: { x: PX, y: 632, w: PW, h: 46 },
+  table: { x: PX, y: 683, w: PW, h: 46 },
+  spot: { x: PX, y: 734, w: PW, h: 29 },
+  formation: { x: PX, y: 804, w: PCELL, h: 29 },
+  match: { x: PX + PCELL + 8, y: 804, w: PCELL, h: 29 },
+  speed: { x: PX, y: 838, w: PCELL, h: 29 },
+  ski: { x: PX + PCELL + 8, y: 838, w: PCELL, h: 29 },
+  view: { x: PX, y: 872, w: PCELL, h: 29 },
+  characters: { x: PX, y: 942, w: PW, h: 29 },
+  account: { x: PX, y: 976, w: PW, h: 29 },
+  leaderboard: { x: PX, y: 1010, w: PW, h: 29 },
+  profiles: { x: PX, y: 1044, w: PW, h: 29 },
+  help: { x: PX, y: 1078, w: PW, h: 29 },
+  backup: { x: PX, y: 1112, w: PW, h: 29 },
 };
 
 /** Narrow screens get the portrait layout. */
@@ -142,8 +146,8 @@ export function rowRect(id: RowId, portrait = false) {
 const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
   { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
-  { title: 'PLAY', ids: ['quick', 'draft'] },
-  { title: 'MORE', ids: ['characters', 'account', 'profiles', 'help', 'backup'] },
+  { title: 'PLAY', ids: ['quick', 'draft', 'online'] },
+  { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'profiles', 'help', 'backup'] },
 ];
 
 export class Menu {
@@ -156,6 +160,8 @@ export class Menu {
   playingAs: () => string = () => 'Random';
   /** The profile row: its label, a hint, and how many things wait there (moderator reviews). */
   accountInfo: () => { label: string; hint: string; alert: number } = () => ({ label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 });
+  /** The leaderboard row's hint (e.g. your rank). */
+  leaderboardHint: () => string = () => 'XP of every approved player';
   /** Starts on Quick match, so the hit key plays straight away. */
   cursor = this.rows().findIndex((r) => r.id === 'quick');
 
@@ -213,8 +219,10 @@ export class Menu {
       { id: 'collection', label: 'Collection', action: 'collection' },
       { id: 'quick', label: 'Quick match', action: 'quick' },
       { id: 'draft', label: 'Draft match', action: 'draft' },
+      { id: 'online', label: 'Online match', action: 'online' },
       { id: 'characters', label: 'Characters', action: 'characters' },
       { id: 'account', label: this.accountInfo().label, action: 'account' },
+      { id: 'leaderboard', label: 'Leaderboard', action: 'leaderboard' },
       { id: 'profiles', label: 'Local players', action: 'profiles' },
       { id: 'help', label: 'How to play', action: 'help' },
       { id: 'backup', label: 'Back up / restore', action: 'backup' },
@@ -287,7 +295,7 @@ export const MENU_H = 660;
 export function menuLayout(v: View): { s: number; ox: number; oy: number; portrait: boolean } {
   const portrait = isPortrait(v);
   const W = portrait ? 560 : MENU_W;
-  const H = portrait ? 1110 : MENU_H;
+  const H = portrait ? 1190 : MENU_H;
   const s = Math.min(v.width / W, v.height / H);
   return { s, ox: (v.width - W * s) / 2, oy: portrait ? Math.max(0, (v.height - H * s) / 2) : (v.height - H * s) / 2, portrait };
 }
@@ -350,6 +358,8 @@ export interface MenuExtras {
   /** Owner: characters waiting for review. */
   pending: number;
   offline: boolean;
+  /** Why games don't earn XP right now (no approved profile), if so. */
+  progressNote?: string;
   /** The moderator: everything is unlocked, no loot boxes. */
   allAccess?: boolean;
   /** The picked characters' sprites (null = random). */
@@ -476,7 +486,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   rows.forEach((row, i) => {
     const r = RR[row.id];
     const on = i === menu.cursor;
-    const play = row.id === 'quick' || row.id === 'draft';
+    const play = row.id === 'quick' || row.id === 'draft' || row.id === 'online';
     const card = row.id === 'collection';
     if (card) return drawCollectionCard(ctx, theme, r, on, ex);
     if (on) {
@@ -546,7 +556,8 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       ctx.font = theme.fonts.label;
       ctx.fillStyle = on ? ink : c.textDim;
       ctx.textAlign = 'right';
-      if (play) ctx.fillText(row.id === 'draft' ? 'pick profiles, draft characters' : 'your picks, straight in', r.x + r.w - 14, mid);
+      if (play) ctx.fillText(row.id === 'draft' ? 'pick profiles, draft characters' : row.id === 'online' ? '1v1 against a player on another device' : 'your picks, straight in', r.x + r.w - 14, mid);
+      if (row.id === 'leaderboard') ctx.fillText(menu.leaderboardHint(), r.x + r.w - 14, mid);
       if (row.id === 'characters') {
         if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);
         else ctx.fillText('make and edit, levels, cosmetics', r.x + r.w - 14, mid);
@@ -564,12 +575,12 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.textAlign = 'left';
     ctx.font = theme.fonts.label;
     ctx.fillStyle = c.textDim;
-    ctx.fillText(note || 'Tap a row to choose. Playing needs a keyboard: WASD + Space, arrows + Enter.', PX, 1094);
+    ctx.fillText(note || 'Tap a row to choose. Playing needs a keyboard: WASD + Space, arrows + Enter.', PX, 1170);
     return;
   }
   // Controls legend.
   let x = LX;
-  const y = 622;
+  const y = 628;
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.teamA;
@@ -592,7 +603,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.font = theme.fonts.hud;
     ctx.fillStyle = m.accent;
     ctx.textAlign = 'left';
-    ctx.fillText(note, RX, 600);
+    ctx.fillText(note, LX, 604);
   }
 }
 
@@ -632,13 +643,13 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   // What's waiting.
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.bar;
-  let msg = ex.allAccess ? 'Moderator: every table and character unlocked' : ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
+  let msg = ex.progressNote ? ex.progressNote : ex.allAccess ? 'Moderator: every table and character unlocked' : ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
   if (ex.pending) msg += `  ·  ${ex.pending} to review`;
-  ctx.fillStyle = alert ? m.accentWarm : ex.pending ? m.accentWarm : c.textDim;
+  ctx.fillStyle = alert || ex.pending || ex.progressNote ? m.accentWarm : c.textDim;
   ctx.fillText(msg, r.x, r.y + 92);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText(ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
+  ctx.fillText(ex.progressNote ? 'Everything is playable now; approved profiles level up and unlock more.' : ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
   crate(ctx, theme, r.x + r.w - 54, r.y + 22, alert);
   if (alert) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.boxes));
   else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));

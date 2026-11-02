@@ -161,3 +161,38 @@ describe('who has what', () => {
     expect(a.usable()).toHaveLength(4);
   });
 });
+
+describe('profiles gate progress', () => {
+  it('guests and unapproved players earn no XP or boxes; approved ones do', () => {
+    const store = new AppStore(memoryStore());
+    const a = new Account(store, cfg, memoryStore());
+    const counted: Record<string, number> = {};
+    expect(a.canProgress).toBe(false);
+    expect(a.addMatchXp({ c1: 500 }, counted).counted).toBe(false);
+    expect(a.progress.charXp.c1).toBeUndefined();
+    expect(a.boxes()).toBe(0);
+    // Signed in with a profile the moderator approved.
+    a.mode = 'online';
+    a.uid = 'u1';
+    a.profiles.set('u1', { name: 'Ari', xp: 0, level: 1, requestedAt: '', updatedAt: '' });
+    expect(a.role).toBe('pending');
+    expect(a.canProgress).toBe(false);
+    a.approvals.set('u1', { status: 'approved', at: '' });
+    expect(a.role).toBe('player');
+    expect(a.addMatchXp({ c1: 500 }, counted).counted).toBe(true);
+    expect(a.progress.charXp.c1).toBe(500);
+    a.approvals.set('u1', { status: 'revoked', at: '' });
+    expect(a.canProgress).toBe(false);
+  });
+
+  it('the leaderboard lists approved profiles by XP', () => {
+    const a = new Account(new AppStore(memoryStore()), cfg, memoryStore());
+    a.profiles.set('x', { name: 'Low', xp: 10, level: 1, requestedAt: '', updatedAt: '' });
+    a.profiles.set('y', { name: 'High', xp: 900, level: 4, requestedAt: '', updatedAt: '' });
+    a.profiles.set('z', { name: 'Waiting', xp: 5000, level: 9, requestedAt: '', updatedAt: '' });
+    a.approvals.set('x', { status: 'approved', at: '' });
+    a.approvals.set('y', { status: 'approved', at: '' });
+    expect(a.leaderboard().map((r) => r.card.name)).toEqual(['High', 'Low']);
+    expect(a.pendingProfiles().map(([id]) => id)).toEqual(['z']);
+  });
+});

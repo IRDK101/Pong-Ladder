@@ -7,7 +7,7 @@ import type { GameConfig } from '../config';
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
 import { getStyle } from '../core/styles';
-import type { Account, PlayerSubmissions } from '../data/shared';
+import { PROFILE_NAME_MAX, type Account, type PlayerSubmissions, type Role } from '../data/shared';
 import type { AppStore } from '../data/storage';
 import { DESIGN_ORDER } from '../render/designs';
 import { characterLevel, playerLevel, playerXp } from '../progress/unlocks';
@@ -15,11 +15,14 @@ import { levelBar } from './careerView';
 import { characterCard, statBars, type CharactersScreen } from './characters';
 import { h, spriteImage, type Overlay } from './dom';
 
-const ROLE_INFO = {
-  moderator: { label: 'MODERATOR', blurb: 'This is the game’s owner account. You run the shared collection: what you make is added for everyone straight away, you approve or turn down what players submit, and you can edit or remove any character.' },
-  player: { label: 'PLAYER', blurb: 'Your level, unlocks, loot boxes, character levels, cosmetics, the characters you make and your home-screen picks are saved to this account. Open the game signed in on any device and it is all there.' },
-  guest: { label: 'GUEST', blurb: 'Not signed in here (or the game is open outside claude.ai), so everything is kept in this browser only. Open the game’s link while signed in to claude.ai to save your progress to your account.' },
-} as const;
+const ROLE_INFO: Record<Role, { label: string; blurb: string }> = {
+  moderator: { label: 'MODERATOR', blurb: 'This is the game’s owner account. You run the shared collection: what you make is added for everyone straight away, you approve new profiles and submitted characters, and you can edit or remove any character.' },
+  player: { label: 'PLAYER', blurb: 'Your profile is approved. Your level, unlocks, loot boxes, character levels, cosmetics, the characters you make and your home-screen picks are saved to this account, and you’re on the leaderboard.' },
+  pending: { label: 'WAITING FOR APPROVAL', blurb: 'Your profile is waiting for the moderator. Until it’s approved you can play every mode, but games don’t earn XP yet.' },
+  unregistered: { label: 'NO PROFILE YET', blurb: 'You can play straight away. To earn XP, level up, unlock tables and characters, and get on the leaderboard, make a profile; the moderator approves new profiles.' },
+  viewonly: { label: 'VIEW-ONLY ACCESS', blurb: 'You opened the game by a view-only link, so nothing can be saved online: you can play, but no XP or profile. Ask the moderator for access to make a profile.' },
+  guest: { label: 'GUEST', blurb: 'Not signed in (or opened outside claude.ai). You can play the default game; games don’t earn XP. Open the link while signed in to claude.ai to make a profile.' },
+};
 
 export class ProfileScreen {
   private panel: HTMLElement | null = null;
@@ -62,6 +65,7 @@ export class ProfileScreen {
         a.role === 'moderator' ? h('button', { class: 'primary', onclick: () => this.go.moderator() }, a.pendingCount() ? `Moderator tools · ${a.pendingCount()} to review` : 'Moderator tools') : null,
       ),
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
+      this.profileForm(),
       h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', {}, 'Player level'), levelBar(lvl), h('p', { class: 'dim', style: 'font-size:12px' }, `${playerXp(a.progress)} XP in total from all your characters.`)),
       h(
         'div',
@@ -78,19 +82,102 @@ export class ProfileScreen {
         'div',
         { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' },
         h('h2', {}, 'What is saved where'),
-        h('p', { class: 'dim', style: 'font-size:13px' }, a.role === 'guest' ? 'Everything below is in this browser only.' : 'With your account (any device): level and XP, loot boxes and unlocks, each character’s level and cosmetics, the characters you made, your home-screen picks.'),
+        h('p', { class: 'dim', style: 'font-size:13px' }, a.role === 'guest' || a.role === 'viewonly' ? 'Everything is in this browser only, and games don’t earn XP.' : 'With your account (any device): level and XP, loot boxes and unlocks, each character’s level and cosmetics, the characters you made, your home-screen picks. XP only counts once your profile is approved.'),
         h('p', { class: 'dim', style: 'font-size:13px' }, 'In this browser only: local players for a shared keyboard (Players screen) and the match history behind career stats. Back up / restore moves those.'),
       ),
     );
     this.panel = panel;
     this.overlay.show(panel, true);
   }
+
+  private error = '';
+  private draftName = '';
+
+  /** Make a profile (or see where it stands). */
+  private profileForm(): HTMLElement | null {
+    const a = this.account;
+    if (a.role === 'moderator' || a.role === 'player' || a.role === 'guest' || a.role === 'viewonly') {
+      if (a.role !== 'player' || !a.myProfile) return null;
+      return h('div', { class: 'box row spread' }, h('span', {}, 'Leaderboard name: ', h('b', {}, a.myProfile.name)), h('span', { class: 'dim', style: 'font-size:12px' }, 'The moderator can rename it.'));
+    }
+    const card = a.myProfile;
+    const decision = a.myApproval;
+    const input = h('input', { type: 'text', maxlength: String(PROFILE_NAME_MAX), placeholder: 'Name for the leaderboard', value: this.draftName || card?.name || '', 'aria-label': 'Profile name' }) as HTMLInputElement;
+    input.addEventListener('input', () => (this.draftName = input.value));
+    const send = () => {
+      this.error = a.createProfile(input.value) ?? '';
+      if (!this.error) this.draftName = '';
+      this.show();
+    };
+    input.addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && send());
+    const status = !card
+      ? null
+      : decision?.status === 'rejected'
+        ? h('p', { class: 'error' }, `Turned down${decision.note ? `: ${decision.note}` : '.'} You can change the name and ask again.`)
+        : decision?.status === 'revoked'
+          ? h('p', { class: 'error' }, `The moderator paused your profile${decision.note ? `: ${decision.note}` : '.'}`)
+          : h('p', { class: 'dim' }, `Requested as “${card.name}”. You’ll start earning XP as soon as the moderator approves it.`);
+    return h(
+      'div',
+      { class: 'box', style: 'display:flex;flex-direction:column;gap:8px;border-color:var(--gold, #e6c45a)' },
+      h('h2', {}, card ? 'Your profile request' : 'Make a profile'),
+      status,
+      decision?.status === 'revoked' ? null : h('div', { class: 'row' }, input, h('button', { class: 'primary', onclick: send }, card ? 'Update request' : 'Ask to join')),
+      this.error ? h('p', { class: 'error' }, this.error) : null,
+    );
+  }
 }
 
-type ModTab = 'review' | 'collection' | 'powers';
+/** Everyone with an approved profile, by XP. */
+export class LeaderboardScreen {
+  private panel: HTMLElement | null = null;
+
+  constructor(
+    private overlay: Overlay,
+    private account: Account,
+    private back: () => void,
+    private openProfile: () => void,
+  ) {}
+
+  isShowing(): boolean {
+    return !!this.panel && this.overlay.isOpen() && this.overlay.root.contains(this.panel);
+  }
+
+  show(): void {
+    const a = this.account;
+    const rows = a.leaderboard();
+    const me = a.uid;
+    const table = rows.length
+      ? h(
+          'div',
+          { class: 'board' },
+          h('div', { class: 'board-row head' }, h('span', {}, '#'), h('span', {}, 'Player'), h('span', {}, 'Level'), h('span', {}, 'XP')),
+          ...rows.map(({ uid, card }, i) =>
+            h(
+              'div',
+              { class: `board-row${uid === me ? ' me' : ''}${i < 3 ? ` top${i + 1}` : ''}` },
+              h('span', { class: 'rank' }, i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1)),
+              h('span', { class: 'name' }, card.name, card.moderator ? h('span', { class: 'role-badge role-moderator', style: 'margin-left:8px;font-size:10px;padding:1px 5px' }, 'MOD') : null, uid === me ? h('span', { class: 'dim', style: 'margin-left:8px;font-size:12px' }, 'you') : null),
+              h('span', {}, String(card.level)),
+              h('span', {}, card.xp.toLocaleString()),
+            ),
+          ),
+        )
+      : h('div', { class: 'box' }, h('p', {}, a.mode === 'online' || a.profiles.size ? 'No approved profiles yet.' : 'The leaderboard is online: open the game signed in to claude.ai to see it.'));
+    const note =
+      a.role === 'player' || a.role === 'moderator'
+        ? null
+        : h('div', { class: 'box row spread' }, h('span', { class: 'dim' }, a.role === 'pending' ? 'Your profile is waiting for approval: you’ll show up here once it’s approved.' : 'Make a profile to earn XP and get on the board.'), a.role === 'unregistered' || a.role === 'pending' ? h('button', { class: 'primary', onclick: () => this.openProfile() }, 'Your profile') : null);
+    const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('button', { onclick: () => this.back() }, 'Back to menu')), h('p', { class: 'dim' }, 'Total XP from every character each player has played. Updates live.'), note, table);
+    this.panel = panel;
+    this.overlay.show(panel, true);
+  }
+}
+
+type ModTab = 'profiles' | 'review' | 'collection' | 'powers';
 
 export class ModeratorScreen {
-  private tab: ModTab = 'review';
+  private tab: ModTab = 'profiles';
   private note = '';
   private panel: HTMLElement | null = null;
 
@@ -116,18 +203,58 @@ export class ModeratorScreen {
     }
     const pending = a.pendingCount();
     const tabBtn = (t: ModTab, label: string) => h('button', { class: this.tab === t ? 'on' : '', onclick: () => ((this.note = ''), this.show(t)) }, label);
-    const body = this.tab === 'review' ? this.review() : this.tab === 'collection' ? this.collection() : this.powers();
+    const body = this.tab === 'profiles' ? this.players() : this.tab === 'review' ? this.review() : this.tab === 'collection' ? this.collection() : this.powers();
+    const waiting = a.pendingProfiles().length;
     const panel = h(
       'div',
       { class: 'panel' },
       h('div', { class: 'row spread' }, h('div', { class: 'row' }, h('h1', {}, 'Moderator tools'), h('span', { class: 'role-badge role-moderator' }, 'MODERATOR')), h('button', { onclick: () => this.back() }, 'Back')),
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
       this.note ? h('p', { class: 'ok' }, this.note) : null,
-      h('div', { class: 'tabs' }, tabBtn('review', pending ? `Review (${pending})` : 'Review'), tabBtn('collection', `Collection (${this.store.characters.sharedList().length})`), tabBtn('powers', 'What you can do')),
+      h('div', { class: 'tabs' }, tabBtn('profiles', waiting ? `Profiles (${waiting} new)` : 'Profiles'), tabBtn('review', pending ? `Characters to review (${pending})` : 'Characters to review'), tabBtn('collection', `Collection (${this.store.characters.sharedList().length})`), tabBtn('powers', 'What you can do')),
       body,
     );
     this.panel = panel;
     this.overlay.show(panel, true);
+  }
+
+  // ---------------------------------------------------------- profiles
+
+  private players(): HTMLElement {
+    const a = this.account;
+    const all = [...a.profiles].filter(([id]) => id !== a.uid);
+    if (!all.length) return h('div', { class: 'box' }, h('p', {}, 'No profiles yet. When someone makes one, it shows up here for you to approve.'));
+    const order = (id: string) => (!a.approvals.has(id) ? 0 : a.approvals.get(id)!.status === 'approved' ? 1 : 2);
+    all.sort(([x], [y]) => order(x) - order(y));
+    const row = ([uid, card]: [string, import('../data/shared').PublicProfile]) => {
+      const d = a.approvals.get(uid);
+      const note = h('input', { type: 'text', placeholder: 'Note (optional)', maxlength: '200' }) as HTMLInputElement;
+      const rename = h('input', { type: 'text', value: card.name, maxlength: String(PROFILE_NAME_MAX), 'aria-label': 'Profile name' }) as HTMLInputElement;
+      const status = !d ? h('span', { class: 'badge status-pending' }, 'New: waiting for you') : d.status === 'approved' ? h('span', { class: 'badge status-approved' }, 'Approved') : h('span', { class: 'badge status-rejected' }, d.status === 'revoked' ? 'Paused' : 'Turned down');
+      const act = (status: 'approved' | 'rejected' | 'revoked', msg: string) => () => {
+        a.decideProfile(uid, status, note.value.trim());
+        this.note = msg;
+        this.show('profiles');
+      };
+      return h(
+        'div',
+        { class: 'box card' },
+        h('div', { class: 'row spread', style: 'width:100%' }, h('span', { class: 'name' }, card.name), status),
+        h('p', { class: 'dim', style: 'font-size:12px' }, `Account: ${a.nameOf(uid)} · level ${card.level} · ${card.xp} XP${card.requestedAt ? ` · asked ${new Date(card.requestedAt).toLocaleDateString()}` : ''}`),
+        d?.status === 'approved' ? null : note,
+        h(
+          'div',
+          { class: 'row' },
+          d?.status !== 'approved' ? h('button', { class: 'primary', onclick: act('approved', `Approved ${card.name}.`) }, 'Approve') : null,
+          !d ? h('button', { class: 'danger', onclick: act('rejected', `Turned down ${card.name}.`) }, 'Turn down') : null,
+          d?.status === 'approved' ? h('button', { class: 'danger', onclick: act('revoked', `Paused ${card.name}: their games stop earning XP.`) }, 'Pause profile') : null,
+        ),
+        d?.status === 'approved'
+          ? h('div', { class: 'row' }, rename, h('button', { onclick: () => (a.renameProfile(uid, rename.value), (this.note = `Renamed to ${rename.value.trim()}.`), this.show('profiles')) }, 'Rename'))
+          : null,
+      );
+    };
+    return h('div', { style: 'display:flex;flex-direction:column;gap:10px' }, h('p', { class: 'dim' }, 'New profiles need your approval before their games earn XP, unlock anything or show on the leaderboard. Pausing stops that again.'), h('div', { class: 'grid wide' }, ...all.map(row)));
   }
 
   // ------------------------------------------------------------ review
@@ -239,13 +366,14 @@ export class ModeratorScreen {
       { class: 'cols2' },
       row('Moderator (you)', [
         'Characters you make or edit go into the shared collection for everyone, straight away.',
-        'Review submissions: approve, edit then approve, or turn down with a note.',
+        'Approve new profiles (only approved profiles earn XP and show on the leaderboard), pause them, or rename them.',
+        'Review submitted characters: approve, edit then approve, or turn down with a note.',
         'Edit or remove any character in the collection, including approved ones.',
         'Your own characters are always unlocked for you.',
         'Only your account can write the shared collection or read the review queue.',
       ]),
       row('Players', [
-        'Level up, open loot boxes, and unlock tables and characters, saved to their account.',
+        'Anyone can play straight away. With an approved profile they earn XP, level up, open loot boxes, unlock tables and characters, and appear on the leaderboard.',
         'Make their own characters (saved to their account) and play them right away.',
         'Submit characters for you to review; they see whether each is waiting, approved or turned down.',
         'They can’t change the shared collection or see other players’ submissions.',

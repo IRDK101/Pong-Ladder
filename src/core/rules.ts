@@ -180,7 +180,12 @@ export class RulesEngine {
     return structuredClone(this.s);
   }
 
-  /** Live, read-only view of the state (no copy). Do not mutate. */
+  /** Online play (guest): take the host's state as-is (the host's engine is the one that rules). */
+  restore(state: GameState): void {
+    this.s = structuredClone(state);
+  }
+
+    /** Live, read-only view of the state (no copy). Do not mutate. */
   peek(): Readonly<GameState> {
     return this.s;
   }

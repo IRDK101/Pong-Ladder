@@ -736,3 +736,26 @@ Decided with the owner (asked first):
 - The owner's account counts every table and character as unlocked. It gets no loot boxes and no starter top-up, and the menu card and the Collection say so.
 - Every other account starts with the plain table and 4 random characters from the collection (not their own creations, which they always have), and unlocks the rest from loot boxes.
 - Players who started before the plain table became the default keep the Saints table they were given.
+
+## Profiles that need approval, the leaderboard, online 1v1
+
+Decided with the owner: keep the public link (so view-only visitors play as guests), and make online mode 1v1 with one player per device.
+
+- **Anyone can play every offline mode straight away.** XP, levels, loot boxes, the leaderboard and character submissions need an approved profile (or the moderator account).
+  - The game checks `user.can('data.write')`. A `false` answer (view-only access, such as a public link from outside the organization) means a guest: nothing is saved online.
+  - Roles: moderator, player (approved), pending, unregistered (signed in, no profile), viewonly, guest.
+- **Profiles:**
+  - A player asks to join with a display name (up to 20 characters, unique), written to `profiles/<uid>` as `{name, xp, level, requestedAt, updatedAt}`. Everyone can read it; the player writes their own; the owner can write any (for renames).
+  - The moderator's decision goes to `approvals/<uid>` as `{status: approved|rejected|revoked, note, at}`. Everyone can read it; only the owner writes it, so nobody can approve themselves.
+  - The moderator's own profile is created and approved automatically.
+  - Approved players publish their total XP and level to their card when they change.
+- **Moderator tools → Profiles:** approve, turn down with a note, pause (stops XP), or rename.
+- **Leaderboard** (menu → More): approved profiles by total XP, live, with medals for the top 3, MOD on the moderator, and "you" highlighted. The menu row shows your rank.
+- **Online match** (menu → Play) uses the page's live `room`, with no server:
+  - A presence card in the lobby (name, level, packed character, status), plus `invite` and `answer` fields addressed by `peer`. Everything is presence; there are no event topics.
+  - The match runs in a named room `pz-<id>`. The challenger hosts as Team A and runs the real game, sending `Game.netState()` in presence about 15 times a second (well under the 4 KB limit; a test checks this).
+  - The guest (Team B) mirrors the state with `applyNet` and runs physics between updates (`netTick`). It steers its own crosshair locally and sends its keys, crosshair and a numbered list of recent hits (with the timing quality and offset seen on its own screen, which the host uses, so lag doesn't make hits late) and penalty-cup steps.
+  - Settings are the challenger's menu settings: 1v1, single game. The guest sees the table from Team B's end (the `behindB` layout), and each device shows only its own crosshair.
+  - XP: the host records the game. The guest's XP is `matchXp(record, 'B')` from the host's `final` presence field, given only if the guest may progress.
+  - If either player leaves, the other returns to the menu.
+- **Platform limit:** visitors from a public link outside the organization can't connect to the room or save data. They see an explanation and play offline as guests.

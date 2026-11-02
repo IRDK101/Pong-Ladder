@@ -23,7 +23,11 @@ import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
 import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
-import { ModeratorScreen, ProfileScreen } from './ui/profile';
+import { LeaderboardScreen, ModeratorScreen, ProfileScreen } from './ui/profile';
+import { OnlineScreen, type OnlineStart } from './ui/online';
+import { MatchLink } from './net/online';
+import { matchXp } from './progress/unlocks';
+import { participantFrom } from './ui/prematch';
 import { CharacterPicker, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
@@ -106,18 +110,30 @@ function adoptSelection(): void {
 menu.restoreDesign(selection.design);
 menu.mySide = selection.mySide;
 menu.playingAs = () => playingAsLabel(menu.config(baseCfg), selection, account.usable());
+menu.leaderboardHint = () => {
+  const board = account.leaderboard();
+  const i = account.uid ? board.findIndex((r) => r.uid === account.uid) : -1;
+  if (i >= 0) return `you're #${i + 1} of ${board.length}`;
+  return board.length ? `${board.length} player${board.length === 1 ? '' : 's'} ranked by XP` : 'XP of every approved player';
+};
 menu.accountInfo = () => {
   const who = account.me?.name || account.me?.email || '';
-  if (account.role === 'moderator') return { label: 'Moderator profile', hint: who ? `${who} · review, edit, approve` : 'review, edit, approve', alert: account.pendingCount() };
-  if (account.role === 'player') return { label: 'Your profile', hint: who ? `${who} · saved to your account` : 'saved to your account', alert: 0 };
-  return { label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 };
+  if (account.role === 'moderator') return { label: 'Moderator profile', hint: who ? `${who} · review, edit, approve` : 'review, edit, approve', alert: account.pendingCount() + account.pendingProfiles().length };
+  if (account.role === 'player') return { label: 'Your profile', hint: `${account.myProfile?.name ?? who} · earning XP`, alert: 0 };
+  if (account.role === 'pending') return { label: 'Your profile', hint: 'waiting for approval · no XP yet', alert: 0 };
+  if (account.role === 'unregistered') return { label: 'Your profile', hint: 'make a profile to earn XP', alert: 0 };
+  if (account.role === 'viewonly') return { label: 'Your profile', hint: 'view-only access · no XP', alert: 0 };
+  return { label: 'Your profile', hint: 'guest · no XP', alert: 0 };
 };
 account.onChange(() => {
   adoptSelection();
   if (screen !== 'panel') return;
   if (characters.isShowingList()) characters.showList();
   else if (collection.isShowing()) collection.show();
-  else if (profileScreen.isShowing()) profileScreen.show();
+  else if (profileScreen.isShowing()) {
+    // Don't wipe a half-typed profile name.
+    if (!(document.activeElement instanceof HTMLInputElement && overlay.root.contains(document.activeElement))) profileScreen.show();
+  } else if (leaderboard.isShowing()) leaderboard.show();
   else if (moderator.isShowing()) moderator.show();
 });
 void account.connect();
@@ -181,6 +197,92 @@ function startMatch(cfg: GameConfig, roster: Roster): void {
   canvas.focus();
 }
 
+/** The live online match, if one is on: this device hosts (Team A) or mirrors it (Team B). */
+let online: { link: MatchLink; role: 'host' | 'guest'; otherName: string; lastNet: unknown; finalDone: boolean } | null = null;
+
+function onlineConfig(s: OnlineStart['settings'], role: 'host' | 'guest'): GameConfig {
+  const cfg = menu.config(baseCfg);
+  cfg.teamSize = 1;
+  cfg.players.mode = 'versus';
+  cfg.players.mySide = role === 'host' ? 'A' : 'B';
+  cfg.matchFormat = 'single';
+  cfg.view = 'behindA';
+  cfg.design = s.design as GameConfig['design'];
+  cfg.venue = s.venue as GameConfig['venue'];
+  cfg.formation = s.formation;
+  cfg.physics.timeScale = s.speed;
+  cfg.skiCollision = s.ski;
+  cfg.penaltyCupSelection = 'choose';
+  return cfg;
+}
+
+function startOnline(o: OnlineStart): void {
+  const host = o.role === 'host';
+  const cfg = onlineConfig(o.settings, o.role);
+  const pa = participantFrom(host ? o.mine : o.theirs, null);
+  const pb = participantFrom(host ? o.theirs : o.mine, null);
+  const roster: Roster = { 'A-left': pa, 'A-right': pa, 'B-left': pb, 'B-right': pb };
+  const link = new MatchLink(o.room, o.role, o.otherPeer);
+  online = { link, role: o.role, otherName: o.otherName, lastNet: null, finalDone: false };
+  if (host) {
+    startMatch(cfg, roster);
+    const g = game!;
+    g.online = true;
+    g.remoteAim.B = true;
+    g.controlFrames = { A: cameraFrame(teamCamera(cfg, 'A', 16, 9)), B: cameraFrame(teamCamera(cfg, 'B', 16, 9)) };
+    g.messages.push({ text: `Online vs ${o.otherName}: you are Team A`, time: g.time });
+  } else {
+    overlay.hide();
+    game = new Game(cfg, Math.random, roster);
+    game.online = true;
+    game.controlFrames = { A: cameraFrame(teamCamera(cfg, 'A', 16, 9)), B: cameraFrame(teamCamera(cfg, 'B', 16, 9)) };
+    game.messages.push({ text: `Online vs ${o.otherName}: you are Team B. Waiting for the host…`, time: 0 });
+    record = null;
+    cpu = null;
+    counted = {};
+    xpNote = '';
+    screen = 'playing';
+    canvas.focus();
+  }
+}
+
+function endOnline(note = ''): void {
+  if (!online) return;
+  void online.link.close();
+  online = null;
+  onlineScreen.close();
+  if (note) menuNote = note;
+}
+
+/** One frame of an online match on the guest's device. */
+function guestFrame(g: Game, dt: number): void {
+  const o = online!;
+  const inp = mergeInputs(keyboard.team('A'), keyboard.team('B'));
+  const net = o.link.net;
+  if (net && net !== o.lastNet) {
+    o.lastNet = net;
+    g.applyNet(net, 'B');
+  }
+  if (screen === 'playing') {
+    const st = g.engine.peek();
+    if (inp.hit) o.link.event('hit', g.timingNow('B') ?? {});
+    if (st.phase === 'penalty' && st.penalty?.chooser === 'B' && inp.nav) o.link.event('nav', { d: inp.nav });
+    g.netTick(dt, 'B', inp);
+    o.link.sendInput({ up: inp.up, down: inp.down, left: inp.left, right: inp.right, style: inp.style, aim: { ...g.aim.B } }, performance.now(), inp.hit);
+    if (st.phase === 'gameOver') {
+      gameOverAt = performance.now();
+      screen = 'gameEnd';
+      xpNote = 'Waiting for the result…';
+    }
+  }
+  if (o.link.final && !o.finalDone) {
+    o.finalDone = true;
+    const res = account.addMatchXp(o.link.final.xp, counted);
+    const gained = Object.values(counted).reduce((a, b) => a + b, 0);
+    xpNote = res.counted ? `Your side (Team B): +${gained} XP` : account.role === 'pending' ? 'No XP yet: your profile is waiting for approval' : 'Make a profile (Your profile) to earn XP from games';
+  }
+}
+
 /** XP this match has already given (so each game adds only what's new). */
 let counted: Record<string, number> = {};
 /** A line for the end screens about XP and loot boxes. */
@@ -199,10 +301,16 @@ function recordGame(): void {
   store.matches.save(record);
   const side = game.cfg.players.mode === 'coop' ? 'A' : (game.cfg.players.mySide ?? 'A');
   const before = Object.values(counted).reduce((a, b) => a + b, 0);
-  const { boxesBefore } = account.recordMatch(record, side, counted);
+  const res = account.recordMatch(record, side, counted);
   const gained = Object.values(counted).reduce((a, b) => a + b, 0) - before;
   const boxes = account.boxes();
-  xpNote = `Your side (Team ${side}): +${gained} XP` + (boxes > boxesBefore ? ` · LEVEL UP! ${boxes} loot box${boxes === 1 ? '' : 'es'} in the Collection` : '');
+  xpNote = !res.counted
+    ? account.role === 'pending'
+      ? 'No XP yet: your profile is waiting for approval'
+      : 'Make a profile (Your profile) to earn XP from games'
+    : `Your side (Team ${side}): +${gained} XP` + (boxes > res.boxesBefore ? ` · LEVEL UP! ${boxes} loot box${boxes === 1 ? '' : 'es'} in the Collection` : '');
+  // Online: the guest's XP comes from the host's record of the game.
+  if (online?.role === 'host') online.link.sendFinal(matchXp(baseCfg, record, 'B'));
 }
 
 /** Keyboard (and CPU) input for the current mode. */
@@ -239,6 +347,25 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
 const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
 const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu(), () => moderator.show('review'));
 const moderator = new ModeratorScreen(overlay, store, baseCfg, account, characters, () => toMenu());
+const leaderboard = new LeaderboardScreen(overlay, account, () => toMenu(), () => profileScreen.show());
+const onlineScreen = new OnlineScreen(overlay, {
+  me: () => {
+    const cfg = menu.config(baseCfg);
+    const usable = account.usable();
+    const pin = pinnedFor({ ...cfg, teamSize: 1, players: { ...cfg.players, mode: 'versus', mySide: 'A' } }, selection, usable)['A-left'];
+    const char = pin ?? usable[0] ?? null;
+    return { name: account.myProfile?.name || account.me?.name || 'Player', level: playerLevel(baseCfg, account.progress).level, char };
+  },
+  settings: () => {
+    const cfg = menu.config(baseCfg);
+    return { design: cfg.design, venue: cfg.venue, formation: cfg.formation, speed: cfg.physics.timeScale, ski: cfg.skiCollision };
+  },
+  start: (o) => startOnline(o),
+  back: () => {
+    onlineScreen.close();
+    toMenu();
+  },
+});
 const profileScreen = new ProfileScreen(overlay, store, baseCfg, account, {
   collection: () => collection.show(),
   characters: () => characters.showList(),
@@ -259,7 +386,8 @@ function menuExtras(): MenuExtras {
     boxes: account.boxes(),
     nothingLeft: account.allUnlocked(),
     newRewards: account.newRewards(),
-    pending: account.owner ? account.pendingCount() : 0,
+    pending: account.owner ? account.pendingCount() + account.pendingProfiles().length : 0,
+    progressNote: account.canProgress ? '' : account.role === 'pending' ? 'Profile waiting for approval: no XP yet' : account.role === 'unregistered' ? 'Make a profile (Your profile) to earn XP' : 'Playing as a guest: games don’t earn XP',
     offline: account.mode === 'local',
     allAccess: account.owner,
     team: mySlots(cfg).map((k) => {
@@ -327,6 +455,10 @@ function runMenuAction(action: MenuAction): void {
       return openPanel(() => collection.show());
     case 'account':
       return openPanel(() => profileScreen.show());
+    case 'leaderboard':
+      return openPanel(() => leaderboard.show());
+    case 'online':
+      return openPanel(() => void onlineScreen.open());
     case 'pickTable':
       return openPanel(() => tablePicker.show(cfg.design));
     case 'pickCharacters':
@@ -396,8 +528,33 @@ function frame(dt: number): void {
   }
 
   const g = game!;
+  if (online?.link.gone && screen !== 'matchEnd') {
+    endOnline(`${online.otherName} left the match.`);
+    return toMenu(menuNote);
+  }
+  if (online?.role === 'guest') {
+    guestFrame(g, dt);
+    renderGame3D(ctx, theme, view, g, 'behindB');
+    renderHud(ctx, theme, view, g);
+    if (screen === 'gameEnd') {
+      const st = g.engine.peek();
+      const ready = performance.now() - gameOverAt > 800;
+      drawEndScreen(ctx, theme, view, st.winner === 'B' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`, [g.teamLine(st.winner ?? 'A'), g.cupsLeftLine(), xpNote], ready ? 'Press Space / Enter for the menu' : '');
+      if (ready && anyPressed(['hit'])) {
+        endOnline();
+        toMenu();
+      }
+    }
+    return;
+  }
   if (screen === 'playing') {
-    g.update(dt, debugInputs ? debugInputs(g) : liveInputs(g));
+    if (online?.role === 'host') {
+      const local = mergeInputs(keyboard.team('A'), keyboard.team('B'));
+      const remote = online.link.hostInput(idleInput());
+      if (online.link.input) g.aim.B = { ...online.link.input.aim };
+      g.update(dt, { A: local, B: remote });
+      online.link.sendState(g.netState(), performance.now(), remote.hit);
+    } else g.update(dt, debugInputs ? debugInputs(g) : liveInputs(g));
     if (g.engine.peek().phase === 'gameOver') {
       recordGame();
       gameOverAt = performance.now();
@@ -419,6 +576,12 @@ function frame(dt: number): void {
     if (g.cfg.matchFormat === 'bestOf3') lines.push(`Games: A ${g.match.wins.A + (st.winner === 'A' ? 1 : 0)} – ${g.match.wins.B + (st.winner === 'B' ? 1 : 0)} B`);
     if (xpNote) lines.push(xpNote);
     drawEndScreen(ctx, theme, view, matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`, lines, ready ? 'Press Space / Enter' : '');
+    if (online?.role === 'host') online.link.sendState(g.netState(), performance.now());
+    if (ready && anyPressed(['hit']) && online?.role === 'host') {
+      endOnline();
+      toMenu();
+      return;
+    }
     if (ready && anyPressed(['hit'])) {
       const w = g.continueMatch();
       if (w) {
@@ -443,7 +606,13 @@ window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
   // Escape in a text box just leaves the box, so a half-typed name is not thrown away.
   if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
-  if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') toMenu('Match abandoned.');
+  if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') {
+    endOnline();
+    toMenu('Match abandoned.');
+  } else if (screen === 'panel' && onlineScreen.isShowing()) {
+    onlineScreen.close();
+    toMenu();
+  }
   else if (screen === 'panel' || screen === 'help') toMenu();
 });
 

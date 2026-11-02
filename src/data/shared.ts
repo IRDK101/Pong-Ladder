@@ -14,7 +14,7 @@ import type { GameConfig } from '../config';
 import { validateCharacter, type Character, type Cosmetics } from '../core/character';
 import type { TeamId } from '../core/types';
 import { DESIGN_ORDER } from '../render/designs';
-import { addXp, boxesWaiting, markSeen, newRewards, newRewardsFor, seedSeen, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
+import { addXp, boxesWaiting, playerLevel, playerXp, markSeen, newRewards, newRewardsFor, seedSeen, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
 import type { AppStore, KeyValueStore, MatchRecord } from './storage';
 
 interface DocSnap {
@@ -41,11 +41,42 @@ interface UserApi {
   isOwner(): Promise<boolean>;
   id(): Promise<string | null>;
   me(): Promise<{ name: string; email: string | null }>;
+  can(capability: string): Promise<boolean | null>;
   profiles(ids: string[]): Promise<Record<string, { name: string }>>;
 }
 
-/** What the player is, for the profile screen and what they may do. */
-export type Role = 'moderator' | 'player' | 'guest';
+/**
+ * What the player is, for the profile screen and what they may do:
+ * - moderator: the game's owner.
+ * - player: an approved profile (earns XP, levels, unlocks, the leaderboard).
+ * - pending: a profile waiting for the moderator.
+ * - unregistered: signed in with access, no profile yet.
+ * - viewonly: signed in by a view-only link (can't save online).
+ * - guest: not signed in / outside claude.ai.
+ */
+export type Role = 'moderator' | 'player' | 'pending' | 'unregistered' | 'viewonly' | 'guest';
+
+/** A player's public profile card (profiles/<uid>): a display name they chose and their progress. */
+export interface PublicProfile {
+  name: string;
+  xp: number;
+  level: number;
+  requestedAt: string;
+  updatedAt: string;
+  moderator?: boolean;
+}
+
+/** The moderator's decision on a profile (approvals/<uid>). */
+export interface Approval {
+  status: 'approved' | 'rejected' | 'revoked';
+  note?: string;
+  at: string;
+}
+
+export const PROFILE_NAME_MAX = 20;
+export function cleanProfileName(raw: string): string {
+  return raw.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/g, '').replace(/\s+/g, ' ').trim().slice(0, PROFILE_NAME_MAX);
+}
 type ClaudeApi = { use(name: string): Promise<unknown> };
 
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
@@ -135,6 +166,11 @@ export class Account {
   allSubmissions: PlayerSubmissions[] = [];
   /** A short message for the screens (e.g. a write that failed). */
   problem = '';
+  /** False for view-only access: nothing can be saved online. */
+  canWrite = true;
+  /** Every public profile card, and the moderator's decisions, by account id. */
+  profiles = new Map<string, PublicProfile>();
+  approvals = new Map<string, Approval>();
   /** Who is signed in (read from the account each visit; never stored). */
   me: { name: string; email: string | null } | null = null;
   /** Account names for other players' ids (submitters, creators), as the account service gives them. */
@@ -210,6 +246,9 @@ export class Account {
       this.uid = this.user ? await this.user.id() : null;
       const me = this.user ? await this.user.me() : null;
       this.me = me ? { name: me.name || '', email: me.email ?? null } : null;
+      // View-only access (e.g. a public link from outside the organization) can read but never save.
+      const w = this.user ? await this.user.can('data.write') : null;
+      this.canWrite = this.owner || w !== false;
     } catch {
       /* treated as a guest */
     }
@@ -244,8 +283,43 @@ export class Account {
       () => this.changed(),
     );
 
+    // Profiles and the moderator's decisions are public: the leaderboard reads them.
+    db.collection('profiles').onSnapshot(
+      (snap) => {
+        this.profiles.clear();
+        for (const d of snap.docs) {
+          const b = d.data();
+          if (!b || typeof b.name !== 'string') continue;
+          this.profiles.set(d.id, {
+            name: cleanProfileName(b.name) || 'Player',
+            xp: typeof b.xp === 'number' ? Math.max(0, b.xp) : 0,
+            level: typeof b.level === 'number' ? b.level : 1,
+            requestedAt: typeof b.requestedAt === 'string' ? b.requestedAt : '',
+            updatedAt: typeof b.updatedAt === 'string' ? b.updatedAt : '',
+            moderator: b.moderator === true,
+          });
+        }
+        void this.nameIds([...this.profiles.keys()]);
+        this.changed();
+      },
+      () => this.changed(),
+    );
+    db.collection('approvals').onSnapshot(
+      (snap) => {
+        this.approvals.clear();
+        for (const d of snap.docs) {
+          const b = d.data();
+          if (b && (b.status === 'approved' || b.status === 'rejected' || b.status === 'revoked')) this.approvals.set(d.id, { status: b.status, note: typeof b.note === 'string' ? b.note.slice(0, 200) : '', at: typeof b.at === 'string' ? b.at : '' });
+        }
+        this.ensureModeratorProfile();
+        this.changed();
+      },
+      () => this.changed(),
+    );
+
     if (!this.uid) return this.changed();
     const uid = this.uid;
+    if (!this.canWrite) return this.changed(); // view-only: play as a guest
     this.mode = 'online';
 
     let progressLoaded = false;
@@ -362,7 +436,103 @@ export class Account {
   /** Moderator (the game's owner), signed-in player, or guest (offline / signed out). */
   get role(): Role {
     if (this.owner) return 'moderator';
-    return this.mode === 'online' ? 'player' : 'guest';
+    if (this.mode !== 'online') return this.uid && !this.canWrite ? 'viewonly' : 'guest';
+    if (this.approvedProfile) return 'player';
+    return this.myProfile ? 'pending' : 'unregistered';
+  }
+
+  /** This player's public profile card, if they made one. */
+  get myProfile(): PublicProfile | null {
+    return (this.uid && this.profiles.get(this.uid)) || null;
+  }
+
+  get myApproval(): Approval | null {
+    return (this.uid && this.approvals.get(this.uid)) || null;
+  }
+
+  private get approvedProfile(): boolean {
+    return !!this.myProfile && this.myApproval?.status === 'approved';
+  }
+
+  /** XP, levels, loot boxes and the leaderboard only count for the moderator and approved profiles. */
+  get canProgress(): boolean {
+    return this.owner || (this.mode === 'online' && this.approvedProfile);
+  }
+
+  /** Ask to join: a display name the moderator approves. */
+  createProfile(rawName: string): string | null {
+    const name = cleanProfileName(rawName);
+    if (!name) return 'Pick a name to show on the leaderboard.';
+    if (this.mode !== 'online' || !this.db || !this.uid) return 'Sign in to claude.ai (with access to save) to make a profile.';
+    if (this.myApproval?.status === 'approved' && !this.owner) return 'Your profile is approved; ask the moderator to change your name.';
+    const taken = [...this.profiles].some(([id, p]) => id !== this.uid && p.name.toLowerCase() === name.toLowerCase());
+    if (taken) return 'Someone already has that name.';
+    const now = new Date().toISOString();
+    const lvl = playerLevel(this.cfg, this.progress);
+    const card: PublicProfile = { name, xp: playerXp(this.progress), level: lvl.level, requestedAt: this.myProfile?.requestedAt || now, updatedAt: now, ...(this.owner ? { moderator: true } : {}) };
+    this.profiles.set(this.uid, card);
+    this.writeProfile(this.uid, card);
+    this.changed();
+    return null;
+  }
+
+  private writeProfile(uid: string, card: PublicProfile): void {
+    const db = this.db!;
+    this.writer.queue(`profiles/${uid}`, () => db.doc(`profiles/${uid}`).set(plain(card)));
+  }
+
+  /** Keep the leaderboard's numbers current (only when they changed). */
+  private publishProgress(): void {
+    if (!this.canProgress || !this.uid || !this.db) return;
+    const card = this.myProfile;
+    if (!card) return;
+    const xp = playerXp(this.progress);
+    const level = playerLevel(this.cfg, this.progress).level;
+    if (card.xp === xp && card.level === level) return;
+    const next = { ...card, xp, level, updatedAt: new Date().toISOString() };
+    this.profiles.set(this.uid, next);
+    this.writeProfile(this.uid, next);
+  }
+
+  /** The moderator's own card is made (and approved) automatically. */
+  private ensureModeratorProfile(): void {
+    if (!this.owner || !this.uid || !this.db || this.mode !== 'online') return;
+    if (!this.myProfile) this.createProfile(this.me?.name || 'Moderator');
+    if (this.myApproval?.status !== 'approved') this.decideProfile(this.uid, 'approved');
+  }
+
+  /** Moderator: approve, turn down or revoke a profile. */
+  decideProfile(uid: string, status: Approval['status'], note = ''): void {
+    if (!this.owner || !this.db) return;
+    const db = this.db;
+    const a: Approval = { status, note: note.slice(0, 200), at: new Date().toISOString() };
+    this.approvals.set(uid, a);
+    this.writer.queue(`approvals/${uid}`, () => db.doc(`approvals/${uid}`).set(plain(a)));
+    this.changed();
+  }
+
+  /** Moderator: rename a player's profile. */
+  renameProfile(uid: string, rawName: string): void {
+    const card = this.profiles.get(uid);
+    const name = cleanProfileName(rawName);
+    if (!this.owner || !card || !name) return;
+    const next = { ...card, name, updatedAt: new Date().toISOString() };
+    this.profiles.set(uid, next);
+    this.writeProfile(uid, next);
+    this.changed();
+  }
+
+  /** Profiles waiting for the moderator. */
+  pendingProfiles(): [string, PublicProfile][] {
+    return [...this.profiles].filter(([id]) => !this.approvals.has(id));
+  }
+
+  /** The leaderboard: approved profiles by XP. */
+  leaderboard(): { uid: string; card: PublicProfile }[] {
+    return [...this.profiles]
+      .filter(([id]) => this.approvals.get(id)?.status === 'approved')
+      .map(([uid, card]) => ({ uid, card }))
+      .sort((a, b) => b.card.xp - a.card.xp || a.card.name.localeCompare(b.card.name));
   }
 
   /** Save the player's own characters to their account. */
@@ -454,7 +624,7 @@ export class Account {
 
   /** Players (not the owner) can send their own characters to the owner for approval. */
   get canSubmit(): boolean {
-    return this.mode === 'online' && !this.owner && !!this.uid;
+    return this.mode === 'online' && !this.owner && !!this.uid && this.canProgress;
   }
 
   submissionOf(id: string): Submission | null {
@@ -552,8 +722,8 @@ export class Account {
   }
 
   boxes(): number {
-    // The moderator already has everything, so no boxes pile up for them.
-    return this.owner ? 0 : boxesWaiting(this.cfg, this.progress);
+    // The moderator already has everything, so no boxes pile up for them; without an approved profile there are none.
+    return this.owner || !this.canProgress ? 0 : boxesWaiting(this.cfg, this.progress);
   }
 
   /** Nothing left to unlock right now. */
@@ -563,7 +733,7 @@ export class Account {
   }
 
   openBox(): LootItem | null {
-    if (this.owner) return null;
+    if (this.owner || !this.canProgress) return null;
     const item = openBox(this.cfg, this.progress, this.tables(), this.lootCharacters(), this.rng);
     if (item) {
       this.saveProgress();
@@ -577,13 +747,20 @@ export class Account {
    * signed-in player's side counts; `counted` tracks what this match has
    * already given.
    */
-  recordMatch(record: MatchRecord, side: TeamId, counted: Record<string, number>): { levelsBefore: number; boxesBefore: number } {
+  recordMatch(record: MatchRecord, side: TeamId, counted: Record<string, number>): { levelsBefore: number; boxesBefore: number; counted: boolean } {
+    return this.addMatchXp(matchXp(this.cfg, record, side), counted);
+  }
+
+  /** Add a match's XP (by character) for this player; nothing unless they may progress. */
+  addMatchXp(xp: Record<string, number>, counted: Record<string, number>): { levelsBefore: number; boxesBefore: number; counted: boolean } {
     const boxesBefore = this.boxes();
     const levelsBefore = this.progress.opened.length + boxesBefore;
-    addXp(this.progress, newXp(matchXp(this.cfg, record, side), counted));
+    if (!this.canProgress) return { levelsBefore, boxesBefore, counted: false };
+    addXp(this.progress, newXp(xp, counted));
     this.saveProgress();
+    this.publishProgress();
     this.changed();
-    return { levelsBefore, boxesBefore };
+    return { levelsBefore, boxesBefore, counted: true };
   }
 
   /** A player always has a few characters to start with. */

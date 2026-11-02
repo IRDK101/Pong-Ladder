@@ -18,7 +18,8 @@ import { disc, IDENTITY, line, ring, screenEllipse } from './prims';
 import { SPIN_LABELS } from '../game/shot';
 import type { View } from './renderer';
 
-export type Layout = 'behindA' | 'split';
+/** behindB: the second device in online play sees the table from Team B's end. */
+export type Layout = 'behindA' | 'behindB' | 'split';
 
 interface Viewport {
   team: TeamId;
@@ -139,7 +140,7 @@ export function viewports(cfg: GameConfig, v: View, layout: Layout): Viewport[] 
     const half = Math.floor((v.width - 4) / 2);
     return [make('A', 0, half), make('B', v.width - half, half)];
   }
-  return [make('A', 0, v.width)];
+  return [make(layout === 'behindB' ? 'B' : 'A', 0, v.width)];
 }
 
 let lastViewports: Viewport[] = [];
@@ -354,6 +355,8 @@ function drawTimingRings(b: CanvasRenderingContext2D, theme: Theme, game: Game, 
 function showsAim(game: Game, vp: Viewport, team: TeamId): boolean {
   if (!game.aiming(team)) return false;
   if (game.cfg.players.mode === 'coop' && team === 'B') return false; // the CPU's aim stays hidden
+  // Online, each device shows only its own crosshair, like split screen.
+  if (game.online) return vp.team === team;
   return lastViewports.length < 2 || vp.team === team;
 }
 
