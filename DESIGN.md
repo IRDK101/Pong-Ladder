@@ -575,3 +575,35 @@ These rule decisions were confirmed with the user.
   - Help and end screens use the same panel.
   - The live basement behind the menu is less darkened.
   - The HTML screens' boxes, fields and toggles use the same square 2 px style.
+
+## Basement detail pass from the third set of photos
+
+The overall layout was already right: three tables in a row, all pointing at the bench wall, with the bar on your right when you face it. This pass corrects the details from the new photos. Visuals only.
+
+- **Walls:** the black header is now a soffit box (`SOFFIT`, 0.32 m deep) along every wall top, with the slogans painted on its face. The wall maps push anything above `HEADER_Z` onto it.
+- **Bench:** two tiers along the whole bench wall and round the door corner (`BENCH`).
+  - A low seat with a particle-board and black front, with XENON '19 carved on it.
+  - A shelf above it with cups, a paper towel roll, a jug and the caution sign.
+  - Tombstones stand on the seat: D. CAMPOS behind the saints table, the RIP group by the second pillars.
+  - The stage-wall bench is gone; that wall has none.
+- **Pillars:** each has a molded cap on its wood, round light fittings on tan patches, names carved into the wood, and slogans on the faces where the photos show them.
+  - First pair, stage side: "Glizz" facing the bar, "If I die, I die." facing the saints table.
+  - First pair, bench side: "Sweat Saves Blood" facing the stage side, an "EAT ME!" plate facing the saints table.
+  - Second pair, stage side: "You can't spell / KOWABUNGA '26" facing the bar, "MY MOM SAYS WE'RE A-SIDE" facing the stage side.
+  - Second pair, bench side: "GET GOOFY NOW!" facing the bar, "'16 TAILS" facing the stage side.
+  - LOCO FOR MOLOKO is a narrow corner pillar by the bathroom.
+- **Beams:** wider.
+  - First beam, bar side: "Act or be acted upon.", the pizza proverb, "Be Better". Door side: "same as it ever was...", "On the Seventh Cup, He Rested.", TYRANNOSAURUS REX ON A BOAT.
+  - Second beam, bar side: BIG BRIGGS, THE CLASS OF 1962 ROOM (back on the beam, where the photos show it, and readable from the saints table), RONA RUINED MY DAY. Door side: STINKY BOY, IT'S FOR THE KIDS.
+- **Lights:** pairs of tube fixtures over each table, running along it.
+- **Bar wall:** an orange bench-side corner with the FARGO '23 door, KCAO, "ZETA PSI. YOU DO YOU.", Bird and BOO!. Then the counter opening under the Frankenstein arch, WE'LL OBSERVE, and the Class of 1981 plaque.
+- **Stage wall:**
+  - Bar end: red walls and soffit with DON'T BREAK THE CHAIN, the EXIT stairs, a gray trash can, and a door with an orange arrow.
+  - The stage beside the saints table, under the LED lights on a 2x4: STEP YOUR LEVELS UP, WHY ARE WE WAITING?!, the Supreme Court line, DAVID '25 ♥ ALYSSA, the 74, ΖΨ, a Maine plate, ITS KCAO A WORLD, a project-manager sign, DUCHESS WAS HERE, a faded STOP sign, and the Monopoly table with cups.
+  - Door end: the creed on the soffit, SHUDDUP CHIP, "He's not a herb...", MOXXI DEXTER, a chair and the restroom door.
+- **Bench wall:**
+  - Behind the chain table: SCRAPPY, "Love loves to love love.", "Do you wanna hear a secret?", ONE WAY, JAFE, ROBICHEAUX / PUCK.
+  - Behind the saints table: "Brothers should be nicer to other brothers", BM, LEFT TURN YIELD ON GREEN, the Diabetes Dash poster, TURK '18.
+  - Behind the night sky table: the windows, BROFESSOR '21, QUARTER MILE RD.
+- **Door wall:** the rest of the creed, a red-framed door, WHILE SHOWERING SHRED, and 8 CLAY DG over the bench corner.
+- **Left out:** profanity, and the real "DICK JERK" name sign, which became a plain project-manager sign.

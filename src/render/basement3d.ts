@@ -8,14 +8,14 @@ import type { GameConfig, Venue } from '../config';
 import { buildFormation } from '../core/formation';
 import type { Vec3 } from '../core/physics';
 import type { Theme } from '../theme';
-import { BAR, BEAMS, FIXTURES, FRIDGES, PILLARS, ROOM, ROW_Y, STAGE, VENUE_ORDER, basementToWorld, tableToBasement, type Paint } from './basement';
+import { BAR, BEAMS, BENCH, FIXTURES, FRIDGES, PILLARS, ROOM, ROW_Y, SOFFIT, STAGE, VENUE_ORDER, basementToWorld, tableToBasement, type Paint } from './basement';
 import { project, type Camera } from './camera';
 import { cylinder, disc, floorSpecks, line, poly, screenEllipse, shadeHex, stripe, textBitmap, texturedTop, xbox, type Xf } from './prims';
 
 /** Height where the black painted header band starts on the walls. */
 const HEADER_Z = 1.5;
 /** Underside of the ceiling beams. */
-const BEAM_Z = 1.65;
+const BEAM_Z = 1.6;
 
 /** A wall as a 2D surface: along-wall distance t (reading left to right from the room side), height z, pushed `o` meters out into the room. World coordinates out. */
 type WallMap = (t: number, z: number, o?: number) => Vec3;
@@ -145,7 +145,7 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
 
   // Ceiling: sooty black with paler water stains, and the red-painted bit by the bathroom.
   plane(x0, y0, x1, y1, ceilZ, R.ceiling);
-  plane(7.1, ROW_Y + 1.5, x1, y1, ceilZ - 0.001, R.ceilingRed);
+  plane(x0, y0, 3.9, 1.6, ceilZ - 0.001, R.ceilingRed);
   for (let i = 0; i < 46; i++) disc(b, cam, xf({ x: x0 + rnd() * (x1 - x0), y: y0 + rnd() * (y1 - y0), z: ceilZ - 0.002 }), 0.2 + rnd() * 0.6, R.ceilingStain, 10);
 
   // Floor: rust-red stained concrete, patchy, with worn and wet spots.
@@ -177,10 +177,12 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
 
   // Walls, each mapped so its writing reads left to right from inside the room:
   // the stage wall (y0), the bench wall (y1), the bar wall (x0) and the door wall (x1).
-  const stageWall: WallMap = (t, z, o = 0) => xf({ x: x0 + t, y: y0 + o, z });
-  const benchWall: WallMap = (t, z, o = 0) => xf({ x: x1 - t, y: y1 - o, z });
-  const barWall: WallMap = (t, z, o = 0) => xf({ x: x0 + o, y: y1 - t, z });
-  const doorWall: WallMap = (t, z, o = 0) => xf({ x: x1 - o, y: y0 + t, z });
+  // Anything above the panelling sits on the face of the black soffit box that runs along the wall tops.
+  const up = (z: number, o: number) => (z > HEADER_Z + 1e-6 ? o + SOFFIT : o);
+  const stageWall: WallMap = (t, z, o = 0) => xf({ x: x0 + t, y: y0 + up(z, o), z });
+  const benchWall: WallMap = (t, z, o = 0) => xf({ x: x1 - t, y: y1 - up(z, o), z });
+  const barWall: WallMap = (t, z, o = 0) => xf({ x: x0 + up(z, o), y: y1 - t, z });
+  const doorWall: WallMap = (t, z, o = 0) => xf({ x: x1 - up(z, o), y: y0 + t, z });
   const lenX = x1 - x0;
   const lenY = y1 - y0;
   for (const [m, len] of [
@@ -192,24 +194,39 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
     drawPaneledWall(b, theme, cam, m, len, floorZ, ceilZ, rnd);
   drawWallDressing(b, theme, cam, { stageWall, benchWall, barWall, doorWall }, floorZ, ceilZ);
 
-  // Bench ledges: the long bench wall, wrapping round the corner by the doors.
-  const bench = (ax: number, ay: number, bx: number, by: number) => {
-    xbox(b, cam, xf, ax, ay, floorZ, bx, by, floorZ + 0.4, R.benchFront, R.benchFront, R.benchFront);
-    xbox(b, cam, xf, ax - 0.02, ay - 0.02, floorZ + 0.4, bx + 0.02, by + 0.02, floorZ + 0.46, R.benchTop, R.bench, R.bench);
+  // The two-tier bench (a low seat, a shelf above) along the whole bench wall and round the door corner.
+  const B = BENCH;
+  const seat = (ax: number, ay: number, bx: number, by: number) => {
+    xbox(b, cam, xf, ax, ay, floorZ, bx, by, floorZ + B.seatZ - 0.05, R.benchFront, R.benchFront, R.benchFront);
+    xbox(b, cam, xf, ax - 0.02, ay - 0.02, floorZ + B.seatZ - 0.05, bx + 0.02, by + 0.02, floorZ + B.seatZ, R.benchTop, R.bench, R.bench);
   };
-  // The bench runs the whole length of the bench wall (as in the basement), round the corner by the doors,
-  // and along the stage wall up to the stage.
-  bench(x0, y1 - 0.34, x1, y1);
-  bench(x1 - 0.34, y1 - 1.9, x1, y1 - 0.34);
-  bench(x0, y0, STAGE.x0, y0 + 0.34);
-  // Tombstones on the bench in the middle of the room, a caution sign by the windows.
+  const shelf = (ax: number, ay: number, bx: number, by: number) => xbox(b, cam, xf, ax, ay, floorZ + B.shelfZ, bx, by, floorZ + B.shelfZ + 0.05, R.benchTop, R.bench, R.bench);
+  const corner = y1 - 2.3;
+  shelf(x0, y1 - B.shelfDepth, x1, y1);
+  shelf(x1 - B.shelfDepth, corner, x1, y1 - B.shelfDepth);
+  seat(x0, y1 - B.seatDepth, x1, y1);
+  seat(x1 - B.seatDepth, corner, x1, y1 - B.seatDepth);
+  // Particle board and black panels along the seat front.
+  for (let t = 0, k = 0; t < x1 - x0; t += 1.35, k++)
+    wallShape(b, cam, benchWall, rectPts(t + 0.02, Math.min(x1 - x0, t + 1.33), floorZ + 0.02, floorZ + B.seatZ - 0.08), k % 3 === 1 ? R.benchFront : R.osb, B.seatDepth + 0.004);
+  wallText(b, cam, benchWall, "XENON \u201919", 'bold 16px sans-serif', R.scratch, x1 - 2.9, x1 - 2.2, floorZ + 0.12, floorZ + 0.3, B.seatDepth + 0.006);
+  // On the seat: tombstones. On the shelf: cups, a jug, a paper towel roll, a caution sign.
   [
-    [6.4, 'RIP'],
-    [6.05, 'RIP'],
-    [5.65, 'HERE LIES\nD. CAMPOS'],
-    [5.25, 'RIP'],
-  ].forEach(([x, label]) => drawTombstone(b, theme, cam, benchWall, x1 - (x as number), floorZ + 0.46, label as string));
-  drawCaution(b, theme, cam, benchWall, x1 - 7.2, floorZ + 0.46, 0.18);
+    [6.35, 'HERE LIES\nD. CAMPOS', 1],
+    [7.55, 'RIP', 0.9],
+    [7.85, 'RIP', 1.25],
+    [8.12, 'RIP', 0.8],
+  ].forEach(([x, label, k]) => drawTombstone(b, theme, cam, benchWall, x1 - (x as number), floorZ + B.seatZ, label as string, k as number));
+  const glass = { light: R.glassStack, mid: R.glassStack, dark: R.glassStackDark };
+  for (const [a, c2] of [
+    [1.0, 2.1],
+    [5.0, 6.3],
+    [7.3, 7.9],
+  ])
+    for (let x = a; x <= c2; x += 0.13) cylinder(b, cam, xf({ x, y: y1 - 0.12, z: 0 }), 0.035, floorZ + B.shelfZ + 0.05, floorZ + B.shelfZ + 0.15, glass, false);
+  cylinder(b, cam, xf({ x: 2.45, y: y1 - 0.13, z: 0 }), 0.07, floorZ + B.shelfZ + 0.05, floorZ + B.shelfZ + 0.33, { light: R.paper, mid: R.paper, dark: R.fridgeDark }, false);
+  cylinder(b, cam, xf({ x: 4.85, y: y1 - 0.13, z: 0 }), 0.06, floorZ + B.shelfZ + 0.05, floorZ + B.shelfZ + 0.3, { light: R.paper, mid: R.jugMilk, dark: R.fridgeDark }, false);
+  drawCaution(b, theme, cam, benchWall, x1 - 8.75, floorZ + B.shelfZ + 0.05, 0.13);
 
   // Things standing in the room, far to near.
   const depth = (p: Vec3) => {
@@ -228,11 +245,13 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
   things.push({ d: depth({ x: 0.3, y: ROW_Y, z: 0 }) + 50, draw: () => FRIDGES.forEach((f) => xbox(b, cam, xf, f.x0, f.y0, floorZ, f.x1, f.y1, floorZ + f.h, R.fridgeTop, R.fridge, R.fridgeDark)) });
   things.push({ d: depth({ x: BAR.x1, y: ROW_Y, z: 0 }), draw: () => drawBar(b, theme, cam, xf, floorZ) });
   things.push({ d: depth({ x: (STAGE.x0 + STAGE.x1) / 2, y: STAGE.y0, z: 0 }) + 50, draw: () => drawStage(b, theme, cam, xf, floorZ) });
-  things.push({ d: depth({ x: x1 - 0.45, y: 2.4, z: 0 }), draw: () => drawChair(b, theme, cam, xf, x1 - 0.65, 2.2, floorZ) });
+  things.push({ d: depth({ x: 8.1, y: 0.4, z: 0 }), draw: () => drawChair(b, theme, cam, xf, 7.9, 0.12, floorZ) });
+  // The gray trash can by the exit stairs.
+  things.push({ d: depth({ x: 1.75, y: 0.45, z: 0 }), draw: () => cylinder(b, cam, xf({ x: 1.75, y: 0.45, z: 0 }), 0.25, floorZ, floorZ + 0.8, { light: R.binLight, mid: R.bin, dark: R.binDark }) });
   things.sort((a, c) => c.d - a.d).forEach((t) => t.draw());
 
   // Ceiling: the tube fixtures, then the beams (far to near).
-  for (const fx of FIXTURES) drawFixture(b, theme, cam, xf, fx.x, fx.y, ceilZ);
+  for (const fx of FIXTURES) drawFixture(b, theme, cam, xf, fx.x, fx.y, ceilZ, fx.axis);
   BEAMS.map((bm) => {
     const mid = (bm.from + bm.to) / 2;
     return { bm, d: depth(bm.axis === 'x' ? { x: mid, y: bm.at, z: ceilZ } : { x: bm.at, y: mid, z: ceilZ }) };
@@ -266,96 +285,137 @@ function drawPaneledWall(b: CanvasRenderingContext2D, theme: Theme, cam: Camera,
     line(b, cam, m(t, z, 0.004), m(t + w, z + tilt, 0.004), rnd() < 0.8 ? R.scratch : R.scratchColor);
     if (rnd() < 0.5) line(b, cam, m(t + 0.02, z - 0.035, 0.004), m(t + w * 0.7, z - 0.035 + tilt, 0.004), R.scratch);
   }
-  // Black painted header band up to the ceiling.
-  poly(b, cam, wallQuad(m, 0, len, HEADER_Z, ceilZ, 0.004), R.header);
-  line(b, cam, m(0, HEADER_Z, 0.005), m(len, HEADER_Z, 0.005), R.headerEdge);
+  // The black soffit box along the top of the wall (m pushes anything above HEADER_Z onto its face).
+  poly(b, cam, wallQuad(m, 0, len, HEADER_Z + 0.0001, ceilZ, 0), R.header);
+  line(b, cam, m(0, HEADER_Z + 0.0001, 0.001), m(len, HEADER_Z + 0.0001, 0.001), R.headerEdge);
+  void rnd;
 }
 
-/** Signs, slogans, doors and windows on the four walls (t is measured along each wall's reading direction). */
+/**
+ * Signs, slogans, doors and windows on the four walls, placed from the
+ * reference photos. t runs along each wall in its reading direction:
+ * - stage wall: from the bar end (t = x);
+ * - bench wall: from the door end (t = x1 - x);
+ * - bar wall: from the bench side (t = y1 - y);
+ * - door wall: from the stage side (t = y).
+ * Header writing sits on the soffit face (the wall maps put anything above
+ * HEADER_Z there).
+ */
 function drawWallDressing(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, w: Record<'stageWall' | 'benchWall' | 'barWall' | 'doorWall', WallMap>, floorZ: number, ceilZ: number): void {
   const R = theme.room;
   const { stageWall: S, benchWall: N, barWall: B, doorWall: D } = w;
   const { x1, y1 } = ROOM;
-  // Writing sits on the lower part of the black band, where the table cameras see it below the HUD.
+  // Writing sits on the lower part of the soffit, where the table cameras see it below the HUD.
   const h0 = HEADER_Z + 0.03;
   const h1 = HEADER_Z + 0.3;
-  void ceilZ;
   const hand = 'bold 20px sans-serif';
   const serif = 'bold 22px serif';
-  const tN = (x: number) => x1 - x; // bench wall reads from the door end toward the bar
-  const tB = (y: number) => y1 - y; // bar wall reads from the bench side toward the stage side
+  const small = 'bold 14px sans-serif';
+  const tN = (x: number) => x1 - x;
+  const tB = (y: number) => y1 - y;
+  const floorTop = (z: number) => floorZ + z; // heights given from the floor
 
-  // --- Bar wall: red corners either side of the bar, the arch over it, the fridges' alcove.
-  wallShape(b, cam, B, rectPts(0, tB(ROW_Y + 2.0), floorZ, ceilZ), R.accentRed, 0.003);
-  wallShape(b, cam, B, rectPts(tB(ROW_Y - 2.0), tB(0), floorZ, ceilZ), R.accentRed, 0.003);
+  // ---------------------------------------------------------- bar wall
+  // Orange corner on the bench side with the FARGO '23 door; KCAO painted beside it.
+  wallShape(b, cam, B, rectPts(0, tB(7.5), floorZ, ceilZ), R.accentRed, 0.003);
+  drawDoor(b, theme, cam, B, 0.4, 1.15, floorZ);
+  wallText(b, cam, B, "FARGO ’23", small, R.scratch, 0.4, 1.15, floorTop(2.08), floorTop(2.18), 0.008);
+  wallText(b, cam, B, 'Buzz\nBuzz', small, R.signInk, 1.25, 1.65, floorTop(1.7), floorTop(2.0), 0.008);
+  wallText(b, cam, B, 'KCAO', 'bold 26px sans-serif', R.paintBlue, tB(7.4), tB(6.75), floorTop(0.6), floorTop(1.1));
+  wallText(b, cam, B, 'ZETA PSI. YOU DO YOU.', hand, R.paintWhite, tB(7.4), tB(6.55), h0 + 0.05, h1);
+  wallText(b, cam, B, 'Bird:', small, R.paintGold, tB(7.35), tB(7.05), h0, h0 + 0.06);
+  wallShape(b, cam, B, rectPts(tB(6.75), tB(6.5), floorTop(1.6), floorTop(1.95)), R.header, 0.005);
+  wallText(b, cam, B, 'BOO!', 'bold 20px sans-serif', R.paintGreen, tB(6.75), tB(6.5), floorTop(1.65), floorTop(1.9), 0.007);
+  // The counter opening with the arch over it, the fridges behind (drawn with the bar).
   wallShape(b, cam, B, rectPts(tB(ROW_Y + 1.5), tB(ROW_Y - 1.5), floorZ + 0.2, 1.3), R.barAlcove, 0.004);
   wallShape(b, cam, B, Array.from({ length: 13 }, (_, i) => [tB(ROW_Y) + Math.cos((i / 12) * Math.PI) * 1.5, 1.3 + Math.sin((i / 12) * Math.PI) * 0.18] as [number, number]), R.barAlcove, 0.004);
   wallText(b, cam, B, 'Now Serving\nFrankenstein Family Ale', serif, R.paintGold, tB(ROW_Y + 1.6), tB(ROW_Y - 1.6), h0 - 0.02, h1);
-  wallText(b, cam, B, 'ZETA DO YOU. YOU DO YOU.', hand, R.paintWhite, 0.3, tB(ROW_Y + 2.1), h0 + 0.1, h1 - 0.1);
-  wallText(b, cam, B, "WE'LL OBSERVE", hand, R.paintWhite, tB(ROW_Y - 2.1), tB(0.3), h0 + 0.1, h1 - 0.1);
-  sign(b, theme, cam, B, 'Class of 1981\nBasement', tB(ROW_Y - 1.75), tB(ROW_Y - 2.05), 0.85, 1.05, R.plaque, R.paintGold, 'bold 14px serif');
-  drawDoor(b, theme, cam, B, tB(1.6), tB(0.85), floorZ);
+  wallText(b, cam, B, "WE'LL OBSERVE", hand, R.paintWhite, tB(ROW_Y - 1.9), tB(0.3), h0 + 0.1, h1);
+  sign(b, theme, cam, B, 'Class of 1981\nBasement', tB(ROW_Y - 1.65), tB(ROW_Y - 2.05), 0.85, 1.05, R.plaque, R.paintGold, 'bold 14px serif');
 
-  // --- Stage wall: the red corner by the bar, then the stage end with its signs.
-  wallShape(b, cam, S, rectPts(0, 2.4, floorZ, ceilZ), R.accentRed, 0.003);
-  wallText(b, cam, S, "DON'T BREAK THE CHAIN", hand, R.paintOrange, 0.3, 3.2, h0 + 0.08, h1 - 0.08);
-  wallText(b, cam, S, "TIMES NOT WASTED\nWHEN YOU'RE WASTED", 'bold 16px sans-serif', R.paintWhite, 0.4, 2.2, 0.95, 1.35);
-  wallText(b, cam, S, 'JAFE', 'bold 26px sans-serif', R.paintBlue, 2.7, 3.5, 0.85, 1.2);
-  wallText(b, cam, S, "ROBICHEAUX '14\nPUCK '12", 'bold 14px sans-serif', R.paintWhite, 3.6, 4.3, 0.9, 1.2);
-  wallText(b, cam, S, 'THE CLASS OF 1962 ROOM', 'bold 24px sans-serif', R.paintGold, 4.3, 6.9, h0, h1);
-  wallText(b, cam, S, 'STEP YOUR LEVELS UP', 'bold 26px sans-serif', R.paintPink, 7.3, 9.9, h0 + 0.12, h1);
-  wallText(b, cam, S, 'Is this going to be in my Supreme Court Hearing?', 'bold 18px sans-serif', R.paintBlue, 7.3, 9.9, h0, h0 + 0.11);
-  // Stage LED lights, mounted above the writing.
-  for (const t of [5.2, 6.0]) {
-    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.43, 0.09, 14), R.ledHousing, 0.02);
-    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.43, 0.065, 14), R.ledLight, 0.024);
+  // -------------------------------------------------------- stage wall
+  // Bar end: red walls and soffit, DON'T BREAK THE CHAIN, the EXIT stairs, a door with an arrow.
+  wallShape(b, cam, S, rectPts(0, 1.45, floorZ, HEADER_Z), R.accentRed, 0.003);
+  wallShape(b, cam, S, rectPts(0, 3.95, HEADER_Z + 0.01, ceilZ), R.accentRed, 0.003);
+  wallText(b, cam, S, "DON'T BREAK THE CHAIN", hand, R.paintWhite, 0.4, 3.6, h0 + 0.04, h1 - 0.02);
+  wallShape(b, cam, S, rectPts(0.3, 1.25, floorZ, floorTop(2.05)), R.stairs, 0.005);
+  for (let k = 0; k < 6; k++) wallShape(b, cam, S, rectPts(0.33, 1.22, floorTop(0.15 + k * 0.3), floorTop(0.17 + k * 0.3)), R.stairEdge, 0.006);
+  sign(b, theme, cam, S, 'EXIT', 0.55, 1.0, HEADER_Z - 0.2, HEADER_Z - 0.06, R.exitRed, R.signWhite, 'bold 14px sans-serif');
+  drawDoor(b, theme, cam, S, 1.75, 2.5, floorZ);
+  wallShape(b, cam, S, [[2.7, 1.05], [2.95, 1.05], [2.95, 1.0], [3.1, 1.1], [2.95, 1.2], [2.95, 1.15], [2.7, 1.15]], R.paintOrange, 0.006);
+  wallText(b, cam, S, "TIMES NOT WASTED\nWHEN YOU'RE WASTED", small, R.paintWhite, 2.9, 3.95, 0.4, 0.75);
+  // The stage, behind the saints table: lights on a 2x4 over STEP YOUR LEVELS UP, the 74, the letters.
+  const sx0 = STAGE.x0 + 0.05;
+  const sx1 = STAGE.x1 - 0.05;
+  wallText(b, cam, S, 'STEP YOUR LEVELS UP', 'bold 26px sans-serif', R.paintPink, sx0, sx1, h0 + 0.11, h1 + 0.04);
+  wallText(b, cam, S, 'WHY ARE WE WAITING?!', small, R.paintOrange, sx0, sx0 + 0.95, h0, h0 + 0.09);
+  wallText(b, cam, S, 'Is this going to be in my Supreme Court Hearing?', 'bold 18px sans-serif', R.paintBlue, sx0 + 1.0, sx1, h0, h0 + 0.1);
+  wallShape(b, cam, S, rectPts(sx0, sx1, HEADER_Z + 0.42, HEADER_Z + 0.47), R.twoByFour, 0.03);
+  for (const t of [sx0 + 0.45, sx1 - 0.45]) {
+    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.33, 0.09, 14), R.ledHousing, 0.05);
+    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.33, 0.065, 14), R.ledLight, 0.055);
   }
-  sign(b, theme, cam, S, 'JOHNSON\nCONTROLS', 5.0, 5.45, 0.62, 0.98);
-  wallText(b, cam, S, 'ITS KCAO A WORLD', hand, R.paintBlue, 5.15, 6.6, 0.35, 0.62);
-  wallShape(b, cam, S, circlePts(6.45, 1.12, 0.22, 22), R.signEdge);
-  wallShape(b, cam, S, circlePts(6.45, 1.12, 0.2, 22), R.signWhite, 0.007);
-  wallText(b, cam, S, '74', 'bold 28px sans-serif', R.signInk, 6.29, 6.61, 1.0, 1.24, 0.008);
-  wallText(b, cam, S, 'Z Ψ', 'bold 28px serif', R.letters, 6.8, 7.3, 1.05, 1.35);
-  wallText(b, cam, S, 'DAVID ’25 ♥ ALYSSA', 'bold 14px sans-serif', R.paintWhite, 5.6, 6.2, 0.78, 0.92);
-  wallText(b, cam, S, 'DUCHESS\nWAS HERE', 'bold 14px sans-serif', R.scratch, 7.5, 8.1, 1.0, 1.3);
-  wallShape(b, cam, S, circlePts(8.75, 1.0, 0.27, 8, Math.PI / 8), R.signWhite);
-  wallShape(b, cam, S, circlePts(8.75, 1.0, 0.24, 8, Math.PI / 8), R.stop, 0.007);
-  wallText(b, cam, S, 'STOP', 'bold 22px sans-serif', R.signWhite, 8.57, 8.93, 0.91, 1.09, 0.008);
+  wallShape(b, cam, S, rectPts((sx0 + sx1) / 2 - 0.18, (sx0 + sx1) / 2 + 0.18, HEADER_Z + 0.25, HEADER_Z + 0.41), R.ledHousing, 0.05);
+  wallShape(b, cam, S, rectPts((sx0 + sx1) / 2 - 0.15, (sx0 + sx1) / 2 + 0.15, HEADER_Z + 0.27, HEADER_Z + 0.39), R.ledLight, 0.055);
+  const cx = (STAGE.x0 + STAGE.x1) / 2;
+  wallText(b, cam, S, 'DAVID ’25\n♥ ALYSSA', small, R.paintWhite, cx - 1.1, cx - 0.55, 0.85, 1.2);
+  wallShape(b, cam, S, rectPts(cx - 0.5, cx - 0.06, 0.8, 1.27), R.signEdge);
+  wallShape(b, cam, S, circlePts(cx - 0.28, 1.035, 0.2, 22), R.signWhite, 0.007);
+  wallText(b, cam, S, '74', 'bold 28px sans-serif', R.signInk, cx - 0.45, cx - 0.11, 0.92, 1.15, 0.008);
+  wallText(b, cam, S, 'Ζ  Ψ', 'bold 28px serif', R.letters, cx, cx + 0.6, 1.02, 1.3);
+  wallShape(b, cam, S, rectPts(cx + 0.65, cx + 0.95, 0.98, 1.1), R.signWhite, 0.006);
+  wallText(b, cam, S, '221 AFC', 'bold 12px sans-serif', R.signInk, cx + 0.67, cx + 0.93, 0.99, 1.09, 0.008);
+  wallText(b, cam, S, 'ITS KCAO\nA WORLD', hand, R.paintBlue, cx - 1.15, cx - 0.4, 0.42, 0.78);
+  sign(b, theme, cam, S, 'SENIOR\nPROJECT\nMANAGER', cx + 0.15, cx + 0.6, 0.42, 0.88);
+  wallText(b, cam, S, 'DUCHESS\nWAS HERE', small, R.scratch, cx + 0.7, cx + 1.15, 1.0, 1.25);
+  wallShape(b, cam, S, circlePts(STAGE.x1 + 0.3, 1.0, 0.27, 8, Math.PI / 8), R.signWhite);
+  wallShape(b, cam, S, circlePts(STAGE.x1 + 0.3, 1.0, 0.24, 8, Math.PI / 8), R.stopFaded, 0.007);
+  wallText(b, cam, S, 'STOP', 'bold 22px sans-serif', R.signWhite, STAGE.x1 + 0.12, STAGE.x1 + 0.48, 0.91, 1.09, 0.008);
+  // Door end: the creed along the soffit, the bathroom, a chair, SHUDDUP CHIP.
+  wallText(b, cam, S, 'Conquer evil with swift & terrible justice. Treat all innocents with utmost respect', 'bold 16px sans-serif', R.paintGold, 7.25, x1 - 0.1, h0, h0 + 0.12);
+  wallShape(b, cam, S, rectPts(7.35, 8.55, floorTop(1.65), floorTop(2.15)), R.header, 0.004);
+  wallText(b, cam, S, 'SHUDDUP\nCHIP', small, R.paintWhite, 7.4, 7.95, floorTop(1.75), floorTop(2.12), 0.006);
+  wallText(b, cam, S, "He's not a herb, he's my homie.", small, R.paintGold, 7.4, 8.55, floorTop(1.66), floorTop(1.74), 0.006);
+  wallText(b, cam, S, "MOXXI\nDEXTER ’19", small, R.scratch, 8.0, 8.6, 0.25, 0.7);
+  drawDoor(b, theme, cam, S, 8.8, 9.6, floorZ);
+  sign(b, theme, cam, S, 'RESTROOM', 8.95, 9.45, 1.0, 1.12, R.restroomBlue, R.signWhite, 'bold 12px sans-serif');
 
-  // --- Bench wall: windows and street sign by the doors, tombstones and the LEFT TURN sign mid-room, ONE WAY toward the bar.
-  wallText(b, cam, N, 'Do you wanna hear a secret?', hand, R.paintGreen, 0.3, 3.3, h0, h1);
-  wallText(b, cam, N, 'Brothers should be nicer to other brothers', hand, R.paintGold, tN(6.95), tN(4.25), h0, h1);
-  wallText(b, cam, N, 'BM', 'bold 26px sans-serif', R.paintGreen, tN(3.9), tN(3.4), h0, h1);
-  wallText(b, cam, N, 'Love loves to love love.', serif, R.paintWhite, tN(3.2), tN(0.3), h0, h1);
-  wallText(b, cam, N, '8', 'bold 30px sans-serif', R.paintBlue, 0.25, 0.5, 0.3, 0.75);
-  wallText(b, cam, N, 'CLAY DG', 'bold 26px sans-serif', R.paintBlue, 0.55, 1.6, 0.3, 0.7);
-  for (const x of [9.0, 8.0]) {
-    wallShape(b, cam, N, rectPts(tN(x + 0.42), tN(x - 0.42), 0.82, 1.42), R.windowFrame, 0.006);
-    wallShape(b, cam, N, rectPts(tN(x + 0.37), tN(x - 0.37), 0.87, 1.37), R.window, 0.008);
+  // -------------------------------------------------------- bench wall
+  // Night sky end: QUARTER MILE RD, the windows, BROFESSOR '21; a header about the kitchen.
+  wallText(b, cam, N, "It's raining in the kitchen", small, R.paintWhite, tN(10.1), tN(7.6), h0, h0 + 0.1);
+  sign(b, theme, cam, N, 'QUARTER MILE RD', tN(10.3), tN(9.65), 1.02, 1.13, R.streetGreen, R.signWhite, 'bold 14px sans-serif');
+  for (const x of [9.25, 8.35]) {
+    wallShape(b, cam, N, rectPts(tN(x + 0.4), tN(x - 0.4), 0.55, 1.35), R.windowFrame, 0.006);
+    wallShape(b, cam, N, rectPts(tN(x + 0.35), tN(x - 0.35), 0.6, 1.3), R.window, 0.008);
   }
-  wallText(b, cam, N, 'KEEP SHUT →', 'bold 14px sans-serif', R.paintWhite, tN(9.35), tN(8.7), 1.2, 1.32, 0.01);
-  sign(b, theme, cam, N, 'QUARTER MILE RD', tN(7.5), tN(6.8), 1.02, 1.14, R.streetGreen, R.signWhite, 'bold 14px sans-serif');
-  sign(b, theme, cam, N, 'LEFT TURN\nYIELD\nON GREEN', tN(4.75), tN(4.25), 0.45, 1.15);
-  wallShape(b, cam, N, circlePts(tN(4.5), 0.54, 0.05), R.smiley, 0.009);
-  sign(b, theme, cam, N, 'DARTMOUTH\nDIABETES\nDASH', tN(5.15), tN(4.85), 0.6, 1.02, R.paper, R.signInk, 'bold 14px sans-serif');
-  wallText(b, cam, N, "TURK '18\nI AM GROOT", 'bold 14px sans-serif', R.paintWhite, tN(4.0), tN(3.4), 0.8, 1.1);
-  wallText(b, cam, N, 'PROFESSOR ’21', 'bold 14px sans-serif', R.scratch, tN(6.6), tN(5.8), 0.55, 0.7);
-  wallShape(b, cam, N, rectPts(tN(2.25), tN(1.4), 1.02, 1.24), R.signEdge);
-  wallShape(b, cam, N, rectPts(tN(2.23), tN(1.42), 1.04, 1.22), R.signWhite, 0.007);
-  wallShape(b, cam, N, [[tN(2.15), 1.11], [tN(1.65), 1.11], [tN(1.65), 1.08], [tN(1.5), 1.13], [tN(1.65), 1.18], [tN(1.65), 1.15], [tN(2.15), 1.15]], R.signInk, 0.008);
-  wallText(b, cam, N, 'ONE WAY', 'bold 12px sans-serif', R.signWhite, tN(2.13), tN(1.7), 1.115, 1.145, 0.009);
+  wallText(b, cam, N, "BROFESSOR ’21", small, R.scratch, tN(8.6), tN(7.9), 0.33, 0.48);
+  // Saints: Brothers should be nicer to other brothers, BM, LEFT TURN YIELD, the Diabetes Dash poster.
+  wallText(b, cam, N, 'Brothers should be nicer to other brothers', hand, R.paintGold, tN(6.85), tN(4.4), h0, h0 + 0.13);
+  wallText(b, cam, N, 'BM', 'bold 26px sans-serif', R.paintGreen, tN(5.25), tN(4.75), h0 + 0.12, h1 + 0.04);
+  sign(b, theme, cam, N, 'LEFT TURN\nYIELD\nON GREEN', tN(5.75), tN(5.25), 0.45, 1.15);
+  wallShape(b, cam, N, circlePts(tN(5.5), 0.54, 0.05), R.smiley, 0.009);
+  sign(b, theme, cam, N, 'DARTMOUTH\nDIABETES\nDASH', tN(6.35), tN(6.05), 0.6, 1.02, R.paper, R.signInk, 'bold 14px sans-serif');
+  wallText(b, cam, N, "TURK '18\nI AM GROOT", small, R.scratch, tN(6.95), tN(6.45), 0.9, 1.15);
+  // Chain: SCRAPPY over Love loves to love love, Do you wanna hear a secret, ONE WAY, JAFE.
+  wallText(b, cam, N, 'SCRAPPY', small, R.paintGold, tN(3.3), tN(2.75), h0 + 0.15, h1);
+  wallText(b, cam, N, 'Love loves to love love.', 'bold 20px serif', R.paintGold, tN(3.75), tN(2.2), h0, h0 + 0.14);
+  wallText(b, cam, N, 'Do you wanna hear a secret?', hand, R.paintGreen, tN(2.05), tN(0.35), h0, h1);
+  wallShape(b, cam, N, rectPts(tN(3.6), tN(2.85), 1.0, 1.2), R.signEdge);
+  wallShape(b, cam, N, rectPts(tN(3.58), tN(2.87), 1.02, 1.18), R.signWhite, 0.007);
+  wallShape(b, cam, N, [[tN(3.5), 1.08], [tN(3.05), 1.08], [tN(3.05), 1.05], [tN(2.92), 1.1], [tN(3.05), 1.15], [tN(3.05), 1.12], [tN(3.5), 1.12]], R.signInk, 0.008);
+  wallText(b, cam, N, 'ONE WAY', 'bold 12px sans-serif', R.signWhite, tN(3.48), tN(3.08), 1.085, 1.115, 0.009);
+  wallText(b, cam, N, 'COCO', small, R.scratch, tN(2.55), tN(2.2), 1.15, 1.25);
+  wallText(b, cam, N, 'JAFE', 'bold 26px sans-serif', R.paintBlue, tN(2.6), tN(1.95), 0.85, 1.12);
+  wallText(b, cam, N, "ROBICHEAUX '14\nPUCK '12", small, R.scratch, tN(1.85), tN(1.2), 0.95, 1.2);
+  wallText(b, cam, N, "Vincent van Brogh '17", small, R.scratch, tN(3.0), tN(2.3), 0.45, 0.55);
 
-  // --- Door wall: the bathroom, then the exit doors; a long creed along the top.
-  wallText(b, cam, D, 'Conquer evil with swift & terrible justice.', hand, R.paintGold, 0.3, 4.4, h0 + 0.08, h1 - 0.08);
-  wallText(b, cam, D, 'Treat all innocents with utmost respect & dignity. Honor your brotherhood with all your actions.', 'bold 16px sans-serif', R.paintGold, 4.6, 9.0, h0 + 0.1, h1 - 0.1);
-  drawDoor(b, theme, cam, D, 3.15, 3.95, floorZ);
-  sign(b, theme, cam, D, 'BATHROOM', 3.0, 4.1, 1.2, 1.42, R.signWhite, R.signInk, 'bold 18px sans-serif');
-  wallText(b, cam, D, "He's not a herb, he's my homie.", 'bold 14px sans-serif', R.paintGold, 2.2, 3.0, 1.0, 1.1);
-  wallText(b, cam, D, 'SHUDDUP\nCHIP', 'bold 16px sans-serif', R.paintWhite, 2.3, 2.95, 1.15, 1.4);
-  wallText(b, cam, D, 'MOXXI\nDEXTER ’19', 'bold 14px sans-serif', R.scratchColor, 1.4, 2.1, 0.3, 0.7);
-  drawDoor(b, theme, cam, D, 5.05, 5.85, floorZ, true);
-  sign(b, theme, cam, D, 'EXIT', 5.3, 5.6, 1.3, 1.44, R.exitRed, R.signWhite, 'bold 14px sans-serif');
-  drawDoor(b, theme, cam, D, 6.15, 6.9, floorZ);
+  // --------------------------------------------------------- door wall
+  wallText(b, cam, D, '& dignity. Honor your brotherhood with all your actions. And fight as though immortal, for history will make you so.', 'bold 16px sans-serif', R.paintGold, 0.4, y1 - 0.5, h0, h0 + 0.12);
+  wallShape(b, cam, D, rectPts(4.55, 5.45, floorZ, floorTop(2.1)), R.exitRed, 0.003);
+  drawDoor(b, theme, cam, D, 4.6, 5.4, floorZ, true);
+  sign(b, theme, cam, D, 'WHILE SHOWERING\nSHRED', 5.8, 6.6, 0.95, 1.25, R.paper, R.streetGreen, 'bold 14px sans-serif');
+  wallText(b, cam, D, '8', 'bold 30px sans-serif', R.paintBlue, 6.95, 7.2, 0.35, 0.8);
+  wallText(b, cam, D, 'CLAY DG', 'bold 26px sans-serif', R.paintBlue, 7.25, 8.5, 0.35, 0.75);
 }
 
 function drawDoor(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, t0: number, t1: number, floorZ: number, pushBar = false): void {
@@ -368,11 +428,11 @@ function drawDoor(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: Wal
   else wallShape(b, cam, m, circlePts(t1 - 0.1, floorZ + 0.95, 0.025, 8), R.ledLight, 0.009);
 }
 
-function drawTombstone(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, t: number, z: number, label: string): void {
+function drawTombstone(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: WallMap, t: number, z: number, label: string, k = 1): void {
   const R = theme.room;
-  const w = 0.14;
-  const h = 0.34;
-  const out = 0.2;
+  const w = 0.13 * k;
+  const h = 0.34 * k;
+  const out = 0.28;
   const pts: [number, number][] = [[t - w, z], [t + w, z]];
   for (let i = 0; i <= 8; i++) pts.push([t + Math.cos((i / 8) * Math.PI) * w, z + h - w + Math.sin((i / 8) * Math.PI) * w]);
   wallShape(b, cam, m, pts, R.stoneDark, out);
@@ -387,12 +447,17 @@ function drawCaution(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, m: 
   wallText(b, cam, m, 'CAUTION\nWET\nFLOOR', 'bold 14px sans-serif', R.signInk, t - 0.1, t + 0.1, z + 0.28, z + 0.52, out + 0.004);
 }
 
-/** A square pillar: stained wood up to the black painted top, with a slogan on each painted side that has one. */
+/**
+ * A square pillar: stained wood (with a molded cap, an inset panel and names
+ * carved in) up to about head height, black painted above. Each face can have
+ * a slogan, a round light fitting on a tan patch, and carvings.
+ */
 function drawPillar(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf, pl: (typeof PILLARS)[number], floorZ: number): void {
   const R = theme.room;
-  const s = 0.18;
-  const mid = 0.75;
-  xbox(b, cam, xf, pl.x - s, pl.y - s, floorZ, pl.x + s, pl.y + s, mid, R.pillarTop, R.pillarWood, R.pillarWoodLit);
+  const s = pl.size ?? 0.18;
+  const mid = 0.85;
+  xbox(b, cam, xf, pl.x - s, pl.y - s, floorZ, pl.x + s, pl.y + s, mid - 0.06, R.pillarTop, R.pillarWood, R.pillarWoodLit);
+  xbox(b, cam, xf, pl.x - s - 0.025, pl.y - s - 0.025, mid - 0.06, pl.x + s + 0.025, pl.y + s + 0.025, mid, R.pillarTop, R.pillarCap, R.pillarCap);
   xbox(b, cam, xf, pl.x - s - 0.01, pl.y - s - 0.01, mid, pl.x + s + 0.01, pl.y + s + 0.01, BEAM_Z, R.header, R.header, R.headerLit);
   // Faces in basement terms: -x, +x, -y, +y; each WallMap reads left to right for someone facing that side.
   const o = s + 0.012;
@@ -402,18 +467,32 @@ function drawPillar(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: 
     (t, z, k = 0) => xf({ x: pl.x + s - t, y: pl.y - o - k, z }),
     (t, z, k = 0) => xf({ x: pl.x - s + t, y: pl.y + o + k, z }),
   ];
+  const W = 2 * s;
   faces.forEach((m, i) => {
     if (!facesCamera(cam, m, s, mid)) return;
-    poly(b, cam, wallQuad(m, 0.05, 2 * s - 0.05, floorZ + 0.1, mid - 0.1, 0.002), R.pillarPanel);
-    const p = pl.faces[i];
-    if (p) wallText(b, cam, m, p.text, p.font ?? 'bold 18px sans-serif', paint(theme, p), 0.03, 2 * s - 0.03, mid + 0.06, BEAM_Z - 0.06, 0.004);
+    const f = pl.faces[i] ?? {};
+    poly(b, cam, wallQuad(m, 0.05, W - 0.05, floorZ + 0.1, mid - 0.14, 0.002), R.pillarPanel);
+    if (f.carved) wallText(b, cam, m, f.carved, 'bold 14px sans-serif', R.scratch, 0.07, W - 0.07, floorZ + 0.75, mid - 0.2, 0.004);
+    // The slogan fills the black top; a light fitting takes its upper part.
+    let top = BEAM_Z - 0.06;
+    if (f.light) {
+      const lc = BEAM_Z - 0.28;
+      wallShape(b, cam, m, rectPts(s - 0.13, s + 0.13, lc - 0.13, lc + 0.13), R.lightPatch, 0.004);
+      wallShape(b, cam, m, circlePts(s, lc, 0.08, 14), R.lightRing, 0.006);
+      wallShape(b, cam, m, circlePts(s, lc, 0.055, 14), R.ledLight, 0.008);
+      top = lc - 0.16;
+    }
+    const p = f.paint;
+    if (!p) return;
+    if (p.plate) wallShape(b, cam, m, rectPts(0.05, W - 0.05, mid + 0.08, top), R.paper, 0.004);
+    wallText(b, cam, m, p.text, p.font ?? 'bold 18px sans-serif', paint(theme, p), 0.04, W - 0.04, mid + 0.08, top, 0.006);
   });
 }
 
 /** A black ceiling beam with slogans spread along both long sides. */
 function drawBeam(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf, bm: (typeof BEAMS)[number], ceilZ: number): void {
   const R = theme.room;
-  const hw = 0.15;
+  const hw = 0.18;
   const len = bm.to - bm.from;
   if (bm.axis === 'x') xbox(b, cam, xf, bm.from, bm.at - hw, BEAM_Z, bm.to, bm.at + hw, ceilZ, R.header, R.header, R.headerLit);
   else xbox(b, cam, xf, bm.at - hw, bm.from, BEAM_Z, bm.at + hw, bm.to, ceilZ, R.header, R.headerLit, R.header);
@@ -425,17 +504,17 @@ function drawBeam(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf
   sides.forEach((m, i) => {
     const list = bm.sides[i];
     const slot = len / list.length;
-    list.forEach((p, k) => wallText(b, cam, m, p.text, p.font ?? 'bold 20px sans-serif', paint(theme, p), k * slot + 0.3, (k + 1) * slot - 0.3, BEAM_Z + 0.05, ceilZ - 0.05, 0.004));
+    list.forEach((p, k) => wallText(b, cam, m, p.text, p.font ?? 'bold 20px sans-serif', paint(theme, p), k * slot + 0.2, (k + 1) * slot - 0.2, BEAM_Z + 0.04, ceilZ - 0.04, 0.004));
   });
 }
 
-function drawFixture(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf, x: number, y: number, ceilZ: number): void {
+function drawFixture(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf, x: number, y: number, ceilZ: number, axis: 'x' | 'y' = 'x'): void {
   const R = theme.room;
-  const hl = 0.6;
-  const hw = 0.14;
+  const hx = axis === 'x' ? 0.6 : 0.14;
+  const hy = axis === 'x' ? 0.14 : 0.6;
   const z0 = ceilZ - 0.07;
-  xbox(b, cam, xf, x - hl, y - hw, z0, x + hl, y + hw, ceilZ, R.fixture, R.fixture, R.fixture);
-  poly(b, cam, [{ x: x - hl + 0.03, y: y - hw + 0.03, z: z0 - 0.001 }, { x: x + hl - 0.03, y: y - hw + 0.03, z: z0 - 0.001 }, { x: x + hl - 0.03, y: y + hw - 0.03, z: z0 - 0.001 }, { x: x - hl + 0.03, y: y + hw - 0.03, z: z0 - 0.001 }].map(xf), R.tube);
+  xbox(b, cam, xf, x - hx, y - hy, z0, x + hx, y + hy, ceilZ, R.fixture, R.fixture, R.fixture);
+  poly(b, cam, [{ x: x - hx + 0.03, y: y - hy + 0.03, z: z0 - 0.001 }, { x: x + hx - 0.03, y: y - hy + 0.03, z: z0 - 0.001 }, { x: x + hx - 0.03, y: y + hy - 0.03, z: z0 - 0.001 }, { x: x - hx + 0.03, y: y + hy - 0.03, z: z0 - 0.001 }].map(xf), R.tube);
   const p = project(cam, xf({ x, y, z: z0 }));
   if (!p) return;
   const r = Math.max(4, p.scale * 0.9);
@@ -465,26 +544,23 @@ function drawStage(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: X
   const st = STAGE;
   const top = floorZ + st.h;
   xbox(b, cam, xf, st.x0, st.y0, floorZ, st.x1, st.y1, top, R.stageFloor, R.stageSide, R.stageSide);
-  // Monopoly table against the wall, its squares along the front edge, cups on it.
-  const mx0 = st.x0 + 0.7;
-  xbox(b, cam, xf, mx0, 0.15, top, mx0 + 2.2, 0.85, top + 0.7, R.monopolyTop, R.monopolySide, R.monopolySide);
-  for (let i = 0; i < 9; i++) {
-    const x = mx0 + 0.05 + i * 0.235;
+  // The Monopoly table against the wall, its squares along the front edge, cups on it; speakers at the front corners.
+  const mx0 = st.x0 + 0.15;
+  const mw = st.x1 - st.x0 - 0.3;
+  xbox(b, cam, xf, mx0, 0.12, top, mx0 + mw, 0.82, top + 0.72, R.monopolyTop, R.monopolySide, R.monopolySide);
+  const n = 10;
+  for (let i = 0; i < n; i++) {
+    const x = mx0 + 0.05 + (i * (mw - 0.1)) / n;
     const col = R.monopolySquares[i % R.monopolySquares.length];
-    poly(b, cam, [{ x, y: 0.72, z: top + 0.701 }, { x: x + 0.2, y: 0.72, z: top + 0.701 }, { x: x + 0.2, y: 0.8, z: top + 0.701 }, { x, y: 0.8, z: top + 0.701 }].map(xf), col);
+    poly(b, cam, [{ x, y: 0.7, z: top + 0.721 }, { x: x + (mw - 0.1) / n - 0.03, y: 0.7, z: top + 0.721 }, { x: x + (mw - 0.1) / n - 0.03, y: 0.78, z: top + 0.721 }, { x, y: 0.78, z: top + 0.721 }].map(xf), col);
   }
-  for (const [cx, cy] of [
-    [mx0 + 0.5, 0.45],
-    [mx0 + 0.8, 0.35],
-    [mx0 + 1.2, 0.5],
-  ]) cylinder(b, cam, xf({ x: cx, y: cy, z: 0 }), 0.045, top + 0.7, top + 0.82, { light: R.glassStack, mid: R.glassStack, dark: R.glassStackDark }, false);
-  for (const [x0, y0, w, h] of [
-    [mx0 - 0.15, 1.15, 0.55, 0.6],
-    [mx0 + 2.5, 1.1, 0.45, 0.85],
-    [mx0 + 3.1, 1.0, 0.42, 0.95],
-  ]) xbox(b, cam, xf, x0, y0, top, x0 + w, y0 + 0.4, top + h, R.speakerTop, R.speaker, R.speakerGrille);
-  cylinder(b, cam, xf({ x: mx0 + 3.0, y: 1.65, z: 0 }), 0.05, top, top + 0.75, { light: R.glassStack, mid: R.glassStack, dark: R.glassStackDark }, false);
-  cylinder(b, cam, xf({ x: mx0 + 2.35, y: 1.6, z: 0 }), 0.08, top, top + 0.3, { light: R.jug, mid: R.jug, dark: shadeHex(R.jug, 0.7) }, false);
+  // The board's name lies flat on the table (wall-map height becomes depth on the table top).
+  wallText(b, cam, (t, z, k = 0) => xf({ x: mx0 + 0.6 + t, y: 0.3 + z, z: top + 0.722 + k }), 'ZETA PSI', 'bold 18px sans-serif', R.stop, 0, 0.8, 0, 0.2, 0.001);
+  const glass = { light: R.glassStack, mid: R.glassStack, dark: R.glassStackDark };
+  for (let i = 0; i < 9; i++) cylinder(b, cam, xf({ x: mx0 + 0.15 + i * (mw / 9), y: 0.32 + (i % 2) * 0.22, z: 0 }), 0.045, top + 0.72, top + 0.84, glass, false);
+  xbox(b, cam, xf, st.x0 + 0.05, 1.0, top, st.x0 + 0.5, 1.4, top + 0.6, R.speakerTop, R.speaker, R.speakerGrille);
+  xbox(b, cam, xf, st.x1 - 0.5, 0.95, top, st.x1 - 0.06, 1.38, top + 0.85, R.speakerTop, R.speaker, R.speakerGrille);
+  cylinder(b, cam, xf({ x: st.x1 - 0.75, y: 1.2, z: 0 }), 0.08, top, top + 0.3, { light: R.jug, mid: R.jug, dark: shadeHex(R.jug, 0.7) }, false);
 }
 
 function drawChair(b: CanvasRenderingContext2D, theme: Theme, cam: Camera, xf: Xf, x: number, y: number, floorZ: number): void {
