@@ -2,6 +2,7 @@
 
 import { makeConfig, type GameConfig, type TableDesign } from './config';
 import { tableArt } from './render/basement3d';
+import { composeSprite, PART_OPTIONS } from './core/sprite';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
 import { Game, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
@@ -118,6 +119,8 @@ if (location.hash === '#debug') {
     },
     openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
     art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
+    sprite: composeSprite,
+    parts: PART_OPTIONS,
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
   };
 }

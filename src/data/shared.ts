@@ -290,7 +290,10 @@ export class Account {
   canUse(id: string): boolean {
     if (!this.store.characters.isShared(id)) return true; // made in this browser
     if (this.progress.characters.includes(id)) return true;
-    return !!this.uid && this.creators.get(id) === this.uid;
+    // Whoever made a character always has it: the owner made every character without a creator.
+    const creator = this.creators.get(id);
+    if (!creator) return this.owner;
+    return !!this.uid && creator === this.uid;
   }
 
   /** Characters this player can draft or play as. */
@@ -421,7 +424,11 @@ export class Account {
 
   /** Approved characters a box can unlock. */
   private lootCharacters(): string[] {
-    return this.store.characters.sharedList().map((c) => c.id);
+    // The owner already has their own characters, so their boxes only hold tables and other players' characters.
+    return this.store.characters
+      .sharedList()
+      .map((c) => c.id)
+      .filter((id) => !(this.owner && !this.creators.get(id)) && !(this.uid && this.creators.get(id) === this.uid));
   }
 
   boxes(): number {

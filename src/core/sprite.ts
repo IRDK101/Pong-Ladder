@@ -13,26 +13,26 @@ export const SPRITE_H = 24;
  */
 export const PART_OPTIONS = {
   // Body
-  build: ['Slim', 'Average', 'Broad', 'Stocky', 'Heavy', 'Lanky'],
-  skin: ['#f6d7c3', '#e8b892', '#c98e63', '#a0673f', '#7a4a2a', '#4f2f1c', '#fbe3d3', '#ddb08c', '#b9835a', '#8d5a3b', '#5e3a24', '#3b2416'],
+  build: ['Slim', 'Average', 'Broad', 'Stocky', 'Heavy', 'Lanky', 'Athletic', 'Petite', 'Tall'],
+  skin: ['#f6d7c3', '#e8b892', '#c98e63', '#a0673f', '#7a4a2a', '#4f2f1c', '#fbe3d3', '#ddb08c', '#b9835a', '#8d5a3b', '#5e3a24', '#3b2416', '#ffeee2', '#f1c7a4', '#d6a079', '#b07047', '#6b4026', '#2e1b10'],
   // Face
-  faceShape: ['Oval', 'Round', 'Square', 'Long', 'Pointed chin', 'Wide jaw'],
-  eyes: ['Dots', 'Big', 'Sleepy', 'Wide-set', 'Lashes', 'Squint'],
-  mouth: ['Neutral', 'Smile', 'Grin', 'Smirk', 'Surprised', 'Flat'],
-  facialHair: ['None', 'Stubble', 'Mustache', 'Goatee', 'Full beard', 'Chin strap', 'Soul patch'],
+  faceShape: ['Oval', 'Round', 'Square', 'Long', 'Pointed chin', 'Wide jaw', 'Heart', 'Diamond', 'Narrow'],
+  eyes: ['Dots', 'Big', 'Sleepy', 'Wide-set', 'Lashes', 'Squint', 'Angry', 'Wink', 'Closed', 'Tired', 'Blue', 'Green'],
+  mouth: ['Neutral', 'Smile', 'Grin', 'Smirk', 'Surprised', 'Flat', 'Laugh', 'Tongue out', 'Frown', 'Gap tooth', 'Whistle'],
+  facialHair: ['None', 'Stubble', 'Mustache', 'Goatee', 'Full beard', 'Chin strap', 'Soul patch', 'Handlebar', 'Mutton chops', 'Long beard', 'Pencil mustache'],
   // Hair
-  hairStyle: ['Bald', 'Short', 'Long', 'Mohawk', 'Curly', 'Cap', 'Buzz', 'Side part', 'Spiky', 'Ponytail', 'Bun', 'Afro', 'Mullet', 'Bob', 'Swoop', 'Receding'],
-  hairColor: ['#2b1d14', '#5a3a22', '#a5662e', '#e2c171', '#d9d9d9', '#b5332e', '#1c1c1c', '#7a2e1a', '#f3e6b8', '#8a8a8a', '#3b6fd6', '#d65fa8', '#3fae5a'],
-  headwear: ['None', 'Cap', 'Backwards cap', 'Beanie', 'Bucket hat', 'Visor', 'Bandana'],
-  hatColor: ['#00693e', '#b5332e', '#1f2a44', '#f2f2f2', '#222222', '#e8a33d', '#3a8ec9', '#6b3fa0', '#c2a878'],
+  hairStyle: ['Bald', 'Short', 'Long', 'Mohawk', 'Curly', 'Cap', 'Buzz', 'Side part', 'Spiky', 'Ponytail', 'Bun', 'Afro', 'Mullet', 'Bob', 'Swoop', 'Receding', 'Shaggy', 'Pigtails', 'Undercut', 'Dreads', 'Top knot', 'Flat top', 'Bowl cut', 'Braids'],
+  hairColor: ['#2b1d14', '#5a3a22', '#a5662e', '#e2c171', '#d9d9d9', '#b5332e', '#1c1c1c', '#7a2e1a', '#f3e6b8', '#8a8a8a', '#3b6fd6', '#d65fa8', '#3fae5a', '#c98a4b', '#f5f0e6', '#6a4fb0', '#ff8a3d', '#2fbcc4', '#e85a5a', '#4a3a2a'],
+  headwear: ['None', 'Cap', 'Backwards cap', 'Beanie', 'Bucket hat', 'Visor', 'Bandana', 'Cowboy hat', 'Top hat', 'Headphones', 'Beret', 'Hard hat', 'Party hat'],
+  hatColor: ['#00693e', '#b5332e', '#1f2a44', '#f2f2f2', '#222222', '#e8a33d', '#3a8ec9', '#6b3fa0', '#c2a878', '#e23b3b', '#f0d34a', '#2fb3a5', '#d96c8a', '#6b4a2b', '#7d8c3a'],
   // Clothes
-  shirtStyle: ['Tee', 'Tank', 'Jersey', 'Hoodie', 'Polo', 'Flannel', 'Button-up', 'Big D sweater', 'Striped', 'Open jacket', 'Vest'],
-  shirtColor: ['#00693e', '#f2f2f2', '#1f2a44', '#b5332e', '#e8a33d', '#6b3fa0', '#3a8ec9', '#222222', '#7d8c3a', '#d96c8a', '#6b4a2b', '#9aa3ad', '#f0d34a', '#2fb3a5'],
-  pantsStyle: ['Long', 'Shorts', 'Sweats', 'Rolled cuffs'],
-  pantsColor: ['#2c3e66', '#3b3b3b', '#c2a878', '#5d4a36', '#7f1d1d', '#5b6b3a', '#9aa3ad', '#1c1c1c', '#5b84c4'],
-  shoes: ['Black', 'White sneakers', 'Red high-tops', 'Tan boots', 'Green', 'Slides'],
+  shirtStyle: ['Tee', 'Tank', 'Jersey', 'Hoodie', 'Polo', 'Flannel', 'Button-up', 'Big D sweater', 'Striped', 'Open jacket', 'Vest', 'Hawaiian', 'Suit and tie', 'Pinstripes', 'Turtleneck', 'Varsity jacket', 'Raglan', 'Overalls', 'Letters tee'],
+  shirtColor: ['#00693e', '#f2f2f2', '#1f2a44', '#b5332e', '#e8a33d', '#6b3fa0', '#3a8ec9', '#222222', '#7d8c3a', '#d96c8a', '#6b4a2b', '#9aa3ad', '#f0d34a', '#2fb3a5', '#ff8a3d', '#8b1e3f', '#4d7f2a', '#a7d3f2', '#f5e6c8', '#3d2a6b', '#e85a5a', '#5a5a5a'],
+  pantsStyle: ['Long', 'Shorts', 'Sweats', 'Rolled cuffs', 'Cargo', 'Ripped', 'Skirt', 'Track pants'],
+  pantsColor: ['#2c3e66', '#3b3b3b', '#c2a878', '#5d4a36', '#7f1d1d', '#5b6b3a', '#9aa3ad', '#1c1c1c', '#5b84c4', '#e8e2d0', '#00693e', '#b5332e', '#3a8ec9', '#6b3fa0', '#d8b26a'],
+  shoes: ['Black', 'White sneakers', 'Red high-tops', 'Tan boots', 'Green', 'Slides', 'Blue sneakers', 'Pink sneakers', 'Gold high-tops', 'Socks and sandals', 'Barefoot'],
   // Extras
-  accessory: ['None', 'Glasses', 'Shades', 'Headband', 'Beard', 'Chain', 'Round glasses', 'Earring', 'Freckles', 'Face paint', 'Wristband', 'Watch', 'Neck tattoo'],
+  accessory: ['None', 'Glasses', 'Shades', 'Headband', 'Beard', 'Chain', 'Round glasses', 'Earring', 'Freckles', 'Face paint', 'Wristband', 'Watch', 'Neck tattoo', 'Eye patch', 'Bandage', 'Blush', 'Nose ring', 'Bow tie', 'Scarf', 'Lei', 'Backpack'],
 } as const;
 
 export type PartKey = keyof typeof PART_OPTIONS;
@@ -107,6 +107,11 @@ const SHOES: { top: string; sole: string }[] = [
   { top: '#9a6a3a', sole: '#4a3220' },
   { top: '#00693e', sole: WHITE },
   { top: '#2a2a2a', sole: '#2a2a2a' },
+  { top: '#3a6fd0', sole: WHITE },
+  { top: '#e06a9a', sole: WHITE },
+  { top: '#d9b13a', sole: WHITE },
+  { top: '#7a5430', sole: '#4a3220' },
+  { top: '', sole: '' }, // barefoot: skin
 ];
 
 class Canvas {
@@ -141,6 +146,12 @@ function headRows(shape: string): [number, number][] {
       return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [7, 8]];
     case 'Wide jaw':
       return [[6, 9], [5, 10], [5, 10], [5, 10], [4, 11], [4, 11], [5, 10]];
+    case 'Heart':
+      return [[5, 10], [4, 11], [4, 11], [5, 10], [6, 9], [6, 9], [7, 8]];
+    case 'Diamond':
+      return [[7, 8], [6, 9], [5, 10], [4, 11], [5, 10], [6, 9], [7, 8]];
+    case 'Narrow':
+      return [[6, 9], [6, 9], [6, 9], [6, 9], [6, 9], [6, 9], [7, 8]];
     default: // Oval
       return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
   }
@@ -165,12 +176,12 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   const front = facing === 'front';
 
   // ---- Body type: torso half-width, how far everything drops (stocky is shorter), torso and leg rows.
-  const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2 }[build];
-  const drop = build === 'Stocky' ? 1 : 0;
+  const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2, Athletic: 3, Petite: 2, Tall: 3 }[build];
+  const drop = build === 'Stocky' || build === 'Petite' ? 1 : 0;
   const tx0 = 8 - half - 1;
   const tx1 = 7 + half + 1;
   const torsoTop = 10 + drop;
-  const belt = build === 'Lanky' ? 15 : 16;
+  const belt = build === 'Lanky' || build === 'Tall' ? 15 : 16;
   const legTop = belt + 1;
   const legBot = 21;
 
@@ -196,10 +207,10 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   const sleeveless = shirtStyle === 'Tank' || shirtStyle === 'Vest';
   const sleeve = sleeveless ? skin : shirt;
   const armTop = torsoTop;
-  const armBot = build === 'Lanky' ? 15 : 15 + drop;
+  const armBot = build === 'Lanky' || build === 'Tall' ? 15 : 15 + drop;
   c.rect(tx0 - 1, armTop, tx0 - 1, armTop + 2, sleeve);
   c.rect(tx1 + 1, armTop, tx1 + 1, armTop + 2, sleeve);
-  const longSleeve = ['Hoodie', 'Flannel', 'Button-up', 'Big D sweater', 'Open jacket'].includes(shirtStyle);
+  const longSleeve = ['Hoodie', 'Flannel', 'Button-up', 'Big D sweater', 'Open jacket', 'Suit and tie', 'Turtleneck', 'Varsity jacket', 'Raglan'].includes(shirtStyle);
   c.rect(tx0 - 1, armTop + 3, tx0 - 1, armBot, longSleeve ? shade(shirt, 0.92) : skin);
   c.rect(tx1 + 1, armTop + 3, tx1 + 1, armBot, longSleeve ? shade(shirt, 0.92) : skin);
   if (longSleeve) {
@@ -268,6 +279,66 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
         c.set(cx0 - 1, torsoTop + 3, shade(shirt, 0.6));
       }
       break;
+    case 'Hawaiian': {
+      const flower = shirt === '#f0d34a' ? WHITE : '#f0d34a';
+      for (let y = torsoTop; y <= belt; y++)
+        for (let x = tx0 - 1; x <= tx1 + 1; x++) {
+          const col = c.get(x, y);
+          if ((col === shirt || col === shade(shirt, 0.92)) && (x * 2 + y) % 5 === 0) c.set(x, y, (x + y) % 2 ? flower : WHITE);
+        }
+      c.rect(cx0 - 1, torsoTop, cx1 + 1, torsoTop, shade(shirt, 1.2));
+      break;
+    }
+    case 'Suit and tie':
+      if (front) {
+        c.rect(cx0 - 1, torsoTop, cx1 + 1, torsoTop + 3, WHITE);
+        c.set(cx0 - 1, torsoTop + 3, shirt);
+        c.set(cx1 + 1, torsoTop + 3, shirt);
+        const tie = shirt === '#b5332e' ? '#1f2a44' : '#b5332e';
+        c.rect(cx0, torsoTop, cx1, torsoTop, shade(tie, 0.8));
+        c.rect(cx0, torsoTop + 1, cx1, torsoTop + 4, tie);
+        c.set(cx0 - 2, torsoTop + 4, shade(shirt, 0.7));
+      } else c.rect(cx0 - 1, torsoTop, cx1 + 1, torsoTop, WHITE);
+      break;
+    case 'Pinstripes':
+      for (let y = torsoTop; y <= belt; y++) for (let x = tx0; x <= tx1; x += 2) c.set(x, y, shade(shirt, 0.72));
+      if (!front) c.rect(cx0 - 1, torsoTop + 2, cx1 + 1, torsoTop + 4, trim);
+      else c.rect(tx0 + 1, torsoTop + 2, cx0, torsoTop + 2, trim);
+      break;
+    case 'Turtleneck':
+      c.rect(neckW[0] - 1, torsoTop - 1, neckW[1] + 1, torsoTop, shade(shirt, 0.85));
+      break;
+    case 'Varsity jacket':
+      if (front) {
+        c.rect(cx0, torsoTop, cx1, belt, shade(shirt, 0.75));
+        c.rect(tx0 + 1, torsoTop + 2, tx0 + 2, torsoTop + 3, trim); // the chest letter
+      } else c.rect(cx0 - 1, torsoTop + 2, cx1 + 1, torsoTop + 4, trim);
+      c.rect(tx0, belt, tx1, belt, trim);
+      break;
+    case 'Overalls':
+      c.rect(cx0 - 1, torsoTop + 2, cx1 + 1, belt, pants);
+      c.rect(cx0 - 1, torsoTop, cx0 - 1, torsoTop + 1, pants);
+      c.rect(cx1 + 1, torsoTop, cx1 + 1, torsoTop + 1, pants);
+      if (front) {
+        c.set(cx0 - 1, torsoTop + 2, GOLD);
+        c.set(cx1 + 1, torsoTop + 2, GOLD);
+        c.rect(cx0, torsoTop + 4, cx1, torsoTop + 4, shade(pants, 0.75));
+      }
+      break;
+    case 'Letters tee':
+      if (front) {
+        // ΖΨ across the chest.
+        const t = torsoTop + 2;
+        const L = trim;
+        for (const [x, y] of [[5, t], [6, t], [7, t], [6, t + 1], [5, t + 2], [6, t + 2], [7, t + 2], [8, t], [10, t], [8, t + 1], [9, t + 1], [10, t + 1], [9, t + 2]] as const) c.set(x, y, L);
+      }
+      break;
+  }
+  // Raglan and varsity sleeves come in the trim color.
+  if (shirtStyle === 'Raglan' || shirtStyle === 'Varsity jacket') {
+    const sl = shirt === WHITE ? '#1f2a44' : shirtStyle === 'Raglan' ? shade(trim, 0.92) : trim;
+    for (const x of [tx0 - 1, tx1 + 1]) c.rect(x, armTop, x, armBot - 1, sl);
+    if (shirtStyle === 'Raglan') c.rect(tx0, torsoTop, tx1, torsoTop, sl);
   }
 
   // ---- Bottoms and shoes.
@@ -276,6 +347,14 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   c.rect(lx0, legTop, 7, legBot, pants);
   c.rect(8, legTop, lx1, legBot, pants);
   c.rect(tx0, belt, tx1, belt, shade(shirt, 0.72)); // belt line
+  if (build === 'Athletic') {
+    // Broad shoulders over a narrow waist.
+    c.rect(tx0 - 1, torsoTop, tx1 + 1, torsoTop, shirtStyle === 'Tank' || shirtStyle === 'Vest' ? skin : shirt);
+    for (const y of [belt - 1, belt]) {
+      c.set(tx0, y, '');
+      c.set(tx1, y, '');
+    }
+  }
   c.set(7, legTop + 2, shade(pants, 0.7));
   c.set(8, legTop + 2, shade(pants, 0.7));
   if (pantsStyle === 'Shorts') {
@@ -291,18 +370,48 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   } else if (pantsStyle === 'Rolled cuffs') {
     c.rect(lx0, legBot, 7, legBot, shade(pants, 1.3));
     c.rect(8, legBot, lx1, legBot, shade(pants, 1.3));
+  } else if (pantsStyle === 'Cargo') {
+    c.set(lx0, legTop + 3, shade(pants, 0.72));
+    c.set(lx1, legTop + 3, shade(pants, 0.72));
+    c.set(lx0, legTop + 2, shade(pants, 0.72));
+    c.set(lx1, legTop + 2, shade(pants, 0.72));
+  } else if (pantsStyle === 'Ripped') {
+    c.set(lx0 + 1, legTop + 2, skin);
+    c.set(lx1 - 1, legTop + 3, skin);
+    c.set(lx0, legBot - 1, shade(pants, 1.25));
+  } else if (pantsStyle === 'Skirt') {
+    c.rect(lx0 - 1, legTop, lx1 + 1, legTop + 2, pants);
+    c.rect(lx0 - 1, legTop + 2, lx1 + 1, legTop + 2, shade(pants, 0.78));
+    c.rect(lx0, legTop + 3, 7, legBot, skin);
+    c.rect(8, legTop + 3, lx1, legBot, skin);
+    c.set(7, legTop + 3, '');
+    c.set(8, legTop + 3, '');
+  } else if (pantsStyle === 'Track pants') {
+    c.rect(lx0, legTop, lx0, legBot, WHITE);
+    c.rect(lx1, legTop, lx1, legBot, WHITE);
   }
   const slides = parts.shoes === 5;
-  c.rect(lx0, 22, 7, 22, shoe.top);
-  c.rect(8, 22, lx1, 22, shoe.top);
-  if (slides) {
+  const barefoot = parts.shoes === 10;
+  const shoeTop = barefoot ? shade(skin, 0.92) : shoe.top;
+  c.rect(lx0, 22, 7, 22, shoeTop);
+  c.rect(8, 22, lx1, 22, shoeTop);
+  if (barefoot) {
+    c.set(lx0, 22, shade(skin, 0.75));
+    c.set(lx1, 22, shade(skin, 0.75));
+  } else if (parts.shoes === 9) {
+    // Socks and sandals: white socks above brown straps.
+    c.rect(lx0, 21, 7, 21, WHITE);
+    c.rect(8, 21, lx1, 21, WHITE);
+    c.set(lx0, 22, shoe.sole);
+    c.set(lx1, 22, shoe.sole);
+  } else if (slides) {
     c.set(lx0, 22, skin);
     c.set(lx1, 22, skin);
   } else {
     c.set(lx0, 22, shoe.sole);
     c.set(lx1, 22, shoe.sole);
   }
-  if (parts.shoes === 2) {
+  if (parts.shoes === 2 || parts.shoes === 8) {
     // High-tops come up over the ankle.
     c.rect(lx0, 21, 7, 21, shoe.top);
     c.rect(8, 21, lx1, 21, shoe.top);
@@ -333,10 +442,33 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
         case 'Squint':
           c.set(x, eyeY, shade(skin, 0.55));
           break;
+        case 'Angry':
+          // Brows slanting down toward the nose.
+          c.set(x, eyeY, OUTLINE);
+          c.set(x + (x < 8 ? 1 : -1), eyeY - 1, brow);
+          c.set(x - (x < 8 ? 1 : -1), eyeY - 2, brow);
+          break;
+        case 'Wink':
+          c.set(x, eyeY, x < 8 ? OUTLINE : shade(skin, 0.5));
+          break;
+        case 'Closed':
+          c.set(x, eyeY, shade(skin, 0.45));
+          c.set(x + (x < 8 ? -1 : 1), eyeY - 1, shade(skin, 0.6));
+          break;
+        case 'Tired':
+          c.set(x, eyeY, OUTLINE);
+          c.set(x, eyeY + 1, shade(skin, 0.74));
+          break;
+        case 'Blue':
+          c.set(x, eyeY, '#2f6fc8');
+          break;
+        case 'Green':
+          c.set(x, eyeY, '#2f8a4a');
+          break;
         default:
           c.set(x, eyeY, OUTLINE);
       }
-      if (eyes !== 'Lashes' && eyes !== 'Big' && eyes !== 'Sleepy') c.set(x, eyeY - 1, brow);
+      if (eyes !== 'Lashes' && eyes !== 'Big' && eyes !== 'Sleepy' && eyes !== 'Angry' && eyes !== 'Closed') c.set(x, eyeY - 1, brow);
     }
     c.set(hl, eyeY + 1, shade(skin, 0.92)); // cheek shadow
     const mouth = P.mouth[parts.mouth];
@@ -364,6 +496,32 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
         break;
       case 'Flat':
         c.rect(6, my, 9, my, lip);
+        break;
+      case 'Laugh':
+        c.rect(6, my, 9, my, '#5a1e1e');
+        c.rect(7, my, 8, my, WHITE);
+        if (my + 1 <= chin) c.rect(7, my + 1, 8, my + 1, '#c84a4a');
+        break;
+      case 'Tongue out':
+        c.rect(7, my, 8, my, lip);
+        if (my + 1 <= chin) c.set(8, my + 1, '#e86a8a');
+        break;
+      case 'Frown':
+        c.rect(7, my, 8, my, shade(skin, 0.6));
+        if (my + 1 <= chin) {
+          c.set(6, my + 1, lip);
+          c.set(9, my + 1, lip);
+        }
+        break;
+      case 'Gap tooth':
+        c.rect(6, my, 9, my, WHITE);
+        c.set(6, my, lip);
+        c.set(9, my, lip);
+        c.set(8, my, shade(skin, 0.4));
+        break;
+      case 'Whistle':
+        c.set(8, my, OUTLINE);
+        c.set(9, my - 1, shade(skin, 0.8));
         break;
       default:
         c.rect(7, my, 8, my, lip);
@@ -400,6 +558,28 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
         break;
       case 'Soul patch':
         c.set(7, my + 1 <= chin ? my + 1 : chin, beard);
+        break;
+      case 'Handlebar':
+        c.rect(6, my - 1, 9, my - 1, beard);
+        c.set(5, my, beard);
+        c.set(10, my, beard);
+        break;
+      case 'Mutton chops':
+        for (let y = eyeY; y < chin; y++) {
+          const [l, r] = rows[y - hy];
+          c.rect(l, y, l + 1, y, beard);
+          c.rect(r - 1, y, r, y, beard);
+        }
+        c.rect(6, my - 1, 9, my - 1, beard);
+        break;
+      case 'Long beard':
+        for (let y = my - 1; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin || c.get(x, y) === shade(skin, 0.92)) c.set(x, y, beard);
+        c.rect(7, my, 8, my, lip);
+        c.rect(6, chin + 1, 9, chin + 2, beard);
+        c.rect(7, chin + 3, 8, chin + 3, shade(beard, 0.85));
+        break;
+      case 'Pencil mustache':
+        c.rect(7, my - 1, 8, my - 1, shade(beard, 0.8));
         break;
     }
   }
@@ -494,6 +674,58 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
       c.rect(hr, top + 1, hr, hy + 1, hair);
       c.rect(hl + 2, top, hr - 2, top, hair);
       break;
+    case 'Shaggy':
+      crown(top, hy + 1);
+      c.rect(hl - 1, hy, hl - 1, hy + 3, hair);
+      c.rect(hr + 1, hy, hr + 1, hy + 3, hair);
+      if (front) for (let x = hl + 1; x < hr; x += 2) c.set(x, hy + 1, skin);
+      break;
+    case 'Pigtails':
+      crown(top, hy);
+      hairPx(hl, hy + 1);
+      hairPx(hr, hy + 1);
+      c.rect(hl - 2, hy + 1, hl - 1, hy + 4, hair);
+      c.rect(hr + 1, hy + 1, hr + 2, hy + 4, hair);
+      c.set(hl - 1, hy + 1, '#e23b3b');
+      c.set(hr + 1, hy + 1, '#e23b3b');
+      break;
+    case 'Undercut':
+      c.rect(hl, top - 1, hr - 1, top, hair);
+      c.rect(hl, hy, hr, hy, shade(skin, 0.78));
+      hairPx(hl, hy);
+      break;
+    case 'Dreads':
+      crown(top, hy);
+      for (let y = hy; y <= hy + 6; y++) {
+        c.set(hl - 1, y, y % 2 ? hair : shade(hair, 0.75));
+        c.set(hr + 1, y, y % 2 ? shade(hair, 0.75) : hair);
+      }
+      hairPx(hl, hy + 1);
+      hairPx(hr, hy + 1);
+      break;
+    case 'Top knot':
+      crown(top, hy);
+      hairPx(hl, hy + 1);
+      hairPx(hr, hy + 1);
+      c.rect(7, Math.max(0, top - 2), 8, top - 1, hair);
+      c.rect(7, top, 8, top, shade(hair, 0.7));
+      break;
+    case 'Flat top':
+      c.rect(hl, Math.max(0, top - 2), hr, hy, hair);
+      c.rect(hl, Math.max(0, top - 2), hr, Math.max(0, top - 2), shade(hair, 1.2));
+      break;
+    case 'Bowl cut':
+      crown(top, hy + 1);
+      c.rect(hl - 1, hy, hl - 1, hy + 2, hair);
+      c.rect(hr + 1, hy, hr + 1, hy + 2, hair);
+      break;
+    case 'Braids':
+      crown(top, hy);
+      for (let y = hy; y <= hy + 8; y++) {
+        c.set(hl - 1, y, y % 2 ? hair : shade(hair, 0.72));
+        c.set(hr + 1, y, y % 2 ? shade(hair, 0.72) : hair);
+      }
+      break;
   }
 
   // ---- Back of the head: covered by most hair, skin for bald, buzz shows its texture.
@@ -506,6 +738,8 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
     }
     if (hairStyle === 'Short' || hairStyle === 'Side part' || hairStyle === 'Spiky' || hairStyle === 'Swoop') c.rect(hl + 1, chin, hr - 1, chin, skin); // the nape
     if (hairStyle === 'Ponytail') c.rect(7, chin - 2, 8, chin + 3, shade(hair, 0.9));
+    if (hairStyle === 'Undercut') rows.forEach(([l, r], k) => k >= 2 && c.rect(l, hy + k, r, hy + k, shade(skin, 0.78)));
+    if (hairStyle === 'Dreads' || hairStyle === 'Braids') for (let x = hl; x <= hr; x += 2) c.rect(x, chin, x, chin + 3, shade(hair, x % 4 ? 0.85 : 1));
     if (hairStyle === 'Cap') c.rect(hl, top, hr, hy + 1, shirt);
     for (let y = chin + 1; y < torsoTop; y++) c.rect(neckW[0], y, neckW[1], y, shade(skin, 0.85));
   }
@@ -542,6 +776,44 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
       for (let x = hl; x <= hr; x += 2) c.set(x, top, WHITE);
       if (!front) c.rect(7, hy + 1, 8, hy + 2, hat); // the knot
       break;
+    case 'Cowboy hat':
+      c.rect(hl, Math.max(0, top - 1), hr, top, hat);
+      c.set(7, Math.max(0, top - 1), shade(hat, 0.75)); // the dent
+      c.rect(hl, top, hr, top, shade(hat, 0.6)); // the band
+      c.rect(hl - 2, hy, hr + 2, hy, shade(hat, 0.85)); // the brim
+      c.set(hl - 2, hy - 1, shade(hat, 0.85));
+      c.set(hr + 2, hy - 1, shade(hat, 0.85));
+      break;
+    case 'Top hat':
+      c.rect(hl + 1, 0, hr - 1, top, hat);
+      c.rect(hl + 1, top, hr - 1, top, hat === '#b5332e' ? '#1c1c1c' : '#b5332e');
+      c.rect(hl - 1, hy, hr + 1, hy, shade(hat, 0.85));
+      break;
+    case 'Headphones':
+      c.rect(hl, top, hr, top, '#2a2a2a');
+      c.rect(hl - 1, top + 1, hl - 1, hy + 3, '#2a2a2a');
+      c.rect(hr + 1, top + 1, hr + 1, hy + 3, '#2a2a2a');
+      c.rect(hl - 1, hy + 2, hl - 1, hy + 3, hat);
+      c.rect(hr + 1, hy + 2, hr + 1, hy + 3, hat);
+      break;
+    case 'Beret':
+      c.rect(hl, top, hr + 1, hy, hat);
+      c.set(hr + 2, hy, hat);
+      c.set(7, Math.max(0, top - 1), shade(hat, 0.8));
+      break;
+    case 'Hard hat':
+      c.rect(hl, Math.max(0, top - 1), hr, hy, hat);
+      c.rect(7, Math.max(0, top - 1), 8, hy, shade(hat, 1.2));
+      c.rect(hl - 1, hy + 1, hr + 1, hy + 1, shade(hat, 0.8));
+      break;
+    case 'Party hat':
+      c.rect(7, 0, 8, 0, WHITE);
+      c.rect(6, Math.max(1, top), 9, Math.max(1, top), hat);
+      c.rect(5, hy, 10, hy, hat);
+      c.set(7, Math.max(1, top), WHITE);
+      c.set(9, hy, WHITE);
+      c.set(6, hy, GOLD);
+      break;
   }
 
   // Hair highlight (light from the upper left).
@@ -565,7 +837,7 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   c.set(hand + step * 3, py, shade(face, 1.35));
 
   // ---- Extras.
-  switch (front ? acc : acc === 'Headband' || acc === 'Chain' || acc === 'Wristband' || acc === 'Earring' ? acc : 'None') {
+  switch (front ? acc : ['Headband', 'Chain', 'Wristband', 'Earring', 'Eye patch', 'Scarf', 'Lei', 'Backpack'].includes(acc) ? acc : 'None') {
     case 'Glasses':
       c.rect(hl, eyeY, hr, eyeY, OUTLINE);
       c.set(6, eyeY, '#9fd3ff');
@@ -613,6 +885,51 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
       break;
     case 'Neck tattoo':
       c.set(neckW[1], chin + 1, '#2f4f6a');
+      break;
+    case 'Eye patch':
+      c.rect(hl, hy + 1, hr, hy + 1, OUTLINE);
+      if (front) {
+        c.set(9, eyeY, OUTLINE);
+        c.set(9, eyeY - 1, OUTLINE);
+        c.set(10, eyeY, OUTLINE);
+      }
+      break;
+    case 'Bandage':
+      c.rect(7, eyeY + 1, 8, eyeY + 1, '#f2d6b0');
+      c.set(8, eyeY + 1, '#e0bf94');
+      break;
+    case 'Blush': {
+      const [l, r] = rows[Math.min(rows.length - 1, eyeY + 1 - hy)];
+      c.set(l + 1, eyeY + 1, '#e88a8a');
+      c.set(r - 1, eyeY + 1, '#e88a8a');
+      break;
+    }
+    case 'Nose ring':
+      c.set(8, eyeY + 1, GOLD);
+      break;
+    case 'Bow tie':
+      c.rect(6, torsoTop, 9, torsoTop, '#b5332e');
+      c.rect(7, torsoTop, 8, torsoTop, '#7a1d1a');
+      break;
+    case 'Scarf': {
+      const sc = shirt === '#e8a33d' ? '#b5332e' : '#e8a33d';
+      c.rect(tx0 + 1, torsoTop, tx1 - 1, torsoTop, sc);
+      for (let x = tx0 + 1; x <= tx1 - 1; x += 2) c.set(x, torsoTop, shade(sc, 0.75));
+      if (front) c.rect(tx0 + 1, torsoTop + 1, tx0 + 1, torsoTop + 4, sc);
+      break;
+    }
+    case 'Lei':
+      for (let x = tx0 + 1; x <= tx1 - 1; x++) c.set(x, torsoTop + (front && x > tx0 + 2 && x < tx1 - 2 ? 1 : 0), x % 2 ? '#e86a9a' : '#f0d34a');
+      break;
+    case 'Backpack':
+      if (front) {
+        c.rect(tx0 + 1, torsoTop, tx0 + 1, torsoTop + 3, '#4a3220');
+        c.rect(tx1 - 1, torsoTop, tx1 - 1, torsoTop + 3, '#4a3220');
+      } else {
+        c.rect(tx0 + 1, torsoTop + 1, tx1 - 1, belt - 1, '#6b4a2b');
+        c.rect(tx0 + 2, belt - 3, tx1 - 2, belt - 2, '#8a6440');
+        c.rect(tx0 + 1, torsoTop + 1, tx1 - 1, torsoTop + 1, '#4a3220');
+      }
       break;
   }
 

@@ -672,3 +672,21 @@ Decided with the owner (asked first):
   - With more than 8 characters, a search box appears.
 - **Saving:** the picks are saved in this browser (`dartmouth-pong/selection/v1`).
 - **Keyboard:** when focus is on an HTML screen, the game no longer swallows Enter, Space or the arrow keys, so buttons and grids work from the keyboard.
+
+## More character options; the owner always has their own characters
+
+- Every part's option list grew, and new options were only added at the end, so saved characters keep their look. Every category now has at least 8 options.
+  - Body type: Athletic, Petite, Tall
+  - Skin: 6 more tones
+  - Face: Heart, Diamond, Narrow
+  - Eyes: Angry, Wink, Closed, Tired, Blue, Green
+  - Mouth: Laugh, Tongue out, Frown, Gap tooth, Whistle
+  - Facial hair: Handlebar, Mutton chops, Long beard, Pencil mustache
+  - Hair: Shaggy, Pigtails, Undercut, Dreads, Top knot, Flat top, Bowl cut, Braids, plus 7 colors
+  - Headwear: Cowboy hat, Top hat, Headphones, Beret, Hard hat, Party hat, plus 6 hat colors
+  - Tops: Hawaiian, Suit and tie, Pinstripes, Turtleneck, Varsity jacket, Raglan, Overalls, Letters tee (ΖΨ), plus 8 colors
+  - Bottoms: Cargo, Ripped, Skirt, Track pants, plus 6 colors
+  - Shoes: Blue sneakers, Pink sneakers, Gold high-tops, Socks and sandals, Barefoot
+  - Extras: Eye patch, Bandage, Blush, Nose ring, Bow tie, Scarf, Lei, Backpack
+- A test checks that every option draws something different, from the front or the back.
+- Whoever made a character always has it. That includes the owner, who has every character with no `creator`. The owner's loot boxes therefore only hold tables and characters other players made.
