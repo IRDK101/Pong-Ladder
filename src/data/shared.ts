@@ -16,6 +16,8 @@ import type { TeamId } from '../core/types';
 import { DESIGN_ORDER } from '../render/designs';
 import { addXp, boxesWaiting, playerLevel, playerXp, markSeen, newRewards, newRewardsFor, seedSeen, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
 import type { AppStore, KeyValueStore, MatchRecord } from './storage';
+import { packChar, unpackChar, type PackedChar } from '../net/online';
+import { allowedStyle, cleanNameStyle, DEFAULT_NAME_STYLE, sameStyle, type NameStyle } from '../progress/nameStyles';
 
 interface DocSnap {
   id: string;
@@ -64,6 +66,12 @@ export interface PublicProfile {
   requestedAt: string;
   updatedAt: string;
   moderator?: boolean;
+  /** How the name looks (color, effect, flair). */
+  style?: NameStyle;
+  /** The character they play as, packed small, so everyone can draw it. */
+  char?: PackedChar | null;
+  /** The name before the player last changed it (shown to the moderator). */
+  renamedFrom?: string;
 }
 
 /** The moderator's decision on a profile (approvals/<uid>). */
@@ -182,6 +190,8 @@ export class Account {
   private db: Db | null = null;
   private user: UserApi | null = null;
   private listeners = new Set<() => void>();
+  /** The account's saved progress has been read (until then nothing is written to it). */
+  private progressLoaded = false;
   private writer = new Writer((code) => {
     this.problem = code === 'quota_exceeded' ? 'The online collection is full.' : code === 'invalid_argument' ? 'You do not have permission to change that.' : 'Could not save online; trying again later.';
     this.changed();
@@ -297,6 +307,9 @@ export class Account {
             requestedAt: typeof b.requestedAt === 'string' ? b.requestedAt : '',
             updatedAt: typeof b.updatedAt === 'string' ? b.updatedAt : '',
             moderator: b.moderator === true,
+            style: cleanNameStyle(b.style),
+            char: b.char && typeof b.char === 'object' && unpackChar(b.char as PackedChar) ? (b.char as PackedChar) : null,
+            ...(typeof b.renamedFrom === 'string' && b.renamedFrom ? { renamedFrom: cleanProfileName(b.renamedFrom) } : {}),
           });
         }
         void this.nameIds([...this.profiles.keys()]);
@@ -322,20 +335,21 @@ export class Account {
     if (!this.canWrite) return this.changed(); // view-only: play as a guest
     this.mode = 'online';
 
-    let progressLoaded = false;
     db.doc(`data/users/${uid}/progress`).onSnapshot(
       (snap) => {
         if (snap.metadata.fromCache && !snap.exists) return;
+        const first = !this.progressLoaded;
+        this.progressLoaded = true;
         if (snap.exists) {
           this.progress = normalizeProgress(snap.data());
           if (seedSeen(this.cfg, this.progress)) this.saveProgress();
           this.saveLocal();
           if (this.topUp()) this.saveProgress();
-        } else if (!progressLoaded) {
+        } else if (first) {
           // First visit with this account: start from what this browser already has.
+          this.topUp();
           this.saveProgress();
         }
-        progressLoaded = true;
         this.changed();
       },
       () => this.changed(),
@@ -464,12 +478,25 @@ export class Account {
     const name = cleanProfileName(rawName);
     if (!name) return 'Pick a name to show on the leaderboard.';
     if (this.mode !== 'online' || !this.db || !this.uid) return 'Sign in to claude.ai (with access to save) to make a profile.';
-    if (this.myApproval?.status === 'approved' && !this.owner) return 'Your profile is approved; ask the moderator to change your name.';
+    if (this.myApproval?.status === 'revoked') return 'Your profile is paused; the moderator can change your name.';
     const taken = [...this.profiles].some(([id, p]) => id !== this.uid && p.name.toLowerCase() === name.toLowerCase());
     if (taken) return 'Someone already has that name.';
     const now = new Date().toISOString();
     const lvl = playerLevel(this.cfg, this.progress);
-    const card: PublicProfile = { name, xp: playerXp(this.progress), level: lvl.level, requestedAt: this.myProfile?.requestedAt || now, updatedAt: now, ...(this.owner ? { moderator: true } : {}) };
+    const old = this.myProfile;
+    // An approved player renaming themselves: it applies straight away, and the moderator sees the old name.
+    const renamedFrom = old && this.approvedProfile && !this.owner && old.name !== name ? old.renamedFrom || old.name : old?.renamedFrom;
+    const card: PublicProfile = {
+      name,
+      xp: playerXp(this.progress),
+      level: lvl.level,
+      requestedAt: old?.requestedAt || now,
+      updatedAt: now,
+      style: old?.style ?? { ...DEFAULT_NAME_STYLE },
+      char: old?.char ?? null,
+      ...(renamedFrom ? { renamedFrom } : {}),
+      ...(this.owner ? { moderator: true } : {}),
+    };
     this.profiles.set(this.uid, card);
     this.writeProfile(this.uid, card);
     this.changed();
@@ -511,12 +538,53 @@ export class Account {
     this.changed();
   }
 
+  /** The player's name style (defaults until they pick one). */
+  get myStyle(): NameStyle {
+    return this.myProfile?.style ?? { ...DEFAULT_NAME_STYLE };
+  }
+
+  /** The name to show for this player anywhere: profile name, then account name. */
+  get displayName(): string {
+    return this.myProfile?.name || this.me?.name || 'Player';
+  }
+
+  /** Change how the name looks. Options above the player's level are refused. */
+  setNameStyle(style: NameStyle): string | null {
+    const card = this.myProfile;
+    if (!card || !this.uid || !this.db) return 'Make a profile first.';
+    if (this.myApproval?.status === 'revoked') return 'Your profile is paused.';
+    const level = playerLevel(this.cfg, this.progress).level;
+    const ok = allowedStyle(cleanNameStyle(style), level, this.owner);
+    if (!sameStyle(ok, cleanNameStyle(style))) return 'That style unlocks at a higher player level.';
+    if (card.style && sameStyle(card.style, ok)) return null;
+    const next = { ...card, style: ok, updatedAt: new Date().toISOString() };
+    this.profiles.set(this.uid, next);
+    this.writeProfile(this.uid, next);
+    this.changed();
+    return null;
+  }
+
+  /** Show this character (the one the player plays as) on their profile card. */
+  setShowcase(c: Character | null): void {
+    const card = this.myProfile;
+    if (!card || !this.uid || !this.db || this.myApproval?.status === 'revoked') return;
+    const packed = c ? packChar(c) : null;
+    const was = card.char ? unpackChar(card.char) : null;
+    if (!c && !was) return;
+    if (c && was && was.id === c.id && was.updatedAt === c.updatedAt && (was.cosmetics.spriteItem ?? null) === (c.cosmetics.spriteItem ?? null)) return;
+    const next = { ...card, char: packed, updatedAt: new Date().toISOString() };
+    this.profiles.set(this.uid, next);
+    this.writeProfile(this.uid, next);
+    this.changed();
+  }
+
   /** Moderator: rename a player's profile. */
   renameProfile(uid: string, rawName: string): void {
     const card = this.profiles.get(uid);
     const name = cleanProfileName(rawName);
     if (!this.owner || !card || !name) return;
-    const next = { ...card, name, updatedAt: new Date().toISOString() };
+    const next: PublicProfile = { ...card, name, updatedAt: new Date().toISOString() };
+    delete next.renamedFrom;
     this.profiles.set(uid, next);
     this.writeProfile(uid, next);
     this.changed();
@@ -776,7 +844,8 @@ export class Account {
 
   saveProgress(): void {
     this.saveLocal();
-    if (this.mode !== 'online' || !this.db || !this.uid) return;
+    // Never write over the account's saved progress before it has been read.
+    if (this.mode !== 'online' || !this.db || !this.uid || !this.progressLoaded) return;
     const db = this.db;
     const path = `data/users/${this.uid}/progress`;
     const body = plain(this.progress);

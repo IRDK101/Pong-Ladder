@@ -14,6 +14,7 @@
 
 import type { Character, Sprite } from '../core/character';
 import type { NetState, TeamInput } from '../game/game';
+import { cleanNameStyle, type NameStyle } from '../progress/nameStyles';
 
 export interface RoomPeer {
   peer: string;
@@ -54,6 +55,8 @@ export interface LobbyCard {
   pz: 1;
   name: string;
   level: number;
+  /** How the name looks (profile name style). */
+  style: NameStyle;
   status: 'lobby' | 'playing';
   char: PackedChar | null;
   invite: { to: string; id: string; settings: MatchSettings } | null;
@@ -118,13 +121,14 @@ export function unpackChar(p: PackedChar | null | undefined): Character | null {
   return c;
 }
 
-function cardOf(p: RoomPeer): LobbyCard | null {
+export function cardOf(p: Pick<RoomPeer, "presence">): LobbyCard | null {
   const pr = p.presence as Partial<LobbyCard>;
   if (pr?.pz !== 1 || typeof pr.name !== 'string') return null;
   return {
     pz: 1,
     name: pr.name.slice(0, 24),
     level: typeof pr.level === 'number' ? pr.level : 1,
+    style: cleanNameStyle(pr.style),
     status: pr.status === 'playing' ? 'playing' : 'lobby',
     char: (pr.char as PackedChar) ?? null,
     invite: pr.invite && typeof pr.invite.to === 'string' && typeof pr.invite.id === 'string' ? pr.invite : null,
@@ -173,7 +177,7 @@ export class Lobby {
     this.unsub?.();
     this.unsub = null;
     this.me = null;
-    void this.room.presence({ pz: null, name: null, level: null, status: null, char: null, invite: null, answer: null }).catch(() => {});
+    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null }).catch(() => {});
   }
 
   /** Challenges addressed to this page. */

@@ -7,13 +7,17 @@ import type { GameConfig } from '../config';
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
 import { getStyle } from '../core/styles';
-import { PROFILE_NAME_MAX, type Account, type PlayerSubmissions, type Role } from '../data/shared';
+import { PROFILE_NAME_MAX, type Account, type PlayerSubmissions, type PublicProfile, type Role } from '../data/shared';
 import type { AppStore } from '../data/storage';
 import { DESIGN_ORDER } from '../render/designs';
 import { characterLevel, playerLevel, playerXp } from '../progress/unlocks';
 import { levelBar } from './careerView';
 import { characterCard, statBars, type CharactersScreen } from './characters';
 import { h, spriteImage, type Overlay } from './dom';
+import { styledName } from './nameStyle';
+import { cleanNameStyle } from '../progress/nameStyles';
+import { unpackChar } from '../net/online';
+import type { Sprite } from '../core/character';
 
 const ROLE_INFO: Record<Role, { label: string; blurb: string }> = {
   moderator: { label: 'MODERATOR', blurb: 'This is the game’s owner account. You run the shared collection: what you make is added for everyone straight away, you approve new profiles and submitted characters, and you can edit or remove any character.' },
@@ -32,7 +36,7 @@ export class ProfileScreen {
     private store: AppStore,
     private cfg: GameConfig,
     private account: Account,
-    private go: { collection: () => void; characters: () => void; moderator: () => void; back: () => void },
+    private go: { collection: () => void; characters: () => void; moderator: () => void; edit: () => void; back: () => void },
   ) {}
 
   isShowing(): boolean {
@@ -58,11 +62,16 @@ export class ProfileScreen {
         h(
           'div',
           { style: 'display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px' },
-          h('div', { class: 'row' }, h('span', { class: `role-badge role-${a.role}` }, role.label), a.me ? h('span', { class: 'name', style: 'font-size:18px' }, a.me.name || 'Signed in') : h('span', { class: 'name' }, 'Not signed in')),
+          h('div', { class: 'row' }, h('span', { class: `role-badge role-${a.role}` }, role.label), a.myProfile ? h('span', { style: 'font-size:18px' }, styledName(a.myProfile.name, a.myStyle)) : a.me ? h('span', { class: 'name', style: 'font-size:18px' }, a.me.name || 'Signed in') : h('span', { class: 'name' }, 'Not signed in')),
           a.role !== 'guest' ? h('span', { class: 'dim' }, a.me?.email ? `Saved to ${a.me.email}` : 'Saved to your claude.ai account (the email you sign in with)') : null,
           h('p', { class: 'dim', style: 'font-size:13px' }, role.blurb),
         ),
-        a.role === 'moderator' ? h('button', { class: 'primary', onclick: () => this.go.moderator() }, a.pendingCount() ? `Moderator tools · ${a.pendingCount()} to review` : 'Moderator tools') : null,
+        h(
+          'div',
+          { style: 'display:flex;flex-direction:column;gap:8px' },
+          a.myProfile && a.myApproval?.status !== 'revoked' ? h('button', { class: 'primary', onclick: () => this.go.edit() }, 'Edit profile') : null,
+          a.role === 'moderator' ? h('button', { class: a.myProfile ? '' : 'primary', onclick: () => this.go.moderator() }, a.pendingCount() + a.pendingProfiles().length ? `Moderator tools · ${a.pendingCount() + a.pendingProfiles().length} to review` : 'Moderator tools') : null,
+        ),
       ),
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
       this.profileForm(),
@@ -97,8 +106,8 @@ export class ProfileScreen {
   private profileForm(): HTMLElement | null {
     const a = this.account;
     if (a.role === 'moderator' || a.role === 'player' || a.role === 'guest' || a.role === 'viewonly') {
-      if (a.role !== 'player' || !a.myProfile) return null;
-      return h('div', { class: 'box row spread' }, h('span', {}, 'Leaderboard name: ', h('b', {}, a.myProfile.name)), h('span', { class: 'dim', style: 'font-size:12px' }, 'The moderator can rename it.'));
+      if ((a.role !== 'player' && a.role !== 'moderator') || !a.myProfile) return null;
+      return h('div', { class: 'box row spread' }, h('span', { class: 'row' }, 'Leaderboard name: ', styledName(a.myProfile.name, a.myStyle)), h('button', { onclick: () => this.go.edit() }, 'Change name, character or style'));
     }
     const card = a.myProfile;
     const decision = a.myApproval;
@@ -137,7 +146,20 @@ export class LeaderboardScreen {
     private account: Account,
     private back: () => void,
     private openProfile: () => void,
+    private openEdit: () => void = openProfile,
   ) {}
+
+  private faces = new Map<string, Sprite | null>();
+  /** The character a player shows as, small. */
+  private face(uid: string, card: PublicProfile): HTMLElement | null {
+    const key = `${uid}:${card.updatedAt}`;
+    if (!this.faces.has(key)) {
+      const c = unpackChar(card.char);
+      this.faces.set(key, c ? characterSprite(c.sprite, c.cosmetics.spriteItem ?? null) : null);
+    }
+    const sp = this.faces.get(key);
+    return sp ? spriteImage(sp, 1) : h('span', { style: 'display:inline-block;width:16px;flex:none' });
+  }
 
   isShowing(): boolean {
     return !!this.panel && this.overlay.isOpen() && this.overlay.root.contains(this.panel);
@@ -157,7 +179,7 @@ export class LeaderboardScreen {
               'div',
               { class: `board-row${uid === me ? ' me' : ''}${i < 3 ? ` top${i + 1}` : ''}` },
               h('span', { class: 'rank' }, i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1)),
-              h('span', { class: 'name' }, card.name, card.moderator ? h('span', { class: 'role-badge role-moderator', style: 'margin-left:8px;font-size:10px;padding:1px 5px' }, 'MOD') : null, uid === me ? h('span', { class: 'dim', style: 'margin-left:8px;font-size:12px' }, 'you') : null),
+              h('span', { class: 'who' }, this.face(uid, card), styledName(card.name, cleanNameStyle(card.style)), card.moderator ? h('span', { class: 'role-badge role-moderator', style: 'font-size:10px;padding:1px 5px;flex:none' }, 'MOD') : null, uid === me ? h('span', { class: 'dim', style: 'font-size:12px;flex:none' }, 'you') : null),
               h('span', {}, String(card.level)),
               h('span', {}, card.xp.toLocaleString()),
             ),
@@ -168,7 +190,8 @@ export class LeaderboardScreen {
       a.role === 'player' || a.role === 'moderator'
         ? null
         : h('div', { class: 'box row spread' }, h('span', { class: 'dim' }, a.role === 'pending' ? 'Your profile is waiting for approval: you’ll show up here once it’s approved.' : 'Make a profile to earn XP and get on the board.'), a.role === 'unregistered' || a.role === 'pending' ? h('button', { class: 'primary', onclick: () => this.openProfile() }, 'Your profile') : null);
-    const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('button', { onclick: () => this.back() }, 'Back to menu')), h('p', { class: 'dim' }, 'Total XP from every character each player has played. Updates live.'), note, table);
+    const edit = a.myProfile && (a.role === 'player' || a.role === 'moderator') ? h('button', { onclick: () => this.openEdit() }, 'Edit how you appear') : null;
+    const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('div', { class: 'row' }, edit, h('button', { onclick: () => this.back() }, 'Back to menu'))), h('p', { class: 'dim' }, 'Total XP from every character each player has played. Updates live.'), note, table);
     this.panel = panel;
     this.overlay.show(panel, true);
   }
@@ -239,7 +262,8 @@ export class ModeratorScreen {
       return h(
         'div',
         { class: 'box card' },
-        h('div', { class: 'row spread', style: 'width:100%' }, h('span', { class: 'name' }, card.name), status),
+        h('div', { class: 'row spread', style: 'width:100%' }, styledName(card.name, cleanNameStyle(card.style)), status),
+        card.renamedFrom ? h('p', { class: 'ok', style: 'font-size:12px' }, `Renamed themselves (was “${card.renamedFrom}”). Rename them back below if needed.`) : null,
         h('p', { class: 'dim', style: 'font-size:12px' }, `Account: ${a.nameOf(uid)} · level ${card.level} · ${card.xp} XP${card.requestedAt ? ` · asked ${new Date(card.requestedAt).toLocaleDateString()}` : ''}`),
         d?.status === 'approved' ? null : note,
         h(

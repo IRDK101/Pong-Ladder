@@ -3,6 +3,7 @@
 
 import type { Sprite } from '../core/character';
 import type { Theme } from '../theme';
+import { NAME_STYLE_CSS } from './nameStyle';
 
 type Attrs = Record<string, string | number | boolean | EventListener | undefined>;
 type Child = Node | string | null | undefined | false;
@@ -208,6 +209,7 @@ export function injectStyles(theme: Theme): void {
   #ui .lobby-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
   #ui .invite { border-color: ${c.gold}; background: #3a321e; animation: reveal-in 0.4s both; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  ${NAME_STYLE_CSS(c.gold)}
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));
 }

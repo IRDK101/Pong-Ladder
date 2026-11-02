@@ -28,6 +28,7 @@ import { OnlineScreen, type OnlineStart } from './ui/online';
 import { MatchLink } from './net/online';
 import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
+import { ProfileEditor } from './ui/profileEdit';
 import { CharacterPicker, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
@@ -93,7 +94,17 @@ const saveSelection = () => {
   kv.setItem(SELECTION_KEY, JSON.stringify(selection));
   menu.mySide = selection.mySide;
   account.saveSelection(selection);
+  syncShowcase();
 };
+/** The character the player plays as: their first Playing as spot (null = random). */
+function mainCharacter() {
+  const id = selection.chars[0];
+  return (id && account.usable().find((c) => c.id === id)) || null;
+}
+/** Keep the profile card's character (leaderboard, lobby) the one they play as. */
+function syncShowcase(): void {
+  if (account.myProfile) account.setShowcase(mainCharacter());
+}
 /** Picks saved with the account win over this browser's, once, when the account first answers. */
 let selectionAdopted = false;
 function adoptSelection(): void {
@@ -127,6 +138,8 @@ menu.accountInfo = () => {
 };
 account.onChange(() => {
   adoptSelection();
+  syncShowcase();
+  onlineScreen.refreshMe();
   if (screen !== 'panel') return;
   if (characters.isShowingList()) characters.showList();
   else if (collection.isShowing()) collection.show();
@@ -135,6 +148,7 @@ account.onChange(() => {
     if (!(document.activeElement instanceof HTMLInputElement && overlay.root.contains(document.activeElement))) profileScreen.show();
   } else if (leaderboard.isShowing()) leaderboard.show();
   else if (moderator.isShowing()) moderator.show();
+  else if (profileEditor.isShowing() && !(document.activeElement instanceof HTMLInputElement && overlay.root.contains(document.activeElement))) profileEditor.show();
 });
 void account.connect();
 injectStyles(theme);
@@ -160,6 +174,7 @@ if (location.hash === '#debug') {
       return account;
     },
     openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
+    openEditor: () => openPanel(() => profileEditor.open()),
     art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
     sprite: composeSprite,
     parts: PART_OPTIONS,
@@ -347,14 +362,14 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
 const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
 const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu(), () => moderator.show('review'));
 const moderator = new ModeratorScreen(overlay, store, baseCfg, account, characters, () => toMenu());
-const leaderboard = new LeaderboardScreen(overlay, account, () => toMenu(), () => profileScreen.show());
+const leaderboard = new LeaderboardScreen(overlay, account, () => toMenu(), () => profileScreen.show(), () => profileEditor.open());
 const onlineScreen = new OnlineScreen(overlay, {
   me: () => {
     const cfg = menu.config(baseCfg);
     const usable = account.usable();
     const pin = pinnedFor({ ...cfg, teamSize: 1, players: { ...cfg.players, mode: 'versus', mySide: 'A' } }, selection, usable)['A-left'];
-    const char = pin ?? usable[0] ?? null;
-    return { name: account.myProfile?.name || account.me?.name || 'Player', level: playerLevel(baseCfg, account.progress).level, char };
+    const char = mainCharacter() ?? pin ?? usable[0] ?? null;
+    return { name: account.displayName, level: playerLevel(baseCfg, account.progress).level, style: account.myStyle, char };
   },
   settings: () => {
     const cfg = menu.config(baseCfg);
@@ -370,7 +385,18 @@ const profileScreen = new ProfileScreen(overlay, store, baseCfg, account, {
   collection: () => collection.show(),
   characters: () => characters.showList(),
   moderator: () => moderator.show(),
+  edit: () => profileEditor.open(),
   back: () => toMenu(),
+});
+const profileEditor = new ProfileEditor(overlay, baseCfg, account, {
+  mainId: () => mainCharacter()?.id ?? null,
+  setMain: (id) => {
+    const old = selection.chars[0];
+    if (id && selection.chars[1] === id) selection.chars[1] = old;
+    selection.chars[0] = id;
+    saveSelection();
+  },
+  back: () => profileScreen.show(),
 });
 
 const menuSprites = new Map<string, ReturnType<typeof characterSprite>>();
@@ -399,6 +425,7 @@ function menuExtras(): MenuExtras {
       return sp;
     }),
     tableArt: tableArt(theme, cfg.design),
+    me: account.myProfile ? { name: account.myProfile.name, style: account.myStyle } : null,
   };
 }
 

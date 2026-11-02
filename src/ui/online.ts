@@ -8,6 +8,8 @@ import { DESIGNS } from '../render/designs';
 import { VENUES } from '../render/basement';
 import type { TableDesign, Venue } from '../config';
 import { h, spriteImage, type Overlay } from './dom';
+import { styledName } from './nameStyle';
+import type { NameStyle } from '../progress/nameStyles';
 
 export interface OnlineStart {
   role: 'host' | 'guest';
@@ -37,7 +39,7 @@ export class OnlineScreen {
     private overlay: Overlay,
     private deps: {
       /** Who this player is and who they play as. */
-      me: () => { name: string; level: number; char: Character | null };
+      me: () => { name: string; level: number; style: NameStyle; char: Character | null };
       settings: () => MatchSettings;
       start: (s: OnlineStart) => void;
       back: () => void;
@@ -58,8 +60,18 @@ export class OnlineScreen {
     }
     if (this.room && !this.lobby) this.lobby = new Lobby(this.room, () => this.onLobby());
     const me = this.deps.me();
-    this.lobby?.open({ name: me.name, level: me.level, char: me.char ? packChar(me.char) : null });
+    this.lobby?.open({ name: me.name, level: me.level, style: me.style, char: me.char ? packChar(me.char) : null });
     this.render();
+  }
+
+  /** The player's name, style or character changed: update their lobby card. */
+  refreshMe(): void {
+    if (!this.lobby?.me || this.starting) return;
+    const me = this.deps.me();
+    const char = me.char ? packChar(me.char) : null;
+    const cur = this.lobby.me;
+    if (cur.name === me.name && cur.level === me.level && JSON.stringify(cur.style) === JSON.stringify(me.style) && JSON.stringify(cur.char) === JSON.stringify(char)) return;
+    this.lobby.update({ name: me.name, level: me.level, style: me.style, char });
   }
 
   /** Leave the lobby (when going back to the menu). */
@@ -136,14 +148,14 @@ export class OnlineScreen {
     const meCard = h(
       'div',
       { class: 'box lobby-row' },
-      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, h('span', { class: 'name' }, me.name), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Playing as)`))),
+      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Edit profile or Playing as)`))),
       h('p', { class: 'dim', style: 'font-size:12px;max-width:420px' }, `Your challenges use your menu settings: ${settingsLine(s)}. 1v1, single game. You serve first from Team A; they play Team B on their device.`),
     );
     const invites = incoming.map((p) =>
       h(
         'div',
         { class: 'box invite lobby-row' },
-        h('div', {}, h('span', { class: 'name' }, `${p.card.name} challenges you!`), h('p', { class: 'dim', style: 'font-size:12px' }, settingsLine(p.card.invite!.settings))),
+        h('div', {}, h('span', { class: 'row', style: 'gap:6px' }, styledName(p.card.name, p.card.style), h('b', {}, 'challenges you!')), h('p', { class: 'dim', style: 'font-size:12px' }, settingsLine(p.card.invite!.settings))),
         h(
           'div',
           { class: 'row' },
@@ -159,7 +171,7 @@ export class OnlineScreen {
           return h(
             'div',
             { class: 'box lobby-row' },
-            h('div', { class: 'row' }, c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, h('span', { class: 'name' }, p.card.name), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${p.card.level}${c ? ` · ${c.name}` : ''} · ${p.card.status === 'playing' ? 'in a match' : 'in the lobby'}`))),
+            h('div', { class: 'row' }, c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(p.card.name, p.card.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${p.card.level}${c ? ` · ${c.name}` : ''} · ${p.card.status === 'playing' ? 'in a match' : 'in the lobby'}`))),
             waiting
               ? h('div', { class: 'row' }, h('span', { class: 'dim' }, 'Waiting…'), h('button', { onclick: () => (lb.update({ invite: null }), (this.note = 'Challenge cancelled.'), this.render()) }, 'Cancel'))
               : h('button', { class: 'primary', disabled: p.card.status === 'playing' || !!myInv || !me.char, onclick: () => this.challenge(p) }, 'Challenge'),

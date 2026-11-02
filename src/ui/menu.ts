@@ -4,6 +4,8 @@ import { makeConfig, type GameConfig } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
 import type { Sprite } from '../core/character';
+import type { NameStyle } from '../progress/nameStyles';
+import { drawStyledName } from './nameStyle';
 import { panel } from '../render/hud';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 import { DESIGN_ORDER, DESIGNS } from '../render/designs';
@@ -366,6 +368,8 @@ export interface MenuExtras {
   team: (Sprite | null)[];
   /** The picked table's painted top. */
   tableArt: HTMLCanvasElement | null;
+  /** The player's profile name and its style (null = no profile). */
+  me?: { name: string; style: NameStyle } | null;
 }
 
 const NO_EXTRAS: MenuExtras = { level: 1, xpInto: 0, xpSpan: 150, boxes: 0, nothingLeft: false, newRewards: 0, pending: 0, offline: true, team: [], tableArt: null };
@@ -626,7 +630,14 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.title;
   ctx.fillStyle = c.text;
-  ctx.fillText(`Level ${ex.level}`, r.x, r.y + 40);
+  if (ex.me) {
+    // The player's styled name, then their level.
+    const w = drawStyledName(ctx, ex.me.name, ex.me.style, r.x, r.y + 40, theme.fonts.title, r.w - 200, performance.now());
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = c.textDim;
+    ctx.textAlign = 'left';
+    ctx.fillText(`LV ${ex.level}`, r.x + w + 10, r.y + 41);
+  } else ctx.fillText(`Level ${ex.level}`, r.x, r.y + 40);
   const bx = r.x;
   const by = r.y + 58;
   const bw = r.w - 92;

@@ -759,3 +759,12 @@ Decided with the owner: keep the public link (so view-only visitors play as gues
   - XP: the host records the game. The guest's XP is `matchXp(record, 'B')` from the host's `final` presence field, given only if the guest may progress.
   - If either player leaves, the other returns to the menu.
 - **Platform limit:** visitors from a public link outside the organization can't connect to the room or save data. They see an explanation and play offline as guests.
+
+## Edit profile: name, character, name style
+
+- **Edit profile** (from Your profile or the Leaderboard) changes how a player appears in three places: the leaderboard, their home screen (the Collection card shows the styled name and level) and the online lobby. It has a live preview of all three.
+- **Username:** approved players can now rename themselves. It applies straight away, with the same rules (up to 20 characters, unique). The card keeps `renamedFrom` (the name before the player's own renames), and Moderator tools → Profiles shows it; a moderator rename clears it. Paused profiles can't be changed.
+- **Playing as:** the character a player plays as is their first Playing as spot (`selection.chars[0]`), so the editor and the home-screen picker are the same setting. The profile card carries a packed copy (`char`) so everyone can draw it on the leaderboard; it follows the pick automatically. Online matches use it first.
+- **Name style** (`src/progress/nameStyles.ts`): a color (solid or gradient), an effect (shadow, spaced caps, outline, glow, slanted, animated shine and pulse) and a flair icon. Each option unlocks at a player level; the moderator has all. Options are only appended, and unknown ids fall back to the defaults. The style is saved on the profile card (`style`) and in the lobby card. `Account.setNameStyle` refuses options above the player's level.
+- Drawn by `styledName` (HTML) and `drawStyledName` (canvas) in `src/ui/nameStyle.ts`. Animations stop under reduced motion.
+- **Fixed: progress could be overwritten on a new device.** If the character list loaded before the account's saved progress, the starter top-up saved an empty progress over it. Progress is now never written to the account until the saved copy has been read (a test checks the ordering).
