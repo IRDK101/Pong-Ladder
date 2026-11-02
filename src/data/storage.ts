@@ -155,7 +155,7 @@ export class AppStore {
     } catch {
       throw new Error('That is not valid JSON. Paste the whole backup file.');
     }
-    if (!file || file.app !== 'dartmouth-pong') throw new Error('That is not a Dartmouth Pong backup file.');
+    if (!file || file.app !== 'dartmouth-pong') throw new Error('That is not a Pong Zimulator backup file.');
     if ((file.schemaVersion ?? 0) > SCHEMA_VERSION) throw new Error('This backup is from a newer version of the game.');
     const res: ImportResult = { matches: 0, characters: 0, profiles: 0, skipped: [] };
     const merge = <T extends { id: string }>(col: Collection<T>, items: unknown, kind: keyof Omit<ImportResult, 'skipped'>, check: (x: T) => string[]) => {

@@ -197,8 +197,11 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
     xbox(b, cam, xf, ax, ay, floorZ, bx, by, floorZ + 0.4, R.benchFront, R.benchFront, R.benchFront);
     xbox(b, cam, xf, ax - 0.02, ay - 0.02, floorZ + 0.4, bx + 0.02, by + 0.02, floorZ + 0.46, R.benchTop, R.bench, R.bench);
   };
-  bench(1.6, y1 - 0.34, x1, y1);
+  // The bench runs the whole length of the bench wall (as in the basement), round the corner by the doors,
+  // and along the stage wall up to the stage.
+  bench(x0, y1 - 0.34, x1, y1);
   bench(x1 - 0.34, y1 - 1.9, x1, y1 - 0.34);
+  bench(x0, y0, STAGE.x0, y0 + 0.34);
   // Tombstones on the bench in the middle of the room, a caution sign by the windows.
   [
     [6.4, 'RIP'],
@@ -273,8 +276,10 @@ function drawWallDressing(b: CanvasRenderingContext2D, theme: Theme, cam: Camera
   const R = theme.room;
   const { stageWall: S, benchWall: N, barWall: B, doorWall: D } = w;
   const { x1, y1 } = ROOM;
-  const h0 = HEADER_Z + 0.07;
-  const h1 = ceilZ - 0.07;
+  // Writing sits on the lower part of the black band, where the table cameras see it below the HUD.
+  const h0 = HEADER_Z + 0.03;
+  const h1 = HEADER_Z + 0.3;
+  void ceilZ;
   const hand = 'bold 20px sans-serif';
   const serif = 'bold 22px serif';
   const tN = (x: number) => x1 - x; // bench wall reads from the door end toward the bar
@@ -297,11 +302,13 @@ function drawWallDressing(b: CanvasRenderingContext2D, theme: Theme, cam: Camera
   wallText(b, cam, S, "TIMES NOT WASTED\nWHEN YOU'RE WASTED", 'bold 16px sans-serif', R.paintWhite, 0.4, 2.2, 0.95, 1.35);
   wallText(b, cam, S, 'JAFE', 'bold 26px sans-serif', R.paintBlue, 2.7, 3.5, 0.85, 1.2);
   wallText(b, cam, S, "ROBICHEAUX '14\nPUCK '12", 'bold 14px sans-serif', R.paintWhite, 3.6, 4.3, 0.9, 1.2);
-  wallText(b, cam, S, 'STEP YOUR LEVELS UP', 'bold 26px sans-serif', R.paintPink, 4.6, 6.8, h0, h1);
-  wallText(b, cam, S, 'Is this going to be in my Supreme Court Hearing?', 'bold 18px sans-serif', R.paintBlue, 6.9, 9.6, h0 + 0.08, h1 - 0.08);
+  wallText(b, cam, S, 'THE CLASS OF 1962 ROOM', 'bold 24px sans-serif', R.paintGold, 4.3, 6.9, h0, h1);
+  wallText(b, cam, S, 'STEP YOUR LEVELS UP', 'bold 26px sans-serif', R.paintPink, 7.3, 9.9, h0 + 0.12, h1);
+  wallText(b, cam, S, 'Is this going to be in my Supreme Court Hearing?', 'bold 18px sans-serif', R.paintBlue, 7.3, 9.9, h0, h0 + 0.11);
+  // Stage LED lights, mounted above the writing.
   for (const t of [5.2, 6.0]) {
-    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.2, 0.11, 14), R.ledHousing, 0.02);
-    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.2, 0.08, 14), R.ledLight, 0.024);
+    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.43, 0.09, 14), R.ledHousing, 0.02);
+    wallShape(b, cam, S, circlePts(t, HEADER_Z + 0.43, 0.065, 14), R.ledLight, 0.024);
   }
   sign(b, theme, cam, S, 'JOHNSON\nCONTROLS', 5.0, 5.45, 0.62, 0.98);
   wallText(b, cam, S, 'ITS KCAO A WORLD', hand, R.paintBlue, 5.15, 6.6, 0.35, 0.62);
@@ -316,10 +323,10 @@ function drawWallDressing(b: CanvasRenderingContext2D, theme: Theme, cam: Camera
   wallText(b, cam, S, 'STOP', 'bold 22px sans-serif', R.signWhite, 8.57, 8.93, 0.91, 1.09, 0.008);
 
   // --- Bench wall: windows and street sign by the doors, tombstones and the LEFT TURN sign mid-room, ONE WAY toward the bar.
-  wallText(b, cam, N, 'Do you wanna hear a secret?', hand, R.paintGreen, 0.3, 3.4, h0 + 0.08, h1 - 0.08);
-  wallText(b, cam, N, 'Brothers should be nicer to other brothers', hand, R.paintGold, tN(7.0), tN(3.2), h0 + 0.05, h1 - 0.05);
-  wallText(b, cam, N, 'BM', 'bold 26px sans-serif', R.paintGreen, tN(3.0), tN(2.5), h0, h1);
-  wallText(b, cam, N, 'Love loves to love love.', serif, R.paintWhite, tN(2.3), tN(0.3), h0 + 0.05, h1 - 0.05);
+  wallText(b, cam, N, 'Do you wanna hear a secret?', hand, R.paintGreen, 0.3, 3.3, h0, h1);
+  wallText(b, cam, N, 'Brothers should be nicer to other brothers', hand, R.paintGold, tN(6.95), tN(4.25), h0, h1);
+  wallText(b, cam, N, 'BM', 'bold 26px sans-serif', R.paintGreen, tN(3.9), tN(3.4), h0, h1);
+  wallText(b, cam, N, 'Love loves to love love.', serif, R.paintWhite, tN(3.2), tN(0.3), h0, h1);
   wallText(b, cam, N, '8', 'bold 30px sans-serif', R.paintBlue, 0.25, 0.5, 0.3, 0.75);
   wallText(b, cam, N, 'CLAY DG', 'bold 26px sans-serif', R.paintBlue, 0.55, 1.6, 0.3, 0.7);
   for (const x of [9.0, 8.0]) {

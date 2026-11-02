@@ -132,7 +132,7 @@ export const BEAMS: { axis: 'x' | 'y'; at: number; from: number; to: number; sid
     from: 0,
     to: ROOM.y1,
     sides: [
-      [{ text: 'BIG BRIGGS', color: 'paintWhite', font: 'bold 30px sans-serif' }, { text: 'THE CLASS OF 1962 ROOM', color: 'paintGold' }, { text: 'RONA RUINED MY DAY', color: 'paintGold' }],
+      [{ text: 'BIG BRIGGS', color: 'paintWhite', font: 'bold 30px sans-serif' }, { text: 'RONA RUINED MY DAY', color: 'paintGold' }],
       [{ text: "IT'S FOR THE KIDS", color: 'paintBlue' }, { text: 'Draw without an eraser.', color: 'paintWhite', font: 'bold 24px serif' }],
     ],
   },

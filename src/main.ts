@@ -8,7 +8,7 @@ import { CpuController } from './game/ai';
 import { coopInput } from './game/controllers';
 import { cameraFrame, teamCamera } from './render/camera';
 import { pickCup3D, renderGame3D } from './render/renderer3d';
-import { Keyboard } from './input/keyboard';
+import { isTyping, Keyboard } from './input/keyboard';
 import { cupAt, makeView, renderGame } from './render/renderer';
 import { renderHud } from './render/hud';
 import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, menuRowRect, type MenuAction } from './ui/menu';
@@ -280,6 +280,8 @@ function frame(dt: number): void {
 
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
+  // Escape in a text box just leaves the box, so a half-typed name is not thrown away.
+  if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
   if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') toMenu('Match abandoned.');
   else if (screen === 'panel' || screen === 'help') toMenu();
 });

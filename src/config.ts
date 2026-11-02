@@ -179,7 +179,7 @@ export const defaultConfig: GameConfig = {
   teamSize: 2,
   venue: 'saints',
   view: 'behindA',
-  camera: { behind: 2.2, height: 1.9, lookAt: 0.55, lookHeight: 0.4, fovY: 52, pixelSize: 2, rows: 400, detail: 1 },
+  camera: { behind: 2.3, height: 1.7, lookAt: 0.55, lookHeight: 0.5, fovY: 46, pixelSize: 2, rows: 400, detail: 1 },
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },

@@ -122,25 +122,29 @@ export function menuRowRect(_v: View, i: number) {
 }
 
 let logoCache: HTMLCanvasElement | null = null;
-/** The logo, drawn small and scaled up with hard pixel edges. */
+/**
+ * The logo, "PONG ZIMULATOR", drawn small and scaled up with hard pixel
+ * edges. The Z is a gold Greek capital zeta (Ζ), for Zeta Psi.
+ */
 function logo(theme: Theme): HTMLCanvasElement {
   if (logoCache) return logoCache;
   const m = theme.menu;
   const c = document.createElement('canvas');
   c.width = 132;
-  c.height = 34;
+  c.height = 36;
   const x = c.getContext('2d')!;
   x.textBaseline = 'top';
-  x.font = 'bold 15px monospace';
-  x.fillStyle = m.logoShadow;
-  x.fillText('DARTMOUTH', 2, 2);
-  x.fillStyle = m.logo;
-  x.fillText('DARTMOUTH', 1, 1);
-  x.font = 'bold 15px monospace';
-  x.fillStyle = m.logoShadow;
-  x.fillText('PONG', 2, 19);
-  x.fillStyle = m.accent;
-  x.fillText('PONG', 1, 18);
+  const word = (text: string, px: number, py: number, font: string, fill: string) => {
+    x.font = font;
+    x.fillStyle = m.logoShadow;
+    x.fillText(text, px + 1, py + 1);
+    x.fillStyle = fill;
+    x.fillText(text, px, py);
+    return x.measureText(text).width;
+  };
+  word('PONG', 1, 1, 'bold 15px monospace', m.logo);
+  const zw = word('\u0396', 1, 17, 'bold 18px serif', m.accent);
+  word('IMULATOR', 1 + Math.ceil(zw) + 1, 19, 'bold 15px monospace', m.logo);
   logoCache = c;
   return c;
 }

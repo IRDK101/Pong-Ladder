@@ -195,11 +195,39 @@ export class CharactersScreen {
 
 type SpriteMode = 'parts' | 'draw' | 'upload';
 
+/** Which part of the figure each part's thumbnails show (rows y0..y1), at what scale, and from which side. */
+const THUMB_REGION: Record<PartKey, { y0: number; y1: number; scale: number; back?: boolean }> = {
+  build: { y0: 0, y1: 23, scale: 2 },
+  skin: { y0: 0, y1: 23, scale: 2 },
+  faceShape: { y0: 0, y1: 11, scale: 4 },
+  eyes: { y0: 2, y1: 9, scale: 5 },
+  mouth: { y0: 3, y1: 10, scale: 5 },
+  facialHair: { y0: 2, y1: 11, scale: 4 },
+  hairStyle: { y0: 0, y1: 11, scale: 4 },
+  hairColor: { y0: 0, y1: 11, scale: 4 },
+  headwear: { y0: 0, y1: 11, scale: 4 },
+  hatColor: { y0: 0, y1: 11, scale: 4 },
+  shirtStyle: { y0: 8, y1: 18, scale: 4 },
+  shirtColor: { y0: 8, y1: 18, scale: 4 },
+  pantsStyle: { y0: 15, y1: 23, scale: 4 },
+  pantsColor: { y0: 15, y1: 23, scale: 4 },
+  shoes: { y0: 19, y1: 23, scale: 5 },
+  accessory: { y0: 0, y1: 17, scale: 3 },
+};
+
+/** Rows y0..y1 of a sprite. */
+function cropSprite(s: Sprite, y0: number, y1: number): Sprite {
+  return { w: s.w, h: y1 - y0 + 1, pixels: s.pixels.slice(y0 * s.w, (y1 + 1) * s.w) };
+}
+
 class CharacterEditor {
   private mode: SpriteMode;
   private brush = '#1a1410';
   private recent: string[] = ['#1a1410', '#f2f2f2', '#00693e', '#b5332e', '#e8a33d', '#3a8ec9'];
   private confirmingDelete = false;
+  private shown = false;
+  /** Which group of parts the Look tabs show. */
+  private group = 0;
   private errors: string[] = [];
 
   constructor(
@@ -218,9 +246,9 @@ class CharacterEditor {
     const view = (label: string, img: HTMLCanvasElement) => h('div', { style: 'display:flex;flex-direction:column;align-items:center;gap:4px' }, img, h('span', { class: 'dim', style: 'font-size:12px' }, label));
     const preview = h(
       'div',
-      { class: 'box', style: 'display:flex;justify-content:center;gap:28px;background:#4a3f34' },
-      view('Front', spriteImage(characterSprite(c.sprite), 7)),
-      view('Back', spriteImage(characterBackSprite(c.sprite), 7)),
+      { class: 'sprite-stage' },
+      view('Front', spriteImage(characterSprite(c.sprite), 6)),
+      view('Back', spriteImage(characterBackSprite(c.sprite), 6)),
     );
     const modeTabs = h(
       'div',
@@ -235,14 +263,23 @@ class CharacterEditor {
       'div',
       { class: 'panel' },
       h('div', { class: 'row spread' }, h('h1', {}, c.name.trim() ? `Edit ${c.name}` : 'New character'), h('button', { onclick: () => this.actions.cancel() }, 'Cancel')),
+      // The look, full width: the preview stays pinned beside the options, so every change shows at once.
       h(
         'div',
-        { class: 'cols' },
-        h('div', { style: 'display:flex;flex-direction:column;gap:12px;min-width:0' }, h('h2', {}, 'Sprite'), preview, modeTabs, spriteTools),
-        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.identityPanel(), this.statsPanel(), this.stylesPanel(), this.footer()),
+        { class: 'box look' },
+        h('div', { class: 'look-preview' }, h('h2', {}, 'Look'), preview, modeTabs),
+        h('div', { class: 'look-tools' }, spriteTools),
+      ),
+      h(
+        'div',
+        { class: 'cols2' },
+        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.identityPanel(), this.statsPanel()),
+        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.footer()),
       ),
     );
-    this.overlay.show(panel);
+    // Re-rendering after a change keeps the scroll position (the first show starts at the top).
+    this.overlay.show(panel, this.shown);
+    this.shown = true;
   }
 
   private identityPanel(): HTMLElement {
@@ -402,13 +439,18 @@ class CharacterEditor {
 
   // --------------------------------------------------------- sprite tools
 
+  /**
+   * The parts picker: a tab per group (Body, Face, Hair, Clothes, Extras).
+   * Each part shows every option as a thumbnail of this character wearing
+   * it (colors as swatches), so the choices can be compared at a glance.
+   */
   private partsPanel(): HTMLElement {
+    const parts = this.c.sprite.parts as Required<typeof this.c.sprite.parts>;
+    const overridden = this.c.sprite.pixels !== null;
     const luma = (hex: string) => {
       const n = parseInt(hex.slice(1), 16);
       return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
     };
-    const parts = this.c.sprite.parts as Required<typeof this.c.sprite.parts>;
-    const overridden = this.c.sprite.pixels !== null;
     const set = (key: PartKey, i: number) => {
       parts[key] = i;
       this.c.sprite.pixels = null;
@@ -417,48 +459,49 @@ class CharacterEditor {
     const control = (key: PartKey) => {
       const opts = PART_OPTIONS[key] as readonly string[];
       const v = parts[key];
-      const body = COLOR_PARTS.includes(key)
-        ? h(
-            'div',
-            { class: 'chips' },
-            // Skin tones show light to dark (they are stored in the order they were added).
-            ...(key === 'skin' ? [...opts.keys()].sort((a, b) => luma(opts[b]) - luma(opts[a])) : [...opts.keys()]).map((i) => {
-              const col = opts[i];
-              const b = h('button', { class: v === i ? 'swatch on' : 'swatch', title: col, 'aria-label': `${PART_LABELS[key]} ${i + 1}`, onclick: () => set(key, i) });
-              b.style.background = col;
-              return b;
-            }),
-          )
-        : h(
-            'div',
-            { class: 'row', style: 'flex-wrap:nowrap;gap:6px' },
-            h('button', { 'aria-label': `Previous ${PART_LABELS[key]}`, onclick: () => set(key, (v - 1 + opts.length) % opts.length) }, '◀'),
-            h('span', { style: 'flex:1;min-width:96px;text-align:center;white-space:nowrap' }, opts[v]),
-            h('button', { 'aria-label': `Next ${PART_LABELS[key]}`, onclick: () => set(key, (v + 1) % opts.length) }, '▶'),
-          );
-      const wide = COLOR_PARTS.includes(key);
-      return h('div', { style: `display:flex;flex-direction:column;gap:4px;${wide ? 'grid-column:1 / -1' : ''}` }, h('span', { class: 'dim' }, `${PART_LABELS[key]}${wide ? '' : ` (${v + 1}/${opts.length})`}`), body);
+      let body: HTMLElement;
+      if (COLOR_PARTS.includes(key)) {
+        // Skin tones show light to dark (they are stored in the order they were added).
+        const order = key === 'skin' ? [...opts.keys()].sort((a, b) => luma(opts[b]) - luma(opts[a])) : [...opts.keys()];
+        body = h(
+          'div',
+          { class: 'chips' },
+          ...order.map((i) => {
+            const b = h('button', { class: v === i ? 'swatch on' : 'swatch', title: opts[i], 'aria-label': `${PART_LABELS[key]} ${i + 1}`, onclick: () => set(key, i) });
+            b.style.background = opts[i];
+            return b;
+          }),
+        );
+      } else {
+        const region = THUMB_REGION[key];
+        body = h(
+          'div',
+          { class: 'thumbs' },
+          ...opts.map((name, i) => {
+            // Hair thumbnails go hatless, so each style shows; the preview still wears the hat.
+            const bare = key === 'hairStyle' ? { headwear: 0 } : {};
+            const look = composeSprite({ ...parts, ...bare, [key]: i }, region.back ? 'back' : 'front');
+            const img = spriteImage(cropSprite(look, region.y0, region.y1), region.scale, 'sprite');
+            return h('button', { class: v === i ? 'thumb on' : 'thumb', title: name, 'aria-label': `${PART_LABELS[key]}: ${name}`, 'aria-pressed': v === i ? 'true' : 'false', onclick: () => set(key, i) }, img, h('span', {}, name));
+          }),
+        );
+      }
+      return h('div', { class: 'part' }, h('div', { class: 'row spread' }, h('span', { class: 'part-label' }, PART_LABELS[key]), h('span', { class: 'dim' }, opts[v] && !COLOR_PARTS.includes(key) ? opts[v] : '')), body);
     };
+    const g = PART_GROUPS[this.group] ?? PART_GROUPS[0];
     return h(
       'div',
-      { class: 'box', style: 'display:flex;flex-direction:column;gap:14px' },
+      { style: 'display:flex;flex-direction:column;gap:12px;min-width:0' },
       overridden
         ? h('div', { class: 'row' }, h('span', { class: 'dim' }, 'A custom drawing is showing instead of these parts.'), h('button', { onclick: () => ((this.c.sprite.pixels = null), this.render()) }, 'Use parts'))
         : null,
       h(
         'div',
-        { class: 'row' },
+        { class: 'row spread' },
+        h('div', { class: 'tabs', role: 'tablist' }, ...PART_GROUPS.map((grp, i) => h('button', { class: i === this.group ? 'on' : '', role: 'tab', 'aria-selected': i === this.group ? 'true' : 'false', onclick: () => ((this.group = i), this.render()) }, grp.title))),
         h('button', { onclick: () => ((this.c.sprite.parts = randomParts()), (this.c.sprite.pixels = null), this.render()) }, 'Randomize look'),
-        h('span', { class: 'dim', style: 'font-size:12px' }, 'then tweak any part below'),
       ),
-      ...PART_GROUPS.map((g) =>
-        h(
-          'div',
-          { style: 'display:flex;flex-direction:column;gap:8px' },
-          h('h2', {}, g.title),
-          h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 14px' }, ...g.keys.map(control)),
-        ),
-      ),
+      ...g.keys.map(control),
     );
   }
 

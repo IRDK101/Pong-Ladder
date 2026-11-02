@@ -15,6 +15,8 @@ export class Keyboard {
     this.cfg = cfg;
     const bound = new Set(Object.values(cfg.controls).flatMap((c: TeamControls) => Object.values(c)));
     target.addEventListener('keydown', (e) => {
+      // Typing in a text box (a character's name, a backup) is not game input: leave the key alone.
+      if (isTyping(e.target)) return;
       if (bound.has(e.code)) e.preventDefault();
       if (!e.repeat) {
         this.pressed.add(e.code);
@@ -55,4 +57,15 @@ export class Keyboard {
     this.pressed.clear();
     this.queue = [];
   }
+}
+
+/** True for text fields, text areas, selects and editable content, where keys must reach the page. */
+export function isTyping(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  if (!el || typeof el.tagName !== 'string') return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'textarea' || tag === 'select' || el.isContentEditable) return true;
+  if (tag !== 'input') return false;
+  const type = ((el as HTMLInputElement).type || 'text').toLowerCase();
+  return !['checkbox', 'radio', 'range', 'button', 'submit', 'file', 'color'].includes(type);
 }

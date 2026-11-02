@@ -120,6 +120,24 @@ export function injectStyles(theme: Theme): void {
   #ui .pixelgrid { image-rendering: pixelated; touch-action: none; cursor: crosshair; border: 1px solid ${c.uiEdge};
     background: repeating-conic-gradient(${c.uiField} 0 25%, ${c.button} 0 50%) 0 0 / 14px 14px; max-width: 100%; }
   #ui .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  #ui .look { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+  #ui .look-preview { position: sticky; top: 0; display: flex; flex-direction: column; gap: 10px; }
+  #ui .look-tools { min-width: 0; }
+  @media (max-width: 760px) { #ui .look { grid-template-columns: minmax(0, 1fr); } #ui .look-preview { position: static; } }
+  #ui .cols2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 760px) { #ui .cols2 { grid-template-columns: minmax(0, 1fr); } }
+  #ui .sprite-stage { display: flex; justify-content: center; gap: 22px; padding: 14px 8px 8px; border-radius: 4px;
+    background: radial-gradient(ellipse at 50% 85%, #6a311f 0 38%, #3a2416 70%); border: 1px solid ${c.uiEdge}; }
+  #ui .tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+  #ui .tabs button.on { background: ${c.gold}; color: ${c.background}; border-color: ${c.gold}; font-weight: bold; }
+  #ui .part { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid ${c.uiEdge}; }
+  #ui .part-label { color: ${c.gold}; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: bold; }
+  #ui .thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+  #ui .thumb { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 4px 3px; min-width: 70px;
+    background: #4a3f34; border: 1px solid ${c.uiEdge}; border-radius: 3px; }
+  #ui .thumb span { font-size: 10px; color: ${c.text}; white-space: nowrap; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+  #ui .thumb:hover { border-color: ${c.gold}; background: #5a4d3e; }
+  #ui .thumb.on { border: 2px solid ${c.gold}; background: #6a5a3a; padding: 4px 3px 2px; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));
@@ -138,10 +156,14 @@ export class Overlay {
     return !this.root.hidden;
   }
 
-  show(panel: HTMLElement): void {
+  /** Show a screen. `keepScroll` re-renders the same screen in place (no jump back to the top). */
+  show(panel: HTMLElement, keepScroll = false): void {
+    const y = this.root.scrollTop;
+    const focusId = keepScroll ? (document.activeElement as HTMLElement | null)?.id : undefined;
     this.root.replaceChildren(panel);
     this.root.hidden = false;
-    this.root.scrollTop = 0;
+    this.root.scrollTop = keepScroll ? y : 0;
+    if (focusId) document.getElementById(focusId)?.focus();
   }
 
   hide(): void {

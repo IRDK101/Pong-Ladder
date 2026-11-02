@@ -153,7 +153,7 @@ describe('local storage and backups', () => {
 
   it('rejects files that are not backups', () => {
     const store = new AppStore(memoryStore());
-    expect(() => store.importJson('{"foo":1}')).toThrow(/not a Dartmouth Pong backup/);
+    expect(() => store.importJson('{"foo":1}')).toThrow(/not a Pong Zimulator backup/);
     expect(() => store.importJson('not json')).toThrow(/not valid JSON/);
     expect(() => store.importJson(JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 99, matches: [] }))).toThrow(/newer/);
     expect(() => store.importJson(JSON.stringify({ app: 'dartmouth-pong', schemaVersion: 1, matches: [{ nope: 1 }] }))).toThrow(/malformed/);

@@ -539,3 +539,26 @@ These rule decisions were confirmed with the user.
   - A splash of water drops, rings spreading across the table, and a "SINK!" popping up from the cup.
   - The top-down view has simple versions of both effects.
   - These are cosmetic events in `Game.cupFx`, and they add to any equipped celebration.
+
+## Typing fix, visual parts picker, new title, closer camera, basement touch-ups
+
+- **Typing:** the keyboard handler no longer swallows keys while a text field, text area or select has focus. Before, the game keys (WASD, Q, E, Space, Enter, the arrows, "." and "/") couldn't be typed into a character's name. Escape in a text field now just leaves the field instead of going back to the menu.
+- **Character editor:**
+  - The Look section is full width, with the front and back preview pinned on the left (sticky).
+  - On the right, a tab per group: Body, Face, Hair, Clothes, Extras.
+  - Every option is a thumbnail of this character wearing it, cropped to the part that changes (head for hair and face, torso for tops, legs for bottoms, feet for shoes). Colors stay swatches.
+  - Hair thumbnails are drawn without the hat so each style shows.
+  - Re-rendering after a change keeps the scroll position and focus, where it used to jump back to the top.
+  - "Who" and stats, and styles and save, sit in two columns below.
+- **Title:** "PONG ZIMULATOR", with the Z a gold Greek capital zeta (Ζ) in a serif face. The page title and backup error text were renamed too; the backup file format id is unchanged.
+- **Camera:**
+  - Closer and a little lower: behind 2.3 m, height 1.7 m, lookHeight 0.5, fovY 46°.
+  - The near end of the table is ~17% wider on screen (429 px vs 366 at 1440 × 810).
+  - The ball goes off screen in 1.4% of live play (was 1.2%); the edge arrow covers that.
+  - The far walls' header band is now in view below the HUD.
+- **Basement:**
+  - The bench runs the full length of the bench wall (and round the corner), plus along the stage wall up to the stage.
+  - Header writing sits on the lower part of the black band, where the table cameras see it.
+  - "Brothers should be nicer to other brothers" sits between the beams behind the saints table.
+  - "THE CLASS OF 1962 ROOM" moved from a beam (only ever seen edge-on from the table ends) to the stage wall's header behind the saints table.
+  - "STEP YOUR LEVELS UP" sits over the Supreme Court line, behind the night sky table, as in the photo.
