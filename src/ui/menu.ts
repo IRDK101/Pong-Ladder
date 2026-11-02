@@ -3,6 +3,7 @@
 import { makeConfig, type GameConfig } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
+import type { Sprite } from '../core/character';
 import { panel } from '../render/hud';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 import { DESIGN_ORDER, DESIGNS } from '../render/designs';
@@ -29,9 +30,13 @@ const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
   cfg.players.cpu = d;
 };
 
-const CHOICES: Choice[] = [
+type OptionId = 'players' | 'cpu' | 'view' | 'table' | 'spot' | 'formation' | 'match' | 'speed' | 'ski';
+export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'characters' | 'profiles' | 'help' | 'backup';
+
+const CHOICES: (Choice & { id: OptionId })[] = [
   {
-    label: 'Players',
+    id: 'players',
+    label: 'Mode',
     values: [
       { label: '2v2 head-to-head', apply: players('versus') },
       { label: '2v2 same team vs CPU', apply: players('coop') },
@@ -39,30 +44,70 @@ const CHOICES: Choice[] = [
       { label: '1v1 vs CPU', apply: players('coop', 1) },
     ],
   },
-  { label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
-  { label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }] },
-  { label: 'Table', values: DESIGN_ORDER.map((d) => ({ label: DESIGNS[d].name, apply: set('design', d) })) },
-  { label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
-  { label: 'Formation', values: [{ label: 'Tree (11 cups)', apply: set('formation', 'tree') }, { label: 'Shrub (7 cups)', apply: set('formation', 'shrub') }] },
-  { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
-  { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
-  { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
+  { id: 'cpu', label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
+  { id: 'view', label: 'View', values: [{ label: 'Behind Team A', apply: set('view', 'behindA') }, { label: 'Split screen', apply: set('view', 'split') }] },
+  { id: 'table', label: 'Table', values: DESIGN_ORDER.map((d) => ({ label: DESIGNS[d].name, apply: set('design', d) })) },
+  { id: 'spot', label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
+  { id: 'formation', label: 'Cups', values: [{ label: 'Tree · 11', apply: set('formation', 'tree') }, { label: 'Shrub · 7', apply: set('formation', 'shrub') }] },
+  { id: 'match', label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
+  { id: 'speed', label: 'Speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
+  { id: 'ski', label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
-const TABLE_ROW = CHOICES.findIndex((c) => c.label === 'Table');
+const TABLE_ROW = CHOICES.findIndex((c) => c.id === 'table');
+const choiceIndex = (id: RowId) => CHOICES.findIndex((c) => c.id === id);
 
 export type MenuAction = 'draft' | 'quick' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
+  id: RowId;
   label: string;
   value?: string;
   action?: Exclude<MenuAction, null>;
   /** An option row whose value comes from a picker screen (no ◀ ▶ cycling). */
   picker?: boolean;
+  /** Shown dimmed: doesn't apply to the chosen mode. */
+  dim?: boolean;
+}
+
+// ------------------------------------------------------------------ layout
+// The title screen is laid out on a 1131×660 design, scaled to the screen.
+// Left: MATCH (mode, who you play as, which table, where) and HOUSE RULES
+// (a compact grid). Right: the Collection card (level, loot boxes), PLAY, MORE.
+
+const LX = 56;
+const LW = 470;
+const RX = 588;
+const RW = 486;
+const CELL = (LW - 8) / 2;
+const RULES_Y = 466;
+
+const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
+  players: { x: LX, y: 228, w: LW, h: 29 },
+  cpu: { x: LX, y: 262, w: LW, h: 29 },
+  playingAs: { x: LX, y: 296, w: LW, h: 46 },
+  table: { x: LX, y: 347, w: LW, h: 46 },
+  spot: { x: LX, y: 398, w: LW, h: 29 },
+  formation: { x: LX, y: RULES_Y, w: CELL, h: 29 },
+  match: { x: LX + CELL + 8, y: RULES_Y, w: CELL, h: 29 },
+  speed: { x: LX, y: RULES_Y + 34, w: CELL, h: 29 },
+  ski: { x: LX + CELL + 8, y: RULES_Y + 34, w: CELL, h: 29 },
+  view: { x: LX, y: RULES_Y + 68, w: CELL, h: 29 },
+  collection: { x: RX, y: 40, w: RW, h: 132 },
+  quick: { x: RX, y: 228, w: RW, h: 54 },
+  draft: { x: RX, y: 288, w: RW, h: 54 },
+  characters: { x: RX, y: 390, w: RW, h: 29 },
+  profiles: { x: RX, y: 424, w: RW, h: 29 },
+  help: { x: RX, y: 458, w: RW, h: 29 },
+  backup: { x: RX, y: 492, w: RW, h: 29 },
+};
+
+/** Design-space rectangle of a menu row. */
+export function rowRect(id: RowId) {
+  return RECTS[id];
 }
 
 export class Menu {
-  cursor = 0;
   private picks: number[] = CHOICES.map(() => 0);
   /** Tables this player hasn't unlocked can't be picked. */
   tableLocked: (venue: string) => boolean = () => false;
@@ -70,11 +115,29 @@ export class Menu {
   mySide: 'A' | 'B' = 'A';
   /** The "Playing as" row's value: the characters picked for the player's side. */
   playingAs: () => string = () => 'Random';
+  /** Starts on Quick match, so the hit key plays straight away. */
+  cursor = this.rows().findIndex((r) => r.id === 'quick');
+
+  /** Bring back a saved table pick (kept even while it reads as locked: unlocks can arrive after the menu loads). */
+  restoreDesign(id: string): void {
+    const i = DESIGN_ORDER.indexOf(id as (typeof DESIGN_ORDER)[number]);
+    if (i >= 0) this.picks[TABLE_ROW] = i;
+  }
 
   /** Choose a table from the table picker. */
   setDesign(id: string): void {
     const i = DESIGN_ORDER.indexOf(id as (typeof DESIGN_ORDER)[number]);
     if (i >= 0 && !this.tableLocked(id)) this.picks[TABLE_ROW] = i;
+  }
+
+  /** Put the cursor on a row. */
+  focus(id: RowId): void {
+    const i = this.rows().findIndex((r) => r.id === id);
+    if (i >= 0) this.cursor = i;
+  }
+
+  get current(): RowId {
+    return this.rows()[this.cursor].id;
   }
 
   /** The picked table, or the first unlocked one if the pick is locked. */
@@ -90,32 +153,72 @@ export class Menu {
   }
 
   rows(): MenuRow[] {
+    const opt = (id: OptionId): MenuRow => {
+      const i = choiceIndex(id);
+      return { id, label: CHOICES[i].label, value: CHOICES[i].values[this.pickOf(i)].label };
+    };
+    const mode = this.picks ? this.modeNow() : 'versus';
     return [
-      ...CHOICES.map((c, i) => ({ label: c.label, value: c.values[this.pickOf(i)].label })),
-      { label: 'Playing as', value: this.playingAs(), action: 'pickCharacters' as const, picker: true },
-      { label: 'Draft match', action: 'draft' as const },
-      { label: 'Quick match', action: 'quick' as const },
-      { label: 'Collection', action: 'collection' as const },
-      { label: 'Characters', action: 'characters' as const },
-      { label: 'Players', action: 'profiles' as const },
-      { label: 'How to play', action: 'help' as const },
-      { label: 'Back up / restore', action: 'backup' as const },
+      opt('players'),
+      { ...opt('cpu'), dim: mode !== 'coop' },
+      { id: 'playingAs', label: 'Playing as', value: this.playingAs(), action: 'pickCharacters', picker: true },
+      opt('table'),
+      opt('spot'),
+      opt('formation'),
+      opt('match'),
+      opt('speed'),
+      opt('ski'),
+      { ...opt('view'), dim: mode === 'coop' },
+      { id: 'collection', label: 'Collection', action: 'collection' },
+      { id: 'quick', label: 'Quick match', action: 'quick' },
+      { id: 'draft', label: 'Draft match', action: 'draft' },
+      { id: 'characters', label: 'Characters', action: 'characters' },
+      { id: 'profiles', label: 'Players', action: 'profiles' },
+      { id: 'help', label: 'How to play', action: 'help' },
+      { id: 'backup', label: 'Back up / restore', action: 'backup' },
     ];
   }
 
-  /** Move the cursor (dy) or change the current option (dx). */
+  private modeNow(): GameConfig['players']['mode'] {
+    const cfg = makeConfig();
+    CHOICES[0].values[this.picks[0]].apply(cfg);
+    return cfg.players.mode;
+  }
+
+  /**
+   * Arrow keys. Up/down move to the next row above or below in the same
+   * column (wrapping). Left/right change an option's value; on other rows
+   * they hop to the nearest row in the other column.
+   */
   move(dy: number, dx: number): void {
-    const n = this.rows().length;
-    if (dy) this.cursor = (this.cursor + dy + n) % n;
-    if (dx && this.cursor < CHOICES.length) {
-      const k = CHOICES[this.cursor].values.length;
-      if (this.cursor === TABLE_ROW) this.picks[TABLE_ROW] = this.tablePick();
+    const rows = this.rows();
+    const here = RECTS[rows[this.cursor].id];
+    const cx = (r: { x: number; w: number }) => r.x + r.w / 2;
+    const cy = (r: { y: number; h: number }) => r.y + r.h / 2;
+    if (dy) {
+      const col = rows.map((r, i) => ({ i, r: RECTS[r.id] })).filter(({ r }) => Math.abs(r.x - here.x) < 4);
+      col.sort((a, b) => cy(a.r) - cy(b.r));
+      const k = col.findIndex(({ i }) => i === this.cursor);
+      this.cursor = col[(k + dy + col.length) % col.length].i;
+      return;
+    }
+    if (!dx) return;
+    const ci = choiceIndex(rows[this.cursor].id);
+    if (ci >= 0) {
+      const k = CHOICES[ci].values.length;
+      if (ci === TABLE_ROW) this.picks[TABLE_ROW] = this.tablePick();
       // Locked tables are skipped.
       for (let n = 0; n < k; n++) {
-        this.picks[this.cursor] = (this.picks[this.cursor] + dx + k) % k;
-        if (this.cursor !== TABLE_ROW || !this.tableLocked(DESIGN_ORDER[this.picks[TABLE_ROW]])) break;
+        this.picks[ci] = (this.picks[ci] + dx + k) % k;
+        if (ci !== TABLE_ROW || !this.tableLocked(DESIGN_ORDER[this.picks[TABLE_ROW]])) break;
       }
+      return;
     }
+    // Hop columns, to the row nearest in height.
+    const left = here.x < RX;
+    const other = rows.map((r, i) => ({ i, r: RECTS[r.id] })).filter(({ r }) => (r.x < RX) !== left);
+    other.sort((a, b) => Math.abs(cy(a.r) - cy(here)) - Math.abs(cy(b.r) - cy(here)) || Math.abs(cx(a.r) - cx(here)) - Math.abs(cx(b.r) - cx(here)));
+    if (other.length) this.cursor = other[0].i;
   }
 
   /** Activate the current row. Option rows cycle forward; action rows return their action. */
@@ -123,7 +226,7 @@ export class Menu {
     const row = this.rows()[this.cursor];
     if (row.action) return row.action;
     // The Table row opens the table picker (left/right still flips through tables).
-    if (this.cursor === TABLE_ROW) return 'pickTable';
+    if (row.id === 'table') return 'pickTable';
     this.move(0, 1);
     return null;
   }
@@ -136,29 +239,12 @@ export class Menu {
   }
 }
 
-// Title screen layout (canvas pixels): option rows in a left column, actions on the right.
-const SETUP_X = 56;
-const SETUP_W = 470;
-const ACTION_X = 588;
-const ACTION_W = 486;
-const TOP = 232;
-const ROW = 34;
-const OPTION_ROWS = CHOICES.length + 1;
-const PLAY_ROWS = 2;
-
 /** The menu is laid out on a 1131×660 design and scaled (uniformly, centered) to the screen. */
 export const MENU_W = 1131;
 export const MENU_H = 660;
 export function menuLayout(v: View): { s: number; ox: number; oy: number } {
   const s = Math.min(v.width / MENU_W, v.height / MENU_H);
   return { s, ox: (v.width - MENU_W * s) / 2, oy: (v.height - MENU_H * s) / 2 };
-}
-
-/** Design-space rectangle of menu row `i` (options, then Play buttons, then More). */
-export function menuRowRect(_v: View, i: number) {
-  if (i < OPTION_ROWS) return { x: SETUP_X, y: TOP + i * ROW, w: SETUP_W, h: ROW - 5 };
-  if (i < OPTION_ROWS + PLAY_ROWS) return { x: ACTION_X, y: TOP + (i - OPTION_ROWS) * 58, w: ACTION_W, h: 50 };
-  return { x: ACTION_X, y: TOP + PLAY_ROWS * 58 + 34 + (i - OPTION_ROWS - PLAY_ROWS) * ROW, w: ACTION_W, h: ROW - 5 };
 }
 
 let logoCache: HTMLCanvasElement | null = null;
@@ -199,7 +285,28 @@ function keyCap(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: numbe
   return w + 5;
 }
 
-export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, menu: Menu, note: string): void {
+/** What the title screen shows besides the rows: the player's progress and picks. */
+export interface MenuExtras {
+  level: number;
+  xpInto: number;
+  xpSpan: number;
+  /** Loot boxes waiting to be opened (0 = none), and whether anything is left to unlock. */
+  boxes: number;
+  nothingLeft: boolean;
+  /** Character cosmetics unlocked since the player last looked. */
+  newRewards: number;
+  /** Owner: characters waiting for review. */
+  pending: number;
+  offline: boolean;
+  /** The picked characters' sprites (null = random). */
+  team: (Sprite | null)[];
+  /** The picked table's painted top. */
+  tableArt: HTMLCanvasElement | null;
+}
+
+const NO_EXTRAS: MenuExtras = { level: 1, xpInto: 0, xpSpan: 150, boxes: 0, nothingLeft: false, newRewards: 0, pending: 0, offline: true, team: [], tableArt: null };
+
+export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, menu: Menu, note: string, extras: MenuExtras = NO_EXTRAS): void {
   const m = theme.menu;
   // Darken the live demo behind, more on the left where the text is.
   const g = ctx.createLinearGradient(0, 0, screen.width, 0);
@@ -211,46 +318,110 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: Vi
   ctx.save();
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);
-  const v = { ...screen, width: MENU_W, height: MENU_H };
-  drawMenuBody(ctx, theme, v, menu, note);
+  drawMenuBody(ctx, theme, menu, note, extras);
   ctx.restore();
 }
 
-function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu: Menu, note: string): void {
+const spriteCanvases = new WeakMap<Sprite, HTMLCanvasElement>();
+function spriteCanvas(sp: Sprite): HTMLCanvasElement {
+  let c = spriteCanvases.get(sp);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = sp.w;
+  c.height = sp.h;
+  const x = c.getContext('2d')!;
+  sp.pixels.forEach((col, i) => {
+    if (!col) return;
+    x.fillStyle = col;
+    x.fillRect(i % sp.w, Math.floor(i / sp.w), 1, 1);
+  });
+  spriteCanvases.set(sp, c);
+  return c;
+}
+
+/** A small red count badge (reward alerts), pulsing gently. */
+function badge(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, text: string, pulse = true): void {
+  ctx.font = theme.fonts.label;
+  const w = Math.max(22, ctx.measureText(text).width + 12);
+  const t = pulse ? (Math.sin(performance.now() / 260) + 1) / 2 : 0;
+  ctx.fillStyle = `rgba(255, 90, 70, ${0.25 + 0.35 * t})`;
+  ctx.fillRect(x - w / 2 - 3, y - 14, w + 6, 28);
+  ctx.fillStyle = '#0d0b09';
+  ctx.fillRect(x - w / 2 - 1, y - 12, w + 2, 24);
+  ctx.fillStyle = theme.colors.bad;
+  ctx.fillRect(x - w / 2, y - 11, w, 22);
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+/** A pixel crate (the loot box), lid lifting when there's something inside. */
+function crate(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, ready: boolean): void {
+  const gold = theme.menu.accent;
+  const lift = ready ? Math.max(0, Math.sin(performance.now() / 300)) * 4 : 0;
+  ctx.fillStyle = '#0d0b09';
+  ctx.fillRect(x - 2, y + 12, 52, 34);
+  ctx.fillStyle = '#3a2416';
+  ctx.fillRect(x, y + 14, 48, 30);
+  ctx.fillStyle = gold;
+  ctx.fillRect(x, y + 14, 48, 3);
+  ctx.fillRect(x, y + 41, 48, 3);
+  ctx.fillRect(x, y + 14, 3, 30);
+  ctx.fillRect(x + 45, y + 14, 3, 30);
+  ctx.font = 'bold 16px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Ζ', x + 24, y + 30);
+  ctx.fillStyle = '#0d0b09';
+  ctx.fillRect(x - 4, y + 1 - lift, 56, 14);
+  ctx.fillStyle = gold;
+  ctx.fillRect(x - 2, y + 3 - lift, 52, 10);
+  if (ready) {
+    ctx.fillStyle = `rgba(255, 224, 138, ${0.35 + 0.35 * Math.sin(performance.now() / 300)})`;
+    ctx.fillRect(x + 4, y + 13 - lift, 40, Math.max(1, lift));
+  }
+}
+
+function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, note: string, ex: MenuExtras): void {
   const c = theme.colors;
   const m = theme.menu;
 
   // Logo and subtitle.
   ctx.imageSmoothingEnabled = false;
   const lg = logo(theme);
-  ctx.drawImage(lg, SETUP_X - 4, 34, lg.width * 4, lg.height * 4);
+  ctx.drawImage(lg, LX - 4, 34, lg.width * 4, lg.height * 4);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = m.accent;
-  ctx.fillRect(SETUP_X, 182, 120, 3);
+  ctx.fillRect(LX, 182, 120, 3);
   ctx.fillStyle = c.textDim;
-  ctx.fillText('ZETA PSI BASEMENT RULES  ·  PADDLE PONG, 2V2 OR 1V1', SETUP_X + 132, 184);
+  ctx.fillText('ZETA PSI BASEMENT RULES  ·  2V2 OR 1V1', LX + 132, 184);
 
-  // Column headings and panels.
   const heading = (text: string, x: number, y: number) => {
     ctx.textAlign = 'left';
     ctx.font = theme.fonts.label;
     ctx.fillStyle = m.accent;
     ctx.fillText(text, x, y);
   };
-  // Same pieces as the in-game HUD: dark panels with 2px borders, and the bright turn-tag
-  // style (yellow, dark text) for whatever row is selected.
-  panel(ctx, theme, SETUP_X - 14, TOP - 32, SETUP_W + 28, OPTION_ROWS * ROW + 44, c.uiEdge, m.panel);
-  panel(ctx, theme, ACTION_X - 14, TOP - 32, ACTION_W + 28, PLAY_ROWS * 58 + 34 + 5 * ROW + 40, c.uiEdge, m.panel);
-  heading('MATCH SETUP', SETUP_X, TOP - 14);
-  heading('PLAY', ACTION_X, TOP - 14);
-  heading('MORE', ACTION_X, TOP + PLAY_ROWS * 58 + 14);
+  // Panels: the same dark, 2px-bordered boxes as the in-game HUD.
+  panel(ctx, theme, LX - 14, 200, LW + 28, 240, c.uiEdge, m.panel);
+  panel(ctx, theme, LX - 14, 446, LW + 28, 140, c.uiEdge, m.panel);
+  panel(ctx, theme, RX - 14, 200, RW + 28, 156, c.uiEdge, m.panel);
+  panel(ctx, theme, RX - 14, 362, RW + 28, 172, c.uiEdge, m.panel);
+  heading('MATCH', LX, 214);
+  heading('HOUSE RULES', LX, 452 + 1);
+  heading('PLAY', RX, 214);
+  heading('MORE', RX, 376);
 
-  menu.rows().forEach((row, i) => {
-    const r = menuRowRect(v, i);
+  const rows = menu.rows();
+  rows.forEach((row, i) => {
+    const r = RECTS[row.id];
     const on = i === menu.cursor;
-    const play = row.action === 'draft' || row.action === 'quick';
+    const play = row.id === 'quick' || row.id === 'draft';
+    const card = row.id === 'collection';
+    if (card) return drawCollectionCard(ctx, theme, r, on, ex);
     if (on) {
       // The selected row looks like the in-game "HIT · name" tag.
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -264,30 +435,72 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
     const mid = r.y + r.h / 2 - 1;
     ctx.textBaseline = 'middle';
     if (row.value !== undefined) {
+      const cell = r.w < LW;
       ctx.textAlign = 'left';
-      ctx.font = theme.fonts.bar;
-      ctx.fillStyle = on ? ink : c.textDim;
-      ctx.fillText(row.label, r.x + 14, mid);
+      ctx.font = cell ? theme.fonts.label : theme.fonts.bar;
+      ctx.fillStyle = on ? ink : row.dim ? 'rgba(200, 190, 170, 0.35)' : c.textDim;
+      ctx.fillText(row.label, r.x + (cell ? 10 : 14), mid);
+      let right = r.x + r.w - 14;
+      if (row.picker && !on) {
+        ctx.font = theme.fonts.label;
+        ctx.fillStyle = c.textDim;
+        ctx.textAlign = 'right';
+        ctx.fillText('▸', right, mid);
+        right -= 16;
+      }
       ctx.textAlign = 'right';
-      ctx.fillStyle = on ? ink : c.text;
-      ctx.fillText(on ? (row.picker ? `${row.value}  ▸ pick` : `◀  ${row.value}  ▶`) : row.value, r.x + r.w - 14, mid);
+      ctx.font = theme.fonts.bar;
+      ctx.fillStyle = on ? ink : row.dim ? 'rgba(220, 210, 190, 0.35)' : c.text;
+      const value = row.dim && !on ? (row.id === 'cpu' ? 'vs CPU only' : 'head-to-head only') : row.value;
+      const text = on ? (row.picker ? `${value}  ▸` : row.id === 'table' ? `◀ ${value} ▶` : `◀  ${value}  ▶`) : value;
+      ctx.fillText(text, right, mid);
+      const tw = ctx.measureText(text).width;
+      // Portraits of the picked characters, and a preview of the picked table.
+      if (row.id === 'playingAs') {
+        let px = r.x + 132;
+        for (const sp of ex.team) {
+          if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, 18, px, r.y + 5, sp.w * 2, 36);
+          else {
+            ctx.strokeStyle = on ? ink : c.uiEdge;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(px + 4, r.y + 6, 24, 34);
+            ctx.setLineDash([]);
+            ctx.font = theme.fonts.bar;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = on ? ink : m.accent;
+            ctx.fillText('?', px + 16, mid);
+          }
+          px += 38;
+        }
+      } else if (row.id === 'table' && ex.tableArt) {
+        const ax = r.x + 80;
+        const aw = Math.min(76, r.w - tw - 110);
+        if (aw > 30) {
+          ctx.fillStyle = '#0d0b09';
+          ctx.fillRect(ax - 2, r.y + 5, aw + 4, aw / 2 + 4);
+          ctx.drawImage(ex.tableArt, ax, r.y + 7, aw, aw / 2);
+        }
+      }
     } else {
       ctx.textAlign = 'left';
       ctx.font = play ? theme.fonts.title : theme.fonts.bar;
       ctx.fillStyle = on ? ink : play ? m.accentWarm : c.text;
       ctx.fillText(`${on ? '▶ ' : ''}${row.label}`, r.x + 16, mid);
-      if (play) {
-        ctx.font = theme.fonts.label;
-        ctx.fillStyle = on ? ink : c.textDim;
-        ctx.textAlign = 'right';
-        ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'your picks, straight in', r.x + r.w - 14, mid);
+      ctx.font = theme.fonts.label;
+      ctx.fillStyle = on ? ink : c.textDim;
+      ctx.textAlign = 'right';
+      if (play) ctx.fillText(row.id === 'draft' ? 'pick profiles, draft characters' : 'your picks, straight in', r.x + r.w - 14, mid);
+      if (row.id === 'characters') {
+        if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);
+        else ctx.fillText('make and edit, levels, cosmetics', r.x + r.w - 14, mid);
       }
+      if (row.id === 'profiles') ctx.fillText('who is playing, records', r.x + r.w - 14, mid);
     }
   });
 
   // Controls legend.
-  let x = SETUP_X;
-  const y = 590;
+  let x = LX;
+  const y = 622;
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.teamA;
@@ -305,12 +518,61 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('↑↓ move · ←→ change · hit key selects · mouse works too', x, y + 11);
+  ctx.fillText('arrows move · ←→ change · hit key selects · mouse too', x, y + 11);
   if (note) {
     ctx.font = theme.fonts.hud;
     ctx.fillStyle = m.accent;
-    ctx.fillText(note, SETUP_X, y + 44);
+    ctx.textAlign = 'left';
+    ctx.fillText(note, RX, 568);
   }
+}
+
+/** The Collection card: player level, XP bar, loot boxes waiting, and the owner's review queue. */
+function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x: number; y: number; w: number; h: number }, on: boolean, ex: MenuExtras): void {
+  const c = theme.colors;
+  const m = theme.menu;
+  const alert = ex.boxes > 0 && !ex.nothingLeft;
+  panel(ctx, theme, r.x - 14, r.y - 8, r.w + 28, r.h + 16, on ? c.activeRing : alert ? m.accent : c.uiEdge, on ? m.rowActive : m.panel);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.font = theme.fonts.label;
+  ctx.fillStyle = m.accent;
+  ctx.fillText(on ? '▶ COLLECTION' : 'COLLECTION', r.x, r.y + 10);
+  ctx.font = theme.fonts.label;
+  ctx.fillStyle = c.textDim;
+  ctx.textAlign = 'right';
+  ctx.fillText(ex.offline ? 'saved in this browser' : 'tables · characters · loot boxes', r.x + r.w, r.y + 10);
+  // Level and XP bar.
+  ctx.textAlign = 'left';
+  ctx.font = theme.fonts.title;
+  ctx.fillStyle = c.text;
+  ctx.fillText(`Level ${ex.level}`, r.x, r.y + 40);
+  const bx = r.x;
+  const by = r.y + 58;
+  const bw = r.w - 92;
+  ctx.fillStyle = '#0d0b09';
+  ctx.fillRect(bx, by, bw, 10);
+  ctx.fillStyle = '#2e2820';
+  ctx.fillRect(bx + 1, by + 1, bw - 2, 8);
+  ctx.fillStyle = m.accent;
+  ctx.fillRect(bx + 1, by + 1, Math.round((bw - 2) * Math.min(1, ex.xpInto / Math.max(1, ex.xpSpan))), 8);
+  ctx.font = theme.fonts.label;
+  ctx.fillStyle = c.textDim;
+  ctx.textAlign = 'right';
+  ctx.fillText(`${ex.xpInto} / ${ex.xpSpan} XP`, bx + bw, r.y + 40);
+  // What's waiting.
+  ctx.textAlign = 'left';
+  ctx.font = theme.fonts.bar;
+  let msg = ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
+  if (ex.pending) msg += `  ·  ${ex.pending} to review`;
+  ctx.fillStyle = alert ? m.accentWarm : ex.pending ? m.accentWarm : c.textDim;
+  ctx.fillText(msg, r.x, r.y + 92);
+  ctx.font = theme.fonts.label;
+  ctx.fillStyle = c.textDim;
+  ctx.fillText(alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
+  crate(ctx, theme, r.x + r.w - 54, r.y + 22, alert);
+  if (alert) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.boxes));
+  else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));
 }
 
 /** Game / match over: a centered panel in the menu style, scaled like the menu. */

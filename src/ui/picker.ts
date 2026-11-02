@@ -119,7 +119,7 @@ export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Characte
   const pins = pinnedFor(cfg, sel, usable);
   const names = mySlots(cfg).map((k) => pins[k]?.name ?? 'Random');
   let s = names.join(' & ');
-  if (s.length > 26) s = `${s.slice(0, 25)}…`;
+  if (s.length > 20) s = `${s.slice(0, 19)}…`;
   return cfg.players.mode === 'versus' ? `${s} (${cfg.players.mySide ?? 'A'})` : s;
 }
 

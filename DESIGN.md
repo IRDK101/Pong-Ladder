@@ -690,3 +690,18 @@ Decided with the owner (asked first):
   - Extras: Eye patch, Bandage, Blush, Nose ring, Bow tie, Scarf, Lei, Backpack
 - A test checks that every option draws something different, from the front or the back.
 - Whoever made a character always has it. That includes the owner, who has every character with no `creator`. The owner's loot boxes therefore only hold tables and characters other players made.
+
+## Title screen, redone
+
+- **Left column, MATCH:** Mode, CPU level (dimmed in head-to-head), Playing as (with portraits of the picked characters), Table (with a preview of its painted top), and Spot.
+- **Left column, HOUSE RULES:** a two-column grid of Cups, Match, Speed, Ski collision, and View (dimmed against the CPU).
+- **Right column:**
+  - The Collection card: player level, XP bar and a loot crate. When boxes are waiting, it shows "LEVEL UP! N loot boxes to open" with a pulsing count, and for the owner, how many submissions are waiting for review.
+  - PLAY: Quick match (the cursor starts here) and Draft match.
+  - MORE: Characters, Players, How to play, Back up / restore.
+- **Arrow keys:** up and down move by position within a column, wrapping. Left and right change an option, or hop to the other column from an action row.
+- **New rewards:** character cosmetics unlocked since the player last opened that character's profile are counted (`progress.seen`, seeded so that rewards already unlocked aren't flagged).
+  - The menu's Characters row shows the total.
+  - That character's Profile button is highlighted.
+  - Opening the profile clears its count.
+- **Saved table pick:** it is restored even while it reads as locked, because online unlocks arrive after the menu loads.

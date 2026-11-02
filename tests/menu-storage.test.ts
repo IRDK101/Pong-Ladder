@@ -15,7 +15,7 @@ describe('pre-game menu', () => {
     const m = new Menu();
     m.tableLocked = (v) => v !== 'plain' && v !== 'pitch';
     expect(m.config().design).toBe('plain');
-    m.move(3, 0); // the Table row
+    m.focus('table');
     m.move(0, 1);
     expect(m.config().design).toBe('pitch');
     m.move(0, 1);
@@ -24,32 +24,46 @@ describe('pre-game menu', () => {
     expect(m.config().design).toBe('larks');
   });
 
-  it('defaults to head-to-head, medium CPU, behind-Team-A view', () => {
+  it('defaults to head-to-head, medium CPU, behind-Team-A view, cursor on Quick match', () => {
     const cfg = new Menu().config();
     expect(cfg.players).toEqual({ mode: 'versus', cpu: 'medium', mySide: 'A' });
     expect(cfg.view).toBe('behindA');
     const m = new Menu();
+    expect(m.current).toBe('quick');
+    expect(m.activate()).toBe('quick');
+    m.focus('players');
     m.move(0, 1); // same team vs CPU
     m.move(1, 0);
+    expect(m.current).toBe('cpu');
     m.move(0, 1); // hard
-    m.move(1, 0);
+    m.focus('view');
     m.move(0, 1); // split
     expect(m.config()).toMatchObject({ players: { mode: 'coop', cpu: 'hard' }, view: 'split' });
   });
 
-  it('changes options with left/right and wraps', () => {
+  it('CPU level is dimmed in head-to-head, View against the CPU', () => {
     const m = new Menu();
-    m.move(5, 0); // to Formation, after Players / CPU level / View / Table / Spot
-    m.move(0, 1); // formation → shrub
-    m.move(1, 0);
-    m.move(0, -1); // match → best of 3 (wraps backwards)
-    m.move(1, 0);
-    m.move(0, -1); // speed → relaxed (wraps backwards)
-    m.move(1, 0);
-    m.activate(); // ski → on (activate cycles an option row)
+    const row = (id: string) => m.rows().find((r) => r.id === id)!;
+    expect(row('cpu').dim).toBe(true);
+    expect(row('view').dim).toBeFalsy();
+    m.focus('players');
+    m.move(0, 1);
+    expect(row('cpu').dim).toBe(false);
+    expect(row('view').dim).toBe(true);
+  });
+
+  it('changes house rules with left/right and wraps', () => {
+    const m = new Menu();
+    m.focus('formation');
+    m.move(0, 1); // shrub
+    m.focus('match');
+    m.move(0, -1); // best of 3 (wraps backwards)
+    m.focus('speed');
+    m.move(0, -1); // relaxed (wraps backwards)
+    m.focus('ski');
+    m.activate(); // on (activate cycles an option row)
     const cfg = m.config();
     expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'choose', skiCollision: true });
-    // There is no penalty-cup toggle and no top-down view any more.
     expect(m.rows().map((r) => r.label)).not.toContain('Penalty cup');
     expect(cfg.physics.timeScale).toBeLessThan(makeConfig().physics.timeScale);
   });
@@ -57,34 +71,43 @@ describe('pre-game menu', () => {
   it('game speed: normal is the default, quick is faster', () => {
     const m = new Menu();
     expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
-    m.move(7, 0);
+    m.focus('speed');
     m.move(0, 1);
     expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
   });
 
-  it('action rows return their action; the cursor wraps', () => {
+  it('arrows move by position: down the right column, wrapping, and across columns', () => {
     const m = new Menu();
-    const actions: string[] = [];
-    m.move(10, 0); // first action row, after the 10 option rows
+    m.focus('collection');
+    const seen: string[] = [];
     for (let i = 0; i < 7; i++) {
-      actions.push(m.activate()!);
+      seen.push(m.current);
       m.move(1, 0);
     }
-    expect(actions).toEqual(['draft', 'quick', 'collection', 'characters', 'profiles', 'help', 'backup']);
-    expect(m.cursor).toBe(0); // wrapped
-    m.move(-1, 0);
-    expect(m.activate()).toBe('backup');
+    expect(seen).toEqual(['collection', 'quick', 'draft', 'characters', 'profiles', 'help', 'backup']);
+    expect(m.current).toBe('collection'); // wrapped
+    const actions = seen.map((id) => (m.focus(id as never), m.activate()));
+    expect(actions).toEqual(['collection', 'quick', 'draft', 'characters', 'profiles', 'help', 'backup']);
+    // Left from Quick match hops to the left column; the house-rules grid steps by column.
+    m.focus('quick');
+    m.move(0, -1);
+    expect(['players', 'cpu']).toContain(m.current);
+    m.focus('formation');
+    m.move(1, 0);
+    expect(m.current).toBe('speed');
+    m.focus('match');
+    m.move(1, 0);
+    expect(m.current).toBe('ski');
   });
 
   it('the Table row picks the design; the Spot row picks where in the basement', () => {
     const m = new Menu();
     expect(m.config()).toMatchObject({ design: 'plain', venue: 'saints' });
-    m.move(3, 0);
-    expect(m.rows()[3].label).toBe('Table');
+    m.focus('table');
     m.move(0, 1);
     expect(m.config().design).toBe('saints');
     m.move(1, 0);
-    expect(m.rows()[4].label).toBe('Spot');
+    expect(m.current).toBe('spot');
     m.move(0, 1);
     expect(m.config().venue).toBe('spirits');
     m.move(0, 1);

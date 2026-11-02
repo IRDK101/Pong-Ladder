@@ -14,7 +14,7 @@ import type { GameConfig } from '../config';
 import { validateCharacter, type Character, type Cosmetics } from '../core/character';
 import type { TeamId } from '../core/types';
 import { DESIGN_ORDER } from '../render/designs';
-import { addXp, boxesWaiting, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
+import { addXp, boxesWaiting, markSeen, newRewards, newRewardsFor, seedSeen, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, seedFromMatches, type LootItem, type PlayerProgress } from '../progress/unlocks';
 import type { AppStore, KeyValueStore, MatchRecord } from './storage';
 
 interface DocSnap {
@@ -155,6 +155,7 @@ export class Account {
     }
     this.progress = normalizeProgress(raw);
     seedFromMatches(cfg, this.progress, store.matches.list());
+    seedSeen(cfg, this.progress);
     this.seedEquipped();
     this.topUp();
     this.saveLocal();
@@ -226,6 +227,7 @@ export class Account {
         if (snap.metadata.fromCache && !snap.exists) return;
         if (snap.exists) {
           this.progress = normalizeProgress(snap.data());
+          if (seedSeen(this.cfg, this.progress)) this.saveProgress();
           this.saveLocal();
           if (this.topUp()) this.saveProgress();
         } else if (!progressLoaded) {
@@ -429,6 +431,19 @@ export class Account {
       .sharedList()
       .map((c) => c.id)
       .filter((id) => !(this.owner && !this.creators.get(id)) && !(this.uid && this.creators.get(id) === this.uid));
+  }
+
+  /** Character cosmetics unlocked since the player last looked (all characters, or one). */
+  newRewards(id?: string): number {
+    return id ? newRewardsFor(this.cfg, this.progress, id) : newRewards(this.cfg, this.progress);
+  }
+
+  /** The player opened a character's profile: its new rewards are no longer new. */
+  sawRewards(id: string): void {
+    if (markSeen(this.cfg, this.progress, id)) {
+      this.saveProgress();
+      this.changed();
+    }
   }
 
   boxes(): number {

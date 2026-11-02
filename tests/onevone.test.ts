@@ -70,6 +70,7 @@ describe('1v1 game', () => {
 
   it('the Players row offers 1v1 head-to-head and 1v1 vs CPU', () => {
     const m = new Menu();
+    m.focus('players');
     expect(m.config().teamSize).toBe(2);
     m.move(0, 2);
     expect(m.config()).toMatchObject({ teamSize: 1, players: { mode: 'versus' } });

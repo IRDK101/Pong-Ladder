@@ -147,7 +147,12 @@ export class CharactersScreen {
             { class: 'grid' },
             ...chars.map((c) =>
               characterCard(c, prog.characterLevel(c.id).level, [
-                h('div', { class: 'row' }, h('button', { onclick: () => this.showProfile(c.id) }, 'Profile'), h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit')),
+                h(
+                  'div',
+                  { class: 'row' },
+                  h('button', { class: this.account.newRewards(c.id) ? 'primary' : '', onclick: () => this.showProfile(c.id) }, this.account.newRewards(c.id) ? `Profile · ${this.account.newRewards(c.id)} new` : 'Profile'),
+                  h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit'),
+                ),
                 this.submitTools(c),
               ].filter((x): x is HTMLElement => !!x)),
             ),
@@ -162,6 +167,10 @@ export class CharactersScreen {
   showProfile(id: string, note = ''): void {
     const c = this.store.characters.get(id);
     if (!c) return this.showList();
+    // Rewards unlocked since last time are shown as new once, then they're seen.
+    const fresh = this.account.newRewards(id);
+    if (fresh && !note) note = `Level up! ${fresh} new reward${fresh === 1 ? '' : 's'} unlocked: equip ${fresh === 1 ? 'it' : 'them'} below.`;
+    this.account.sawRewards(id);
     const prog = this.progress();
     const lvl = prog.characterLevel(id);
     const career = prog.characterCareer(id);

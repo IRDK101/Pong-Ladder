@@ -16,6 +16,7 @@ import type { TeamId } from '../core/types';
 import type { MatchRecord } from '../data/storage';
 import { deriveCareers } from './careers';
 import { levelFor, xpFor, type LevelInfo } from './levels';
+import { REWARDS } from './rewards';
 
 export const STARTER_TABLE: TableDesign = 'plain';
 export const STARTER_CHARACTERS = 4;
@@ -38,6 +39,8 @@ export interface PlayerProgress {
   equipped: Record<string, Cosmetics>;
   /** Set once the old in-browser match history has been counted. */
   seeded?: boolean;
+  /** The character level whose rewards the player has seen (for the "new rewards" alert). */
+  seen?: Record<string, number>;
 }
 
 export function emptyProgress(): PlayerProgress {
@@ -56,6 +59,10 @@ export function normalizeProgress(raw: unknown): PlayerProgress {
   p.opened = Array.isArray(r.opened) ? r.opened.filter((o) => o && (o.kind === 'table' || o.kind === 'character') && typeof o.id === 'string') : [];
   if (r.equipped && typeof r.equipped === 'object') p.equipped = { ...r.equipped };
   if (r.seeded) p.seeded = true;
+  if (r.seen && typeof r.seen === 'object') {
+    p.seen = {};
+    for (const [k, v] of Object.entries(r.seen)) if (typeof v === 'number') p.seen[k] = v;
+  }
   return p;
 }
 
@@ -150,5 +157,33 @@ export function seedFromMatches(cfg: GameConfig, p: PlayerProgress, matches: Mat
   if (p.seeded) return false;
   p.seeded = true;
   for (const m of matches) addXp(p, matchXp(cfg, m, null));
+  return true;
+}
+
+/** Cosmetics a character has unlocked (by level) since the player last opened its profile. */
+export function newRewardsFor(cfg: GameConfig, p: PlayerProgress, id: string): number {
+  const lvl = characterLevel(cfg, p, id).level;
+  const seen = p.seen?.[id] ?? 1;
+  return REWARDS.filter((r) => r.level > seen && r.level <= lvl).length;
+}
+
+/** All the new character rewards waiting, across the player's characters. */
+export function newRewards(cfg: GameConfig, p: PlayerProgress): number {
+  return Object.keys(p.charXp).reduce((n, id) => n + newRewardsFor(cfg, p, id), 0);
+}
+
+/** The player has looked at a character's rewards. Returns true if that changed anything. */
+export function markSeen(cfg: GameConfig, p: PlayerProgress, id: string): boolean {
+  const lvl = characterLevel(cfg, p, id).level;
+  if ((p.seen?.[id] ?? 1) >= lvl) return false;
+  p.seen = { ...(p.seen ?? {}), [id]: lvl };
+  return true;
+}
+
+/** First time with the alert: what's already unlocked doesn't count as new. */
+export function seedSeen(cfg: GameConfig, p: PlayerProgress): boolean {
+  if (p.seen) return false;
+  p.seen = {};
+  for (const id of Object.keys(p.charXp)) p.seen[id] = characterLevel(cfg, p, id).level;
   return true;
 }

@@ -7,7 +7,7 @@ import { CpuController } from '../src/game/ai';
 import { Game, POSITIONS } from '../src/game/game';
 import { newMatchRecord } from '../src/data/storage';
 import { quickRoster } from '../src/ui/prematch';
-import { addXp, boxesWaiting, emptyProgress, ensureStarters, matchXp, newXp, normalizeProgress, openBox, playerLevel, playerXp } from '../src/progress/unlocks';
+import { addXp, boxesWaiting, emptyProgress, ensureStarters, markSeen, matchXp, newRewards, newRewardsFor, newXp, seedSeen, normalizeProgress, openBox, playerLevel, playerXp } from '../src/progress/unlocks';
 
 const cfg = makeConfig();
 const TABLES = ['plain', 'saints', 'spirits'];
@@ -115,5 +115,22 @@ describe('XP from a real game', () => {
     expect(Object.values(xpA).every((x) => x >= gcfg.progression.xp.gamePlayed)).toBe(true);
     const all = matchXp(gcfg, rec, null);
     expect(Object.keys(all)).toHaveLength(4);
+  });
+});
+
+describe('new reward alerts', () => {
+  it('counts cosmetics unlocked since the player last looked, and clears when seen', () => {
+    const p = emptyProgress();
+    addXp(p, { a: 120 }); // character level 2 (100 XP)
+    expect(seedSeen(cfg, p)).toBe(true); // what's already unlocked isn't new
+    expect(newRewards(cfg, p)).toBe(0);
+    addXp(p, { a: 400 }); // level 3+
+    expect(newRewardsFor(cfg, p, 'a')).toBeGreaterThan(0);
+    addXp(p, { b: 120 }); // a new character reaching level 2
+    expect(newRewardsFor(cfg, p, 'b')).toBe(1);
+    expect(markSeen(cfg, p, 'a')).toBe(true);
+    expect(newRewardsFor(cfg, p, 'a')).toBe(0);
+    expect(markSeen(cfg, p, 'a')).toBe(false);
+    expect(newRewards(cfg, p)).toBe(1);
   });
 });

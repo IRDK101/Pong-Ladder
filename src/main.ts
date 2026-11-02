@@ -13,7 +13,9 @@ import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
 import { makeView } from './render/renderer';
 import { renderHud } from './render/hud';
-import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, menuRowRect, type MenuAction } from './ui/menu';
+import { Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
+import { playerLevel } from './progress/unlocks';
+import { characterSprite } from './core/sprite';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
 import { injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
@@ -21,7 +23,7 @@ import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
 import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
-import { CharacterPicker, loadSelection, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
+import { CharacterPicker, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -86,7 +88,7 @@ const saveSelection = () => {
   kv.setItem(SELECTION_KEY, JSON.stringify(selection));
   menu.mySide = selection.mySide;
 };
-menu.setDesign(selection.design);
+menu.restoreDesign(selection.design);
 menu.mySide = selection.mySide;
 menu.playingAs = () => playingAsLabel(menu.config(baseCfg), selection, account.usable());
 account.onChange(() => {
@@ -206,6 +208,33 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
 const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
 const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu());
 
+const menuSprites = new Map<string, ReturnType<typeof characterSprite>>();
+/** The title screen's progress card and picks. */
+function menuExtras(): MenuExtras {
+  const cfg = menu.config(baseCfg);
+  const lvl = playerLevel(baseCfg, account.progress);
+  const pins = pinnedFor(cfg, selection, account.usable());
+  return {
+    level: lvl.level,
+    xpInto: lvl.into,
+    xpSpan: lvl.span,
+    boxes: account.boxes(),
+    nothingLeft: account.allUnlocked(),
+    newRewards: account.newRewards(),
+    pending: account.owner ? account.pendingCount() : 0,
+    offline: account.mode === 'local',
+    team: mySlots(cfg).map((k) => {
+      const c = pins[k];
+      if (!c) return null;
+      const key = `${c.id}:${c.updatedAt}:${c.cosmetics.spriteItem ?? ''}`;
+      let sp = menuSprites.get(key);
+      if (!sp) menuSprites.set(key, (sp = characterSprite(c.sprite, c.cosmetics.spriteItem ?? null)));
+      return sp;
+    }),
+    tableArt: tableArt(theme, cfg.design),
+  };
+}
+
 /** Quick match: the player's picks (or random unlocked characters) on their side; the CPU can use any. */
 function quickFor(cfg: GameConfig): Roster {
   const mine = account.usable();
@@ -310,7 +339,7 @@ function frame(dt: number): void {
     }
     if (screen !== 'menu') return;
     drawBackdrop(dt);
-    drawMenu(ctx, theme, view, menu, document.hasFocus() ? menuNote : 'Click the game first so it can hear your keyboard.');
+    drawMenu(ctx, theme, view, menu, document.hasFocus() ? menuNote : 'Click the game first so it can hear your keyboard.', menuExtras());
     return;
   }
 
@@ -378,8 +407,8 @@ canvas.addEventListener('click', (e) => {
     const L = menuLayout(view);
     const mx = (sx - L.ox) / L.s;
     const my = (sy - L.oy) / L.s;
-    menu.rows().forEach((_, i) => {
-      const r = menuRowRect(view, i);
+    menu.rows().forEach((row, i) => {
+      const r = rowRect(row.id);
       if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
         menu.cursor = i;
         runMenuAction(menu.activate());

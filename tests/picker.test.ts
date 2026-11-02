@@ -34,7 +34,7 @@ describe('home-screen picks', () => {
 
   it('the Table row opens the picker, and a pick sticks unless it is locked', () => {
     const m = new Menu();
-    m.move(3, 0);
+    m.focus('table');
     expect(m.activate()).toBe('pickTable');
     m.setDesign('pitch');
     expect(m.config().design).toBe('pitch');
