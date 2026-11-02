@@ -33,7 +33,7 @@ const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
 };
 
 type OptionId = 'players' | 'cpu' | 'view' | 'table' | 'spot' | 'formation' | 'match' | 'speed' | 'ski';
-export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'online' | 'characters' | 'account' | 'leaderboard' | 'profiles' | 'help' | 'backup';
+export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'online' | 'characters' | 'account' | 'leaderboard' | 'help' | 'backup';
 
 const CHOICES: (Choice & { id: OptionId })[] = [
   {
@@ -59,7 +59,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
 const TABLE_ROW = CHOICES.findIndex((c) => c.id === 'table');
 const choiceIndex = (id: RowId) => CHOICES.findIndex((c) => c.id === id);
 
-export type MenuAction = 'draft' | 'quick' | 'online' | 'leaderboard' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'profiles' | 'help' | 'backup' | null;
+export type MenuAction = 'draft' | 'quick' | 'online' | 'leaderboard' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   id: RowId;
@@ -99,12 +99,11 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   quick: { x: RX, y: 228, w: RW, h: 44 },
   draft: { x: RX, y: 277, w: RW, h: 44 },
   online: { x: RX, y: 326, w: RW, h: 44 },
-  characters: { x: RX, y: 412, w: RW, h: 27 },
-  account: { x: RX, y: 443, w: RW, h: 27 },
-  leaderboard: { x: RX, y: 474, w: RW, h: 27 },
-  profiles: { x: RX, y: 505, w: RW, h: 27 },
-  help: { x: RX, y: 536, w: RW, h: 27 },
-  backup: { x: RX, y: 567, w: RW, h: 27 },
+  characters: { x: RX, y: 412, w: RW, h: 31 },
+  account: { x: RX, y: 448, w: RW, h: 31 },
+  leaderboard: { x: RX, y: 484, w: RW, h: 31 },
+  help: { x: RX, y: 520, w: RW, h: 31 },
+  backup: { x: RX, y: 556, w: RW, h: 31 },
 };
 
 // Portrait (phones): one column on a 560-wide design — progress, play, match, rules, more.
@@ -126,12 +125,11 @@ const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = 
   speed: { x: PX, y: 838, w: PCELL, h: 29 },
   ski: { x: PX + PCELL + 8, y: 838, w: PCELL, h: 29 },
   view: { x: PX, y: 872, w: PCELL, h: 29 },
-  characters: { x: PX, y: 942, w: PW, h: 29 },
-  account: { x: PX, y: 976, w: PW, h: 29 },
-  leaderboard: { x: PX, y: 1010, w: PW, h: 29 },
-  profiles: { x: PX, y: 1044, w: PW, h: 29 },
-  help: { x: PX, y: 1078, w: PW, h: 29 },
-  backup: { x: PX, y: 1112, w: PW, h: 29 },
+  characters: { x: PX, y: 942, w: PW, h: 33 },
+  account: { x: PX, y: 982, w: PW, h: 33 },
+  leaderboard: { x: PX, y: 1022, w: PW, h: 33 },
+  help: { x: PX, y: 1062, w: PW, h: 33 },
+  backup: { x: PX, y: 1102, w: PW, h: 33 },
 };
 
 /** Narrow screens get the portrait layout. */
@@ -149,7 +147,7 @@ const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
   { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
   { title: 'PLAY', ids: ['quick', 'draft', 'online'] },
-  { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'profiles', 'help', 'backup'] },
+  { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'help', 'backup'] },
 ];
 
 export class Menu {
@@ -225,7 +223,6 @@ export class Menu {
       { id: 'characters', label: 'Characters', action: 'characters' },
       { id: 'account', label: this.accountInfo().label, action: 'account' },
       { id: 'leaderboard', label: 'Leaderboard', action: 'leaderboard' },
-      { id: 'profiles', label: 'Local players', action: 'profiles' },
       { id: 'help', label: 'How to play', action: 'help' },
       { id: 'backup', label: 'Back up / restore', action: 'backup' },
     ];
@@ -560,13 +557,12 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       ctx.font = theme.fonts.label;
       ctx.fillStyle = on ? ink : c.textDim;
       ctx.textAlign = 'right';
-      if (play) ctx.fillText(row.id === 'draft' ? 'pick profiles, draft characters' : row.id === 'online' ? '1v1 against a player on another device' : 'your picks, straight in', r.x + r.w - 14, mid);
+      if (play) ctx.fillText(row.id === 'draft' ? 'take turns drafting characters' : row.id === 'online' ? '1v1 against a player on another device' : 'your picks, straight in', r.x + r.w - 14, mid);
       if (row.id === 'leaderboard') ctx.fillText(menu.leaderboardHint(), r.x + r.w - 14, mid);
       if (row.id === 'characters') {
         if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);
         else ctx.fillText('make and edit, levels, cosmetics', r.x + r.w - 14, mid);
       }
-      if (row.id === 'profiles') ctx.fillText('names for a shared keyboard, records', r.x + r.w - 14, mid);
       if (row.id === 'account') {
         const info = menu.accountInfo();
         if (info.alert) badge(ctx, theme, r.x + r.w - 60, mid + 1, `${info.alert} TO REVIEW`);

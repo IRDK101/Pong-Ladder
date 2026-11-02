@@ -79,3 +79,16 @@ describe('basement layout', () => {
     }
   });
 });
+
+describe('background tables', () => {
+  it('never show the table being played on twice', async () => {
+    const { backgroundDesign } = await import('../src/render/basement3d');
+    const { VENUE_ORDER } = await import('../src/render/basement');
+    const { DESIGN_ORDER } = await import('../src/render/designs');
+    for (const play of VENUE_ORDER)
+      for (const design of DESIGN_ORDER) {
+        const shown = [design, ...VENUE_ORDER.filter((v) => v !== play).map((v) => backgroundDesign(v, play, design))];
+        expect(new Set(shown).size).toBe(shown.length);
+      }
+  });
+});

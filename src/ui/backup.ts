@@ -7,7 +7,7 @@ export function showBackup(overlay: Overlay, store: AppStore, onClose: () => voi
   const json = store.exportJson();
   const out = h('textarea', { id: 'backup-out', readonly: true, 'aria-label': 'Backup JSON' }, json);
   const status = h('p', { class: note.startsWith('Restore failed') ? 'error' : 'ok' }, note);
-  const counts = `${store.characters.list().length} characters · ${store.profiles.list().length} players · ${store.matches.list().length} matches`;
+  const counts = `${store.characters.list().length} characters · ${store.matches.list().length} matches`;
 
   const copy = async () => {
     try {
@@ -49,7 +49,7 @@ export function showBackup(overlay: Overlay, store: AppStore, onClose: () => voi
   const restore = (text: string) => {
     try {
       const r = store.importJson(text);
-      const bits = [`${r.characters} new characters`, `${r.profiles} new players`, `${r.matches} new matches`];
+      const bits = [`${r.characters} new characters`, `${r.matches} new matches`];
       const skipped = r.skipped.length ? ` Skipped ${r.skipped.length}: ${r.skipped.join('; ')}` : '';
       showBackup(overlay, store, onClose, `Restored: ${bits.join(', ')}.${skipped}`);
     } catch (e) {

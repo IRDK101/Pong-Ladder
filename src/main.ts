@@ -19,7 +19,6 @@ import { characterSprite } from './core/sprite';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
 import { h, injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
-import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
 import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
@@ -461,7 +460,6 @@ const tablePicker = new TablePicker(
   () => toMenu(),
 );
 const characterPicker = new CharacterPicker(overlay, () => menu.config(baseCfg), account, selection, saveSelection, () => toMenu());
-const profiles = new ProfilesScreen(overlay, store, baseCfg, () => toMenu());
 
 function runMenuAction(action: MenuAction): void {
   const cfg = menu.config(baseCfg);
@@ -492,8 +490,6 @@ function runMenuAction(action: MenuAction): void {
       return openPanel(() => characterPicker.show());
     case 'characters':
       return openPanel(() => characters.showList());
-    case 'profiles':
-      return openPanel(() => profiles.show());
     case 'backup':
       return openPanel(() => showBackup(overlay, store, () => toMenu()));
     case 'help':

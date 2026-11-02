@@ -108,8 +108,6 @@ const teamClass = (t: TeamId) => (t === 'A' ? 'teamA' : 'teamB');
 
 export class PrematchFlow {
   private profiles: Record<TeamId, string> = { A: GUEST, B: GUEST };
-  /** Same-team play: the two humans on Team A. */
-  private coopProfiles = { 'A-left': GUEST, 'A-right': GUEST };
   private draft: Draft | null = null;
   private first: TeamId = 'A';
   private lineup: Record<TeamId, [string, string]> | null = null;
@@ -134,7 +132,7 @@ export class PrematchFlow {
     this.progress = withAccountLevels(this.cfg, progressFrom(this.cfg, this.store.matches.list()), this.account);
     const need = this.coop ? this.size : 2 * this.size;
     if (usable.length < need || this.chars.size < 2 * this.size) return this.notEnough(usable.length, need);
-    this.showProfiles();
+    this.toDraft();
   }
 
   private notEnough(n: number, need: number): void {
@@ -175,7 +173,6 @@ export class PrematchFlow {
     );
   }
 
-  // ------------------------------------------------------- 1. profiles
 
   private get coop(): boolean {
     return this.cfg.players.mode === 'coop';
@@ -186,75 +183,8 @@ export class PrematchFlow {
     return this.cfg.teamSize;
   }
 
-  private showProfiles(): void {
-    const profiles = this.store.profiles.list();
-    const picker = (id: string, value: string, set: (v: string) => void) =>
-      h(
-        'select',
-        { id, onchange: (e: Event) => set((e.target as HTMLSelectElement).value) },
-        h('option', { value: GUEST }, 'Guest'),
-        ...profiles.map((p) => {
-          const o = h('option', { value: p.id }, p.name);
-          if (value === p.id) o.selected = true;
-          return o;
-        }),
-      );
-    const select = (team: TeamId) => picker(`profile-${team}`, this.profiles[team], (v) => (this.profiles[team] = v));
-    if (this.coop && this.size === 2) {
-      const seat = (pos: 'A-left' | 'A-right', keys: string) =>
-        h('div', { class: 'box card' }, h('h2', { class: 'teamA' }, pos === 'A-left' ? 'Left teammate' : 'Right teammate'), h('p', { class: 'dim' }, keys), picker(`profile-${pos}`, this.coopProfiles[pos], (v) => (this.coopProfiles[pos] = v)));
-      this.overlay.show(
-        h(
-          'div',
-          { class: 'panel' },
-          h('div', { class: 'row spread' }, h('h1', {}, 'Who is playing?'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
-          h('p', { class: 'dim' }, `You two are Team A against the CPU (${this.cfg.players.cpu}). Each of you plays one teammate; teammates alternate hits, and either of you can make a save.`),
-          h('div', { class: 'grid' }, seat('A-left', 'WASD to aim · Space to hit · Q / E styles'), seat('A-right', 'Arrows to aim · Enter to hit · . / / styles')),
-          this.error ? h('p', { class: 'error' }, this.error) : null,
-          h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.toDraft() }, 'Flip the coin and draft')),
-        ),
-      );
-      return;
-    }
-    this.overlay.show(
-      h(
-        'div',
-        { class: 'panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, 'Who is playing?'), h('button', { onclick: () => this.actions.cancel() }, 'Back to menu')),
-        h(
-          'p',
-          { class: 'dim' },
-          this.coop
-            ? `1v1 against the CPU (${this.cfg.players.cpu}): pick your player profile, then you and the CPU draft one character each. Either set of keys plays.`
-            : `Each human picks their player profile, then the teams draft ${this.size === 1 ? 'one character each' : 'characters'}. Add profiles from the Players screen.`,
-        ),
-        h(
-          'div',
-          { class: 'grid' },
-          ...(['A', 'B'] as TeamId[]).map((t) =>
-            this.coop && t === 'B'
-              ? h('div', { class: 'box card' }, h('h2', { class: teamClass(t) }, 'Team B'), h('p', { class: 'dim' }, `CPU (${this.cfg.players.cpu})`))
-              : h('div', { class: 'box card' }, h('h2', { class: teamClass(t) }, this.size === 1 ? `Player ${t}` : `Team ${t}`), select(t)),
-          ),
-        ),
-        this.error ? h('p', { class: 'error' }, this.error) : null,
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.toDraft() }, 'Flip the coin and draft')),
-      ),
-    );
-  }
-
+  /** Flip the coin and start the draft (players are guests: progress goes to the signed-in account). */
   private toDraft(): void {
-    const c = this.coopProfiles;
-    if (this.coop) this.profiles.B = GUEST; // the CPU's team has no human
-    if (this.coop && this.size === 2 && c['A-left'] && c['A-left'] === c['A-right']) {
-      this.error = 'Both teammates picked the same player. Pick a different profile, or Guest.';
-      return this.showProfiles();
-    }
-    if (!this.coop && this.profiles.A && this.profiles.A === this.profiles.B) {
-      this.error = 'Both teams picked the same player. Pick a different profile, or Guest.';
-      return this.showProfiles();
-    }
-    this.error = '';
     this.first = firstPicker(this.cfg.draftFirstPick, this.rng);
     this.draft = newDraft([...this.chars.keys()], this.first, this.size);
     this.showDraft();
@@ -365,7 +295,7 @@ export class PrematchFlow {
             : 'Positions are fixed for the whole game. Left serves to the opponent on the right, diagonally.',
         ),
         h('div', { class: 'grid' }, side('A'), side('B')),
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.coop && this.size === 2 ? this.coopProfiles : this.profiles) }) }, 'Start match')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.actions.start({ roster: rosterFrom(this.chars, lu, this.profiles) }) }, 'Start match')),
       ),
     );
   }

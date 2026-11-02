@@ -768,3 +768,8 @@ Decided with the owner: keep the public link (so view-only visitors play as gues
 - **Name style** (`src/progress/nameStyles.ts`): a color (solid or gradient), an effect (shadow, spaced caps, outline, glow, slanted, animated shine and pulse) and a flair icon. Each option unlocks at a player level; the moderator has all. Options are only appended, and unknown ids fall back to the defaults. The style is saved on the profile card (`style`) and in the lobby card. `Account.setNameStyle` refuses options above the player's level.
 - Drawn by `styledName` (HTML) and `drawStyledName` (canvas) in `src/ui/nameStyle.ts`. Animations stop under reduced motion.
 - **Fixed: progress could be overwritten on a new device.** If the character list loaded before the account's saved progress, the starter top-up saved an empty progress over it. Progress is now never written to the account until the saved copy has been read (a test checks the ordering).
+
+## One of each table, no local players
+
+- **Background tables:** the room's three spots each have their own table (bar: Chain, middle: Saints, doors: Night sky). If the table being played on is one of those, the background table at its usual spot swaps to the table the play spot normally has (`backgroundDesign`), so no table is ever on screen twice. A test checks every spot and design.
+- **Local players removed:** the shared-keyboard "Local players" screen and the draft's "Who is playing?" step are gone; signed-in profiles replace them. Draft match goes straight to the coin flip. Old match records keep their (now unused) profile ids; backups still carry any saved local players so nothing is lost.

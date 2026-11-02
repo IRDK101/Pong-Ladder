@@ -1,8 +1,5 @@
 import { newCharacter } from '../src/core/character';
-import { newMatchRecord } from '../src/data/storage';
-import { makeConfig } from '../src/config';
 import { cpuPick, participantFrom, rosterFrom } from '../src/ui/prematch';
-import { profileRecord } from '../src/ui/profiles';
 
 describe('pre-match helpers', () => {
   const chars = ['Ari', 'Mike', 'Sam', 'Kit'].map((n) => newCharacter(n));
@@ -25,20 +22,6 @@ describe('pre-match helpers', () => {
     expect(r['B-right'].name).toBe('Kit');
     expect(r['A-left'].profileId).toBe('p1');
     expect(r['B-left'].profileId).toBeNull();
-  });
-
-  it('profile record counts finished matches and wins by the team the profile played on', () => {
-    const m1 = newMatchRecord(makeConfig(), new Date(), 'm1');
-    m1.roster['A-left'].profileId = 'p1';
-    m1.roster['A-right'].profileId = 'p1';
-    m1.winner = 'A';
-    const m2 = newMatchRecord(makeConfig(), new Date(), 'm2');
-    m2.roster['B-left'].profileId = 'p1';
-    m2.winner = 'A';
-    const unfinished = newMatchRecord(makeConfig(), new Date(), 'm3');
-    unfinished.roster['A-left'].profileId = 'p1';
-    expect(profileRecord([m1, m2, unfinished], 'p1')).toEqual({ played: 2, won: 1 });
-    expect(profileRecord([m1], 'nobody')).toEqual({ played: 0, won: 0 });
   });
 
   it('same-team play: each Team A position gets its own human; the CPU team has none', () => {

@@ -92,7 +92,7 @@ export class ProfileScreen {
         { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' },
         h('h2', {}, 'What is saved where'),
         h('p', { class: 'dim', style: 'font-size:13px' }, a.role === 'guest' || a.role === 'viewonly' ? 'Everything is in this browser only, and games don’t earn XP.' : 'With your account (any device): level and XP, loot boxes and unlocks, each character’s level and cosmetics, the characters you made, your home-screen picks. XP only counts once your profile is approved.'),
-        h('p', { class: 'dim', style: 'font-size:13px' }, 'In this browser only: local players for a shared keyboard (Players screen) and the match history behind career stats. Back up / restore moves those.'),
+        h('p', { class: 'dim', style: 'font-size:13px' }, 'In this browser only: the match history behind career stats. Back up / restore moves it.'),
       ),
     );
     this.panel = panel;

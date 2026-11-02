@@ -133,6 +133,15 @@ function paint(theme: Theme, p: Paint): string {
 // ------------------------------------------------------------------ room
 
 /** Draw the whole basement around the table `venue` (every table but that one is drawn here too). */
+/**
+ * The design of a background table at spot `spot` while the game is played at
+ * `playSpot` on `design`. Each spot normally has its own table; if that is the
+ * table being played on, the two swap, so no table shows twice.
+ */
+export function backgroundDesign(spot: Venue, playSpot: Venue, design: TableDesign): TableDesign {
+  return spot === design ? playSpot : spot;
+}
+
 export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, venue: Venue): void {
   const R = theme.room;
   const xf = basementToWorld(cfg, venue);
@@ -240,7 +249,8 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
     if (v === venue) continue;
     const t = tableToBasement(cfg, v);
     const place: Xf = (p) => xf(t(p));
-    things.push({ d: depth(t({ x: L / 2, y: W / 2, z: 0 })), draw: () => drawTableAt(b, theme, cfg, cam, v, place, true) });
+    const bg = backgroundDesign(v, venue, cfg.design);
+    things.push({ d: depth(t({ x: L / 2, y: W / 2, z: 0 })), draw: () => drawTableAt(b, theme, cfg, cam, v, place, true, bg) });
   }
   // The fridges stand behind the bar counter, so they always go first.
   things.push({ d: depth({ x: 0.3, y: ROW_Y, z: 0 }) + 50, draw: () => FRIDGES.forEach((f) => xbox(b, cam, xf, f.x0, f.y0, floorZ, f.x1, f.y1, floorZ + f.h, R.fridgeTop, R.fridge, R.fridgeDark)) });
