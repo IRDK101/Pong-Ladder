@@ -13,6 +13,7 @@ function named(name: string, updatedAt = '2026-01-01T00:00:00.000Z') {
 describe('shared character collection', () => {
   it('merges shared and local characters, newest copy winning', () => {
     const store = new AppStore(memoryStore());
+    store.characters.sharedWins = false; // the moderator's browser
     const a = named('Alpha');
     const b = named('Bravo');
     store.characters.save(a);
@@ -22,6 +23,18 @@ describe('shared character collection', () => {
     expect(names).toEqual(['Alpha Two', 'Bravo']);
     expect(store.characters.localList().map((c) => c.name)).toEqual(['Alpha']);
     expect(store.characters.get(b.id)?.name).toBe('Bravo');
+  });
+
+  it('for players, a shared character always reads as the moderator made it', () => {
+    const store = new AppStore(memoryStore());
+    const a = named('Alpha');
+    store.characters.setShared([a]);
+    // A newer local copy (an old edit, or a restored backup) doesn't change how it looks.
+    store.characters.save({ ...a, name: 'Hacked', updatedAt: '2099-01-01T00:00:00.000Z' });
+    expect(store.characters.get(a.id)?.name).toBe('Alpha');
+    // The moderator's own copies still win when newer (their edits upload from here).
+    store.characters.sharedWins = false;
+    expect(store.characters.get(a.id)?.name).toBe('Hacked');
   });
 
   it('saving one character never copies the shared collection into this browser', () => {

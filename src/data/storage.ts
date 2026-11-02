@@ -135,6 +135,8 @@ export class Collection<T extends { id: string }> {
  */
 export class CharacterCollection extends Collection<Character> {
   private shared: Character[] = [];
+  /** Shared characters always read as the moderator made them (true for everyone but the moderator). */
+  sharedWins = true;
   /** Applied to every character read through list()/get() (the player's own cosmetics). */
   decorate: ((c: Character) => Character) | null = null;
   private listeners: { save: (c: Character) => void; remove: (id: string) => void }[] = [];
@@ -166,6 +168,7 @@ export class CharacterCollection extends Collection<Character> {
     for (const c of this.shared) out.set(c.id, c);
     for (const c of this.stored()) {
       const s = out.get(c.id);
+      if (s && this.sharedWins) continue;
       if (!s || (c.updatedAt ?? '') >= (s.updatedAt ?? '')) out.set(c.id, c);
     }
     const all = [...out.values()];

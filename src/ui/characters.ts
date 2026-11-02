@@ -94,9 +94,9 @@ export class CharactersScreen {
     const changed = sub && (sub.character.updatedAt ?? '') < (c.updatedAt ?? '');
     const send = () => {
       a.submit(c);
-      this.showList(`Sent ${c.name} to the owner for approval.`);
+      this.showList(`Sent ${c.name} to the moderator for approval.`);
     };
-    if (!sub) return h('button', { onclick: send, title: 'Ask the owner to add this character to the collection for everyone' }, 'Submit for approval');
+    if (!sub) return h('button', { onclick: send, title: 'Ask the moderator to add this character to the collection for everyone' }, 'Submit for approval');
     const label = sub.status === 'pending' ? 'Waiting for approval' : sub.status === 'approved' ? 'Approved' : 'Not approved';
     return h(
       'div',
@@ -135,10 +135,10 @@ export class CharactersScreen {
         'p',
         { class: 'dim' },
         this.account.canSubmit
-          ? 'Characters you make are yours to play right away. Submit one and, once the owner approves it, it joins the collection for everyone: other players unlock it from loot boxes, and you always have it. Levels and cosmetics are your own.'
+          ? 'Characters you make are yours to play right away. Submit one and, once the moderator approves it, it joins the collection for everyone: other players unlock it from loot boxes, and you always have it. From then on only the moderator can change it. Levels and cosmetics are your own.'
           : this.account.owner
             ? 'Your friends, recreated. Everything you make here joins the shared collection: players start with a few and unlock the rest from loot boxes (see Collection). Review other players’ characters under Collection → Submissions. Levels and cosmetics are each player’s own.'
-            : 'Your friends, recreated. Drafts pick from these, and quick matches and the title-screen demo use random ones. Stats show here and in the draft, never during play.',
+            : 'Your friends, recreated. Drafts pick from these, and quick matches and the title-screen demo use random ones. Characters in the collection are made by the moderator and can’t be changed here; ones you make yourself you can edit.',
       ),
       note ? h('p', { class: 'ok' }, note) : null,
       chars.length
@@ -151,7 +151,7 @@ export class CharactersScreen {
                   'div',
                   { class: 'row' },
                   h('button', { class: this.account.newRewards(c.id) ? 'primary' : '', onclick: () => this.showProfile(c.id) }, this.account.newRewards(c.id) ? `Profile · ${this.account.newRewards(c.id)} new` : 'Profile'),
-                  h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit'),
+                  this.canEdit(c.id) ? h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit') : h('span', { class: 'dim', style: 'font-size:12px', title: 'Only the moderator can change characters in the collection' }, '🔒 Moderator only'),
                 ),
                 this.submitTools(c),
               ].filter((x): x is HTMLElement => !!x)),
@@ -265,13 +265,16 @@ export class CharactersScreen {
     else this.showList();
   }
 
+  /** Only the moderator edits characters in the shared collection; players edit only the ones they made that aren't in it. */
   private canEdit(id: string): boolean {
-    return !this.account.canSubmit || this.mine().some((c) => c.id === id);
+    return this.account.owner || !this.store.characters.isShared(id);
   }
 
   edit(c: Character): void {
+    if (!this.canEdit(c.id)) return this.showList('Only the moderator can change characters in the collection.');
     new CharacterEditor(this.overlay, c, {
       save: (done) => {
+        if (!this.canEdit(done.id)) return this.showList(`${done.name} is in the collection now: only the moderator can change it.`);
         done.updatedAt = new Date().toISOString();
         this.store.characters.save(done);
         this.showList(`Saved ${done.name}.`);

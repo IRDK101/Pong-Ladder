@@ -253,6 +253,7 @@ export class Account {
     const db = this.db;
     try {
       this.owner = this.user ? await this.user.isOwner() : false;
+      this.store.characters.sharedWins = !this.owner;
       this.uid = this.user ? await this.user.id() : null;
       const me = this.user ? await this.user.me() : null;
       this.me = me ? { name: me.name || '', email: me.email ?? null } : null;

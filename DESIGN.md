@@ -773,3 +773,11 @@ Decided with the owner: keep the public link (so view-only visitors play as gues
 
 - **Background tables:** the room's three spots each have their own table (bar: Chain, middle: Saints, doors: Night sky). If the table being played on is one of those, the background table at its usual spot swaps to the table the play spot normally has (`backgroundDesign`), so no table is ever on screen twice. A test checks every spot and design.
 - **Local players removed:** the shared-keyboard "Local players" screen and the draft's "Who is playing?" step are gone; signed-in profiles replace them. Draft match goes straight to the coin flip. Old match records keep their (now unused) profile ids; backups still carry any saved local players so nothing is lost.
+
+## Only the moderator edits collection characters
+
+Decided with the owner: players keep making and submitting their own characters, and keep their earned cosmetics.
+
+- A character in the shared collection can only be edited by the moderator. Players (and guests) get no Edit button for it, and the editor refuses to open or save it. That includes a player's own character once it's approved.
+- For everyone but the moderator, a shared character always reads exactly as the moderator saved it: `CharacterCollection.sharedWins` ignores any local copy with the same id (an old local edit or a restored backup), however new. In the moderator's browser the newest copy still wins, so their edits upload as before.
+- The only per-player differences are the level-up cosmetics a player has earned and equipped (name color, badges, sprite item, sink celebration).
