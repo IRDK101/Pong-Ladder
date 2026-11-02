@@ -6,6 +6,8 @@ import { STAT_INFO, STAT_KEYS, STAT_MAX, STAT_MIN, type Stats } from '../core/st
 import { getStyle, stylesOfKind } from '../core/styles';
 import type { GameConfig } from '../config';
 import type { AppStore } from '../data/storage';
+import type { Account } from '../data/shared';
+import { characterLevel } from '../progress/unlocks';
 import { BADGE_LABELS, isUnlocked, REWARDS, type RewardKind } from '../progress/rewards';
 import { theme } from '../theme';
 import { careerTable, levelBar, progressFrom, type Progress } from './careerView';
@@ -42,6 +44,11 @@ export function statBars(stats: Stats): HTMLElement {
   );
 }
 
+/** Character levels come from the player's account (personal per player), not this browser's history alone. */
+export function withAccountLevels(cfg: GameConfig, p: Progress, account: Account): Progress {
+  return { ...p, characterLevel: (id) => characterLevel(cfg, account.progress, id) };
+}
+
 export function characterCard(c: Character, level: number, extra: HTMLElement[] = [], attrs: Record<string, string | EventListener> = {}): HTMLElement {
   return h(
     'div',
@@ -63,11 +70,46 @@ export class CharactersScreen {
     private overlay: Overlay,
     private store: AppStore,
     private cfg: GameConfig,
+    private account: Account,
     private onClose: () => void,
   ) {}
 
   private progress(): Progress {
-    return progressFrom(this.cfg, this.store.matches.list());
+    return withAccountLevels(this.cfg, progressFrom(this.cfg, this.store.matches.list()), this.account);
+  }
+
+  /** The characters this screen manages: everything for the owner (or offline); a player's own otherwise. */
+  private mine(): Character[] {
+    const all = this.store.characters.list();
+    if (!this.account.canSubmit) return all;
+    return all.filter((c) => !this.store.characters.isShared(c.id) || this.account.creators.get(c.id) === this.account.uid);
+  }
+
+  /** Submission status and buttons on a player's own character. */
+  private submitTools(c: Character): HTMLElement | null {
+    const a = this.account;
+    if (!a.canSubmit) return null;
+    if (a.creators.get(c.id) === a.uid && this.store.characters.isShared(c.id)) return h('span', { class: 'badge reward' }, 'In the collection');
+    const sub = a.submissionOf(c.id);
+    const changed = sub && (sub.character.updatedAt ?? '') < (c.updatedAt ?? '');
+    const send = () => {
+      a.submit(c);
+      this.showList(`Sent ${c.name} to the owner for approval.`);
+    };
+    if (!sub) return h('button', { onclick: send, title: 'Ask the owner to add this character to the collection for everyone' }, 'Submit for approval');
+    const label = sub.status === 'pending' ? 'Waiting for approval' : sub.status === 'approved' ? 'Approved' : 'Not approved';
+    return h(
+      'div',
+      { style: 'display:flex;flex-direction:column;gap:6px' },
+      h('span', { class: `badge status-${sub.status}` }, changed ? `${label} · edited since` : label),
+      sub.status === 'rejected' && sub.note ? h('p', { class: 'dim', style: 'font-size:12px' }, `Note: ${sub.note}`) : null,
+      h(
+        'div',
+        { class: 'row' },
+        changed || sub.status === 'rejected' ? h('button', { onclick: send }, 'Resubmit') : null,
+        sub.status === 'pending' ? h('button', { onclick: () => (a.withdraw(c.id), this.showList(`Withdrew ${c.name}.`)) }, 'Withdraw') : null,
+      ),
+    );
   }
 
   private listPanel: HTMLElement | null = null;
@@ -78,7 +120,7 @@ export class CharactersScreen {
   }
 
   showList(note = ''): void {
-    const chars = this.store.characters.list();
+    const chars = this.mine();
     const prog = this.progress();
     const panel = h(
       'div',
@@ -89,7 +131,15 @@ export class CharactersScreen {
         h('h1', {}, 'Characters'),
         h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.edit(newCharacter('')) }, 'New character'), h('button', { onclick: () => this.onClose() }, 'Back to menu')),
       ),
-      h('p', { class: 'dim' }, 'Your friends, recreated. Every character here plays in the game: drafts pick from this pool, and quick matches and the title-screen demo use random ones. Characters the owner makes are shared with everyone who opens the game. Stats show here and in the draft, never during play.'),
+      h(
+        'p',
+        { class: 'dim' },
+        this.account.canSubmit
+          ? 'Characters you make are yours to play right away. Submit one and, once the owner approves it, it joins the collection for everyone: other players unlock it from loot boxes, and you always have it. Levels and cosmetics are your own.'
+          : this.account.owner
+            ? 'Your friends, recreated. Everything you make here joins the shared collection: players start with a few and unlock the rest from loot boxes (see Collection). Review other players’ characters under Collection → Submissions. Levels and cosmetics are each player’s own.'
+            : 'Your friends, recreated. Drafts pick from these, and quick matches and the title-screen demo use random ones. Stats show here and in the draft, never during play.',
+      ),
       note ? h('p', { class: 'ok' }, note) : null,
       chars.length
         ? h(
@@ -98,7 +148,8 @@ export class CharactersScreen {
             ...chars.map((c) =>
               characterCard(c, prog.characterLevel(c.id).level, [
                 h('div', { class: 'row' }, h('button', { onclick: () => this.showProfile(c.id) }, 'Profile'), h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit')),
-              ]),
+                this.submitTools(c),
+              ].filter((x): x is HTMLElement => !!x)),
             ),
           )
         : h('div', { class: 'box' }, h('p', {}, 'No characters yet. Create your first one with “New character”.')),
@@ -114,9 +165,9 @@ export class CharactersScreen {
     const prog = this.progress();
     const lvl = prog.characterLevel(id);
     const career = prog.characterCareer(id);
+    // Cosmetics are this player's own: they're saved with the player, not the character.
     const save = (msg: string) => {
-      c.updatedAt = new Date().toISOString();
-      this.store.characters.save(c);
+      this.account.equip(c.id, c.cosmetics);
       this.showProfile(id, msg);
     };
     const kinds: [RewardKind, string][] = [
@@ -159,7 +210,7 @@ export class CharactersScreen {
       h(
         'div',
         { class: 'panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, `${c.name}`), h('div', { class: 'row' }, h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit'), h('button', { onclick: () => this.showList() }, 'All characters'))),
+        h('div', { class: 'row spread' }, h('h1', {}, `${c.name}`), h('div', { class: 'row' }, this.canEdit(c.id) ? h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit') : null, h('button', { onclick: () => this.back() }, 'Back'))),
         h(
           'div',
           { class: 'box row', style: 'align-items:flex-start;gap:20px' },
@@ -170,17 +221,31 @@ export class CharactersScreen {
             nameTag(c.name, c.master, nameColorOf(c)),
             badgeChips(c),
             levelBar(lvl),
-            h('p', { class: 'dim' }, 'Levels come from playing (games, wins, sinks, saves, aces, perfect hits) and unlock cosmetics only. Stats never change.'),
+            h('p', { class: 'dim' }, 'Your level with this character comes from your games with it (wins, sinks, saves, aces, perfect hits) and unlocks cosmetics for your copy only. Its XP also counts towards your player level. Stats never change.'),
             statBars(c.stats),
           ),
         ),
         note ? h('p', { class: 'ok' }, note) : null,
-        h('h2', {}, 'Career'),
+        h('h2', {}, 'Career (games in this browser)'),
         careerTable(career),
         h('h2', {}, 'Rewards'),
         equip,
       ),
     );
+  }
+
+  /** Where Back from a profile goes (the Collection opens profiles too). */
+  backTo: (() => void) | null = null;
+
+  private back(): void {
+    const b = this.backTo;
+    this.backTo = null;
+    if (b) b();
+    else this.showList();
+  }
+
+  private canEdit(id: string): boolean {
+    return !this.account.canSubmit || this.mine().some((c) => c.id === id);
   }
 
   edit(c: Character): void {

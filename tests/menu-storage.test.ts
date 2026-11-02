@@ -11,9 +11,22 @@ describe('pre-game menu', () => {
     expect(cfg).toMatchObject({ formation: 'tree', matchFormat: 'single', penaltyCupSelection: 'choose', skiCollision: false });
   });
 
+  it('skips locked tables and never hands out a locked one', () => {
+    const m = new Menu();
+    m.tableLocked = (v) => v !== 'saints' && v !== 'chain';
+    expect(m.config().venue).toBe('saints');
+    m.move(3, 0); // the Table row
+    m.move(0, 1);
+    expect(m.config().venue).toBe('chain');
+    m.move(0, 1);
+    expect(m.config().venue).toBe('saints');
+    m.tableLocked = (v) => v !== 'spirits';
+    expect(m.config().venue).toBe('spirits');
+  });
+
   it('defaults to head-to-head, medium CPU, behind-Team-A view', () => {
     const cfg = new Menu().config();
-    expect(cfg.players).toEqual({ mode: 'versus', cpu: 'medium' });
+    expect(cfg.players).toEqual({ mode: 'versus', cpu: 'medium', mySide: 'A' });
     expect(cfg.view).toBe('behindA');
     const m = new Menu();
     m.move(0, 1); // same team vs CPU
@@ -52,12 +65,12 @@ describe('pre-game menu', () => {
   it('action rows return their action; the cursor wraps', () => {
     const m = new Menu();
     const actions: string[] = [];
-    m.move(8, 0); // first action row, after the 8 option rows
-    for (let i = 0; i < 6; i++) {
+    m.move(9, 0); // first action row, after the 9 option rows
+    for (let i = 0; i < 7; i++) {
       actions.push(m.activate()!);
       m.move(1, 0);
     }
-    expect(actions).toEqual(['draft', 'quick', 'characters', 'profiles', 'help', 'backup']);
+    expect(actions).toEqual(['draft', 'quick', 'collection', 'characters', 'profiles', 'help', 'backup']);
     expect(m.cursor).toBe(0); // wrapped
     m.move(-1, 0);
     expect(m.activate()).toBe('backup');

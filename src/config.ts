@@ -33,7 +33,8 @@ export interface GameConfig {
   /** Who picks first in the draft. */
   draftFirstPick: FirstPick;
   /** Head-to-head (one human per team) or both humans on Team A against the CPU. */
-  players: { mode: 'versus' | 'coop'; cpu: Difficulty };
+  /** mySide: which team the signed-in player is on (their XP and unlocks); always A against the CPU. */
+  players: { mode: 'versus' | 'coop'; cpu: Difficulty; mySide?: 'A' | 'B' };
   /** Players per team: 2 (the standard four-player game) or 1 (1v1: one player covers both halves of their end). */
   teamSize: 1 | 2;
   /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
@@ -82,6 +83,8 @@ export interface GameConfig {
 }
 
 export interface ProgressionTuning {
+  /** XP per player level step (player XP is every character's XP added up). Each level past 1 gives a loot box. */
+  playerLevelStep: number;
   /** XP a character earns per career stat. Levels are cosmetic only. */
   xp: {
     gamePlayed: number;
@@ -238,6 +241,7 @@ export const defaultConfig: GameConfig = {
   progression: {
     xp: { gamePlayed: 20, gameWon: 15, matchWon: 25, cupSunk: 8, cupDowned: 4, saveMade: 5, clutchSave: 10, ace: 3, perfectHit: 1 },
     levelStep: 100,
+    playerLevelStep: 150,
     elo: { start: 1000, k: 32 },
   },
 };

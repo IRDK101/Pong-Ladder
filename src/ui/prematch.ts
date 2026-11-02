@@ -8,7 +8,8 @@ import type { TeamId } from '../core/types';
 import type { AppStore } from '../data/storage';
 import { genericRoster, type Participant, type PositionKey, type Roster } from '../game/game';
 import { progressFrom, type Progress } from './careerView';
-import { characterCard, nameColorOf } from './characters';
+import type { Account } from '../data/shared';
+import { characterCard, nameColorOf, withAccountLevels } from './characters';
 import { theme } from '../theme';
 import { h, nameTag, spriteImage, type Overlay } from './dom';
 
@@ -57,20 +58,32 @@ export function rosterFrom(
 
 /**
  * A quick match (and the title screen's demo) with characters from the
- * collection: random different ones in every position, with generic players
- * filling in only when there aren't enough characters.
+ * collection: random different ones in every position, each team drawing
+ * from its own pool (a player's unlocked characters; the CPU can use any).
+ * Generic players fill in only when a pool runs out.
  */
-export function quickRoster(chars: Character[], teamSize: 1 | 2, rng: () => number = Math.random): Roster {
-  const pool = chars.filter((c) => validateCharacter(c).length === 0);
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
+export function quickRoster(pools: Character[] | Record<TeamId, Character[]>, teamSize: 1 | 2, rng: () => number = Math.random): Roster {
+  const by = Array.isArray(pools) ? { A: pools, B: pools } : pools;
+  const shuffled = (list: Character[]) => {
+    const pool = list.filter((c) => validateCharacter(c).length === 0);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool;
+  };
   const roster = genericRoster(teamSize);
-  const keys: PositionKey[] = teamSize === 1 ? ['A-left', 'B-left'] : ['A-left', 'A-right', 'B-left', 'B-right'];
-  keys.forEach((k, i) => {
-    if (pool[i]) roster[k] = participantFrom(pool[i], null);
-  });
+  const used = new Set<string>();
+  const keys: Record<TeamId, PositionKey[]> = teamSize === 1 ? { A: ['A-left'], B: ['B-left'] } : { A: ['A-left', 'A-right'], B: ['B-left', 'B-right'] };
+  for (const t of ['A', 'B'] as TeamId[]) {
+    const pool = shuffled(by[t]);
+    for (const k of keys[t]) {
+      const c = pool.find((x) => !used.has(x.id));
+      if (!c) continue;
+      used.add(c.id);
+      roster[k] = participantFrom(c, null);
+    }
+  }
   if (teamSize === 1) {
     roster['A-right'] = roster['A-left'];
     roster['B-right'] = roster['B-left'];
@@ -104,19 +117,42 @@ export class PrematchFlow {
     private store: AppStore,
     private cfg: GameConfig,
     private rng: () => number,
-    private actions: { start: (r: PrematchResult) => void; cancel: () => void; editCharacters: () => void; quickMatch: () => void },
+    private account: Account,
+    private actions: { start: (r: PrematchResult) => void; cancel: () => void; editCharacters: () => void; quickMatch: () => void; collection: () => void },
   ) {}
 
   begin(): void {
-    const usable = this.store.characters.list().filter((c) => validateCharacter(c).length === 0);
-    this.chars = new Map(usable.map((c) => [c.id, c]));
-    this.progress = progressFrom(this.cfg, this.store.matches.list());
-    if (usable.length < 2 * this.size) return this.notEnough(usable.length);
+    // Humans draft from the characters they have unlocked; the CPU can also take locked ones.
+    const usable = this.account.usable();
+    const pool = this.coop ? this.account.everyone() : usable;
+    this.chars = new Map(pool.map((c) => [c.id, c]));
+    this.progress = withAccountLevels(this.cfg, progressFrom(this.cfg, this.store.matches.list()), this.account);
+    const need = this.coop ? this.size : 2 * this.size;
+    if (usable.length < need || this.chars.size < 2 * this.size) return this.notEnough(usable.length, need);
     this.showProfiles();
   }
 
-  private notEnough(n: number): void {
-    const need = 2 * this.size;
+  private notEnough(n: number, need: number): void {
+    if (this.account.sharedCollection && n < need) {
+      this.overlay.show(
+        h(
+          'div',
+          { class: 'panel' },
+          h('h1', {}, `Draft needs ${need} unlocked characters`),
+          h('p', {}, `You have ${n} unlocked. Level up to earn loot boxes and unlock more, make your own in Characters, or play a quick match.`),
+          h(
+            'div',
+            { class: 'row' },
+            h('button', { class: 'primary', onclick: () => this.actions.collection() }, 'Collection'),
+            h('button', { onclick: () => this.actions.editCharacters() }, 'Characters'),
+            h('button', { onclick: () => this.actions.quickMatch() }, 'Quick match'),
+            h('button', { onclick: () => this.actions.cancel() }, 'Back to menu'),
+          ),
+        ),
+      );
+      return;
+    }
+    need = 2 * this.size;
     this.overlay.show(
       h(
         'div',
@@ -235,7 +271,10 @@ export class PrematchFlow {
     const team = onTheClock(d)!;
     if (this.coop && team === 'B') {
       // The CPU picks for itself.
-      const id = cpuPick(available(d).map((x) => this.chars.get(x)!), this.cfg.players.cpu, this.rng);
+      // It prefers characters the human can't use, so the human's unlocked ones stay free.
+      const left = available(d).map((x) => this.chars.get(x)!);
+      const locked = left.filter((c) => !this.account.canUse(c.id));
+      const id = cpuPick(locked.length ? locked : left, this.cfg.players.cpu, this.rng);
       this.draft = pick(d, 'B', id) as Draft;
       return this.showDraft();
     }
@@ -243,8 +282,9 @@ export class PrematchFlow {
     const pickedBy = new Map(d.picks.map((p) => [p.characterId, p.team]));
     const cards = [...this.chars.values()].map((c) => {
       const by = pickedBy.get(c.id);
-      const extra = by ? [h('span', { class: `badge ${teamClass(by)}` }, `Team ${by}`)] : [];
-      const attrs = free.has(c.id)
+      const locked = !this.account.canUse(c.id);
+      const extra = by ? [h('span', { class: `badge ${teamClass(by)}` }, `Team ${by}`)] : locked ? [h('span', { class: 'badge reward' }, 'Locked · CPU only')] : [];
+      const attrs = free.has(c.id) && !locked
         ? { class: 'box card pick', tabindex: '0', role: 'button', 'aria-label': `Pick ${c.name}`, onclick: () => this.choose(team, c.id), onkeydown: (e: Event) => (e as KeyboardEvent).key === 'Enter' && this.choose(team, c.id) }
         : { class: 'box card taken' };
       return characterCard(c, this.progress!.characterLevel(c.id).level, extra, attrs as Record<string, string | EventListener>);

@@ -618,3 +618,28 @@ The overall layout was already right: three tables in a row, all pointing at the
 - Viewers who can't write still get every shared character. Anything they make stays in their own browser.
 - If both the shared collection and the browser have a copy of a character, the more recently updated copy wins.
 - Without a database (a local file, or signed out), characters stay in the browser as before.
+
+## Collection, player levels, loot boxes and approvals
+
+Decided with the owner (asked first):
+- **Player:** the signed-in claude.ai account. Progress is kept online at `data/users/<uid>/progress`, private to each player. Offline, or signed out, it stays in this browser.
+- **XP:**
+  - Each player earns character XP separately, so the same character can be at different levels for different players.
+  - Player XP is the sum of all of that player's character XP. Player levels use `progression.playerLevelStep` (150).
+  - Cosmetics (name colors, badges, sprite items, celebrations) are equipped per player, and character levels unlock them as before.
+- **Your side:** on a shared keyboard, the "Your side" menu row picks which team's XP goes to the signed-in account, and both teams draft from that player's unlocks. Against the CPU it is always Team A.
+- **Loot boxes:**
+  - One box per player level past 1. A box unlocks a random table or approved character the player doesn't have, so there are no duplicates.
+  - When there's nothing left to unlock, boxes are kept until something new is added.
+- **Starting set:** the Saints table plus 4 random characters. The starting characters are topped up to 4 whenever the collection grows.
+- **Locked items:** only the CPU and the title-screen demo use locked characters. In the Collection they show as silhouettes, and locked tables are skipped in the menu.
+- **Approvals:**
+  - Other players make characters in their own browser and can play them right away.
+  - "Submit for approval" writes the character to `submissions/<uid>`. Only the owner can read those, under Collection → Submissions.
+  - Approving copies the character to `characters/<id>` with `creator`. It joins everyone's loot pool, and its creator always has it.
+  - The owner can turn a submission down, with an optional note the player sees.
+- **Owner's characters:** the owner's own characters go into the pool too, so the owner unlocks them like everyone else.
+- **Access rules:**
+  - `characters`: everyone reads, only the owner writes.
+  - `submissions`: only the owner reads and writes.
+  - `submissions/{self}`: each player (Contributor and up) writes their own.

@@ -17,7 +17,8 @@ import { injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
 import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
-import { connectSharedCharacters } from './data/shared';
+import { Account } from './data/shared';
+import { CollectionScreen } from './ui/collection';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -70,12 +71,18 @@ function browserStore(): KeyValueStore {
     return memoryStore();
   }
 }
-const store = new AppStore(browserStore());
+const kv = browserStore();
+const store = new AppStore(kv);
 const menu = new Menu();
-// Characters in the shared collection play for everyone who opens the game.
-void connectSharedCharacters(store.characters, () => {
-  if (screen === 'panel' && characters.isShowingList()) characters.showList();
+// The player's account: level, loot boxes, unlocks, and the shared character collection.
+const account = new Account(store, baseCfg, kv);
+menu.tableLocked = (v) => !account.tableUnlocked(v);
+account.onChange(() => {
+  if (screen !== 'panel') return;
+  if (characters.isShowingList()) characters.showList();
+  else if (collection.isShowing()) collection.show();
 });
+void account.connect();
 injectStyles(theme);
 const overlay = new Overlay();
 
@@ -95,6 +102,10 @@ if (location.hash === '#debug') {
     game: () => game,
     screen: () => screen,
     store,
+    get account() {
+      return account;
+    },
+    openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
   };
 }
@@ -120,17 +131,30 @@ function startMatch(cfg: GameConfig, roster: Roster): void {
   else game.controlFrames = { A: frameFor('A'), B: frameFor('A') };
   cpu = cfg.players.mode === 'coop' ? new CpuController('B', cfg.players.cpu, Math.random) : null;
   record = newMatchRecord(cfg);
+  counted = {};
+  xpNote = '';
   for (const k of POSITIONS) record.roster[k] = { characterId: roster[k].characterId, profileId: roster[k].profileId };
   game.messages.push({ text: `${game.serverName()} serves first (random draw)`, time: 0 });
   screen = 'playing';
   canvas.focus();
 }
 
-/** Persist the finished game (and match, if decided). */
+/** XP this match has already given (so each game adds only what's new). */
+let counted: Record<string, number> = {};
+/** A line for the end screens about XP and loot boxes. */
+let xpNote = '';
+
+/** Persist the finished game (and match, if decided), and give the player their XP. */
 function recordGame(): void {
   if (!game || !record) return;
   record.games.push({ winner: game.engine.peek().winner, log: game.engine.log });
   store.matches.save(record);
+  const side = game.cfg.players.mode === 'coop' ? 'A' : (game.cfg.players.mySide ?? 'A');
+  const before = Object.values(counted).reduce((a, b) => a + b, 0);
+  const { boxesBefore } = account.recordMatch(record, side, counted);
+  const gained = Object.values(counted).reduce((a, b) => a + b, 0) - before;
+  const boxes = account.boxes();
+  xpNote = `Your side (Team ${side}): +${gained} XP` + (boxes > boxesBefore ? ` · LEVEL UP! ${boxes} loot box${boxes === 1 ? '' : 'es'} in the Collection` : '');
 }
 
 /** Keyboard (and CPU) input for the current mode. */
@@ -164,23 +188,34 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
   return (['A', 'B'] as TeamId[]).some((t) => codes.some((k) => keyboard.wasPressed(baseCfg.controls[t][k])));
 }
 
-const characters = new CharactersScreen(overlay, store, baseCfg, () => toMenu());
+const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
+const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu());
+
+/** Quick match: the player's unlocked characters on their side; the CPU can use any. */
+function quickFor(cfg: GameConfig): Roster {
+  const mine = account.usable();
+  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize);
+  return quickRoster(mine, cfg.teamSize);
+}
 const profiles = new ProfilesScreen(overlay, store, baseCfg, () => toMenu());
 
 function runMenuAction(action: MenuAction): void {
   const cfg = menu.config(baseCfg);
   switch (action) {
     case 'quick':
-      return startMatch(cfg, quickRoster(store.characters.list(), cfg.teamSize));
+      return startMatch(cfg, quickFor(cfg));
     case 'draft':
       return openPanel(() =>
-        new PrematchFlow(overlay, store, cfg, Math.random, {
+        new PrematchFlow(overlay, store, cfg, Math.random, account, {
+          collection: () => collection.show(),
           start: ({ roster }) => startMatch(cfg, roster),
           cancel: () => toMenu(),
           editCharacters: () => characters.showList(),
-          quickMatch: () => startMatch(cfg, quickRoster(store.characters.list(), cfg.teamSize)),
+          quickMatch: () => startMatch(cfg, quickFor(cfg)),
         }).begin(),
       );
+    case 'collection':
+      return openPanel(() => collection.show());
     case 'characters':
       return openPanel(() => characters.showList());
     case 'profiles':
@@ -197,7 +232,7 @@ function runMenuAction(action: MenuAction): void {
 let demo: { game: Game; a: CpuController; b: CpuController } | null = null;
 function drawBackdrop(dt: number): void {
   if (!demo || demo.game.engine.peek().phase === 'gameOver') {
-    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), Math.random, quickRoster(store.characters.list(), 2));
+    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), Math.random, quickRoster(account.everyone(), 2));
     const frame = cameraFrame(teamCamera(g.cfg, 'A', 16, 9));
     g.controlFrames = { A: frame, B: frame };
     demo = { game: g, a: new CpuController('A', 'hard', Math.random), b: new CpuController('B', 'medium', Math.random) };
@@ -260,6 +295,7 @@ function frame(dt: number): void {
     const matchWinner = g.match.wins[st.winner!] + 1 >= g.match.gamesToWin;
     const lines = [g.teamLine(st.winner!), g.cupsLeftLine()];
     if (g.cfg.matchFormat === 'bestOf3') lines.push(`Games: A ${g.match.wins.A + (st.winner === 'A' ? 1 : 0)} – ${g.match.wins.B + (st.winner === 'B' ? 1 : 0)} B`);
+    if (xpNote) lines.push(xpNote);
     drawEndScreen(ctx, theme, view, matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`, lines, ready ? 'Press Space / Enter' : '');
     if (ready && anyPressed(['hit'])) {
       const w = g.continueMatch();
@@ -271,7 +307,7 @@ function frame(dt: number): void {
       } else screen = 'playing';
     }
   } else if (screen === 'matchEnd') {
-    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, 'Match log saved'], 'Press Space / Enter for the menu');
+    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, xpNote || 'Match log saved'], 'Press Space / Enter for the menu');
     if (anyPressed(['hit'])) {
       if (record && hasTrackedPlayers(record)) {
         const rec = record;

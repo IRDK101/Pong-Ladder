@@ -138,6 +138,39 @@ export function injectStyles(theme: Theme): void {
   #ui .thumb span { font-size: 10px; color: ${c.text}; white-space: nowrap; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
   #ui .thumb:hover { border-color: ${c.gold}; background: #5a4d3e; }
   #ui .thumb.on { border: 2px solid ${c.gold}; background: #6a5a3a; padding: 4px 3px 2px; }
+  #ui .grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  #ui .card.locked { opacity: 0.6; border-style: dashed; }
+  #ui .card.locked .table-shot { filter: grayscale(1) brightness(0.45); }
+  #ui .table-shot { width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; display: block; border: 1px solid ${c.uiEdge}; }
+  #ui .badge.status-pending { border: 1px solid ${c.gold}; color: ${c.gold}; }
+  #ui .badge.status-approved { border: 1px solid ${c.good}; color: ${c.good}; }
+  #ui .badge.status-rejected { border: 1px solid ${c.bad}; color: ${c.bad}; }
+  #ui .badge { font-size: 12px; padding: 1px 6px; border-radius: 3px; align-self: flex-start; }
+  #ui .loot-head { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  #ui .loot-box-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  /* A pixel-style crate: gold lid (b) over a dark body (i), with a count. */
+  #ui .loot-box { position: relative; width: 64px; height: 52px; }
+  #ui .loot-box i { position: absolute; left: 4px; right: 4px; bottom: 0; height: 34px; background: #3a2416; border: 3px solid ${c.gold}; box-shadow: inset 0 0 0 3px #1a1410; }
+  #ui .loot-box b { position: absolute; left: 0; right: 0; top: 4px; height: 16px; background: ${c.gold}; border: 3px solid #1a1410; }
+  #ui .loot-box i::after { content: 'Ζ'; position: absolute; inset: 0; display: grid; place-items: center; color: ${c.gold}; font: bold 18px serif; }
+  #ui .loot-box .count { position: absolute; right: -10px; top: -8px; min-width: 22px; height: 22px; padding: 0 5px; display: grid; place-items: center;
+    background: ${c.bad}; color: #fff; font-weight: bold; font-size: 12px; border: 2px solid #1a1410; }
+  #ui .loot-box.ready { animation: loot-shake 1.6s ease-in-out infinite; }
+  #ui .loot-box.ready b { animation: loot-lid 1.6s ease-in-out infinite; }
+  @keyframes loot-shake { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-6deg); } 85% { transform: rotate(6deg); } 95% { transform: rotate(-3deg); } }
+  @keyframes loot-lid { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-5px); } }
+  #ui .loot-reveal { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+    border-color: ${c.gold}; animation: reveal-in 0.5s cubic-bezier(.2,1.4,.4,1) both; }
+  #ui .loot-reveal .reveal-art { position: relative; animation: reveal-pop 0.7s 0.15s cubic-bezier(.2,1.6,.4,1) both; }
+  #ui .loot-reveal .reveal-art .table-shot { width: min(360px, 80vw); }
+  #ui .loot-reveal .burst { position: absolute; left: 50%; top: 55%; width: 640px; height: 640px; margin: -320px 0 0 -320px; pointer-events: none;
+    background: repeating-conic-gradient(rgba(255, 210, 90, 0.16) 0 10deg, transparent 10deg 20deg); animation: burst-spin 12s linear infinite, burst-fade 0.8s ease-out both; }
+  #ui .loot-reveal > :not(.burst) { position: relative; }
+  @keyframes reveal-in { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes reveal-pop { from { transform: scale(0.2) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes burst-spin { to { transform: rotate(360deg); } }
+  @keyframes burst-fade { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #ui .loot-box.ready, #ui .loot-box.ready b, #ui .loot-reveal, #ui .loot-reveal .reveal-art, #ui .loot-reveal .burst { animation: none; } }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));

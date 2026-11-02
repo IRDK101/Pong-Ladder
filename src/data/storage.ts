@@ -124,6 +124,8 @@ export class Collection<T extends { id: string }> {
  */
 export class CharacterCollection extends Collection<Character> {
   private shared: Character[] = [];
+  /** Applied to every character read through list()/get() (the player's own cosmetics). */
+  decorate: ((c: Character) => Character) | null = null;
   private listeners: { save: (c: Character) => void; remove: (id: string) => void }[] = [];
 
   /** Characters only this browser has saved. */
@@ -155,7 +157,8 @@ export class CharacterCollection extends Collection<Character> {
       const s = out.get(c.id);
       if (!s || (c.updatedAt ?? '') >= (s.updatedAt ?? '')) out.set(c.id, c);
     }
-    return [...out.values()];
+    const all = [...out.values()];
+    return this.decorate ? all.map(this.decorate) : all;
   }
 
   override save(item: Character): void {

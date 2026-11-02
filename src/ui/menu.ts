@@ -45,9 +45,19 @@ const CHOICES: Choice[] = [
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
   { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
+  {
+    label: 'Your side',
+    values: [
+      { label: 'Team A', apply: (cfg) => void (cfg.players.mySide = 'A') },
+      { label: 'Team B', apply: (cfg) => void (cfg.players.mySide = 'B') },
+    ],
+  },
 ];
 
-export type MenuAction = 'draft' | 'quick' | 'characters' | 'profiles' | 'help' | 'backup' | null;
+const TABLE_ROW = CHOICES.findIndex((c) => c.label === 'Table');
+const SIDE_ROW = CHOICES.findIndex((c) => c.label === 'Your side');
+
+export type MenuAction = 'draft' | 'quick' | 'collection' | 'characters' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   label: string;
@@ -58,12 +68,27 @@ export interface MenuRow {
 export class Menu {
   cursor = 0;
   private picks: number[] = CHOICES.map(() => 0);
+  /** Tables this player hasn't unlocked can't be picked. */
+  tableLocked: (venue: string) => boolean = () => false;
+
+  /** The picked table, or the first unlocked one if the pick is locked. */
+  private tablePick(): number {
+    const p = this.picks[TABLE_ROW];
+    if (!this.tableLocked(VENUE_ORDER[p])) return p;
+    const free = VENUE_ORDER.findIndex((v) => !this.tableLocked(v));
+    return free < 0 ? 0 : free;
+  }
+
+  private pickOf(i: number): number {
+    return i === TABLE_ROW ? this.tablePick() : this.picks[i];
+  }
 
   rows(): MenuRow[] {
     return [
-      ...CHOICES.map((c, i) => ({ label: c.label, value: c.values[this.picks[i]].label })),
+      ...CHOICES.map((c, i) => ({ label: c.label, value: i === SIDE_ROW && this.picksMode() === 'coop' ? 'Team A (vs CPU)' : c.values[this.pickOf(i)].label })),
       { label: 'Draft match', action: 'draft' as const },
       { label: 'Quick match', action: 'quick' as const },
+      { label: 'Collection', action: 'collection' as const },
       { label: 'Characters', action: 'characters' as const },
       { label: 'Players', action: 'profiles' as const },
       { label: 'How to play', action: 'help' as const },
@@ -77,7 +102,12 @@ export class Menu {
     if (dy) this.cursor = (this.cursor + dy + n) % n;
     if (dx && this.cursor < CHOICES.length) {
       const k = CHOICES[this.cursor].values.length;
-      this.picks[this.cursor] = (this.picks[this.cursor] + dx + k) % k;
+      if (this.cursor === TABLE_ROW) this.picks[TABLE_ROW] = this.tablePick();
+      // Locked tables are skipped.
+      for (let n = 0; n < k; n++) {
+        this.picks[this.cursor] = (this.picks[this.cursor] + dx + k) % k;
+        if (this.cursor !== TABLE_ROW || !this.tableLocked(VENUE_ORDER[this.picks[TABLE_ROW]])) break;
+      }
     }
   }
 
@@ -91,8 +121,15 @@ export class Menu {
 
   config(base: GameConfig = makeConfig()): GameConfig {
     const cfg = structuredClone(base);
-    CHOICES.forEach((c, i) => c.values[this.picks[i]].apply(cfg));
+    CHOICES.forEach((c, i) => c.values[this.pickOf(i)].apply(cfg));
+    if (cfg.players.mode === 'coop') cfg.players.mySide = 'A';
     return cfg;
+  }
+
+  private picksMode(): GameConfig['players']['mode'] {
+    const cfg = makeConfig();
+    CHOICES[0].values[this.picks[0]].apply(cfg);
+    return cfg.players.mode;
   }
 }
 
@@ -202,7 +239,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
   // Same pieces as the in-game HUD: dark panels with 2px borders, and the bright turn-tag
   // style (yellow, dark text) for whatever row is selected.
   panel(ctx, theme, SETUP_X - 14, TOP - 32, SETUP_W + 28, OPTION_ROWS * ROW + 44, c.uiEdge, m.panel);
-  panel(ctx, theme, ACTION_X - 14, TOP - 32, ACTION_W + 28, PLAY_ROWS * 58 + 34 + 4 * ROW + 44, c.uiEdge, m.panel);
+  panel(ctx, theme, ACTION_X - 14, TOP - 32, ACTION_W + 28, PLAY_ROWS * 58 + 34 + 5 * ROW + 40, c.uiEdge, m.panel);
   heading('MATCH SETUP', SETUP_X, TOP - 14);
   heading('PLAY', ACTION_X, TOP - 14);
   heading('MORE', ACTION_X, TOP + PLAY_ROWS * 58 + 14);
@@ -313,7 +350,8 @@ const HELP: [string, string][] = [
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
-  ['Modes', '2v2 head-to-head: one of you per team (split screen gives each team its own camera). 2v2 same team: you two against the CPU; WASD plays the left teammate, the arrows the right one. 1v1: one player a side, who makes every hit and serves from alternating halves (head-to-head, or you against the CPU with either set of keys).'],
+  ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
+  ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. Your side (menu) picks which team earns XP.'],
 ];
 
 /** Split text into lines no wider than maxWidth with the current font. */
