@@ -3,7 +3,7 @@
 import { makeConfig, type GameConfig } from './config';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
-import { Game, genericRoster, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
+import { Game, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
 import { CpuController } from './game/ai';
 import { coopInput } from './game/controllers';
 import { cameraFrame, teamCamera } from './render/camera';
@@ -16,7 +16,8 @@ import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRe
 import { injectStyles, Overlay } from './ui/dom';
 import { CharactersScreen } from './ui/characters';
 import { ProfilesScreen } from './ui/profiles';
-import { PrematchFlow } from './ui/prematch';
+import { PrematchFlow, quickRoster } from './ui/prematch';
+import { connectSharedCharacters } from './data/shared';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -71,6 +72,10 @@ function browserStore(): KeyValueStore {
 }
 const store = new AppStore(browserStore());
 const menu = new Menu();
+// Characters in the shared collection play for everyone who opens the game.
+void connectSharedCharacters(store.characters, () => {
+  if (screen === 'panel' && characters.isShowingList()) characters.showList();
+});
 injectStyles(theme);
 const overlay = new Overlay();
 
@@ -166,14 +171,14 @@ function runMenuAction(action: MenuAction): void {
   const cfg = menu.config(baseCfg);
   switch (action) {
     case 'quick':
-      return startMatch(cfg, genericRoster(cfg.teamSize));
+      return startMatch(cfg, quickRoster(store.characters.list(), cfg.teamSize));
     case 'draft':
       return openPanel(() =>
         new PrematchFlow(overlay, store, cfg, Math.random, {
           start: ({ roster }) => startMatch(cfg, roster),
           cancel: () => toMenu(),
           editCharacters: () => characters.showList(),
-          quickMatch: () => startMatch(cfg, genericRoster(cfg.teamSize)),
+          quickMatch: () => startMatch(cfg, quickRoster(store.characters.list(), cfg.teamSize)),
         }).begin(),
       );
     case 'characters':
@@ -192,7 +197,7 @@ function runMenuAction(action: MenuAction): void {
 let demo: { game: Game; a: CpuController; b: CpuController } | null = null;
 function drawBackdrop(dt: number): void {
   if (!demo || demo.game.engine.peek().phase === 'gameOver') {
-    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), Math.random);
+    const g = new Game(makeConfig({ formation: 'shrub', penaltyCupSelection: 'auto' }), Math.random, quickRoster(store.characters.list(), 2));
     const frame = cameraFrame(teamCamera(g.cfg, 'A', 16, 9));
     g.controlFrames = { A: frame, B: frame };
     demo = { game: g, a: new CpuController('A', 'hard', Math.random), b: new CpuController('B', 'medium', Math.random) };

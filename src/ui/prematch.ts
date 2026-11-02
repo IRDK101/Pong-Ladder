@@ -6,7 +6,7 @@ import { available, isDone, newDraft, onTheClock, pick, teamPicks, firstPicker, 
 import { characterBackSprite, characterSprite } from '../core/sprite';
 import type { TeamId } from '../core/types';
 import type { AppStore } from '../data/storage';
-import type { Participant, Roster } from '../game/game';
+import { genericRoster, type Participant, type PositionKey, type Roster } from '../game/game';
 import { progressFrom, type Progress } from './careerView';
 import { characterCard, nameColorOf } from './characters';
 import { theme } from '../theme';
@@ -55,6 +55,29 @@ export function rosterFrom(
   };
 }
 
+/**
+ * A quick match (and the title screen's demo) with characters from the
+ * collection: random different ones in every position, with generic players
+ * filling in only when there aren't enough characters.
+ */
+export function quickRoster(chars: Character[], teamSize: 1 | 2, rng: () => number = Math.random): Roster {
+  const pool = chars.filter((c) => validateCharacter(c).length === 0);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const roster = genericRoster(teamSize);
+  const keys: PositionKey[] = teamSize === 1 ? ['A-left', 'B-left'] : ['A-left', 'A-right', 'B-left', 'B-right'];
+  keys.forEach((k, i) => {
+    if (pool[i]) roster[k] = participantFrom(pool[i], null);
+  });
+  if (teamSize === 1) {
+    roster['A-right'] = roster['A-left'];
+    roster['B-right'] = roster['B-left'];
+  }
+  return roster;
+}
+
 /** The CPU's draft pick: Hard takes the best stat line, Medium one of the better half, Easy any. */
 export function cpuPick(available: Character[], difficulty: GameConfig['players']['cpu'], rng: () => number): string {
   const total = (c: Character) => Object.values(c.stats).reduce((a, b) => a + b, 0);
@@ -99,7 +122,7 @@ export class PrematchFlow {
         'div',
         { class: 'panel' },
         h('h1', {}, `Draft needs ${need} characters`),
-        h('p', {}, n ? `You have ${n} character${n === 1 ? '' : 's'}. Create ${need - n} more to draft, or play a quick match with generic players.` : `There are no characters yet. Create at least ${need}, or play a quick match with generic players.`),
+        h('p', {}, n ? `You have ${n} character${n === 1 ? '' : 's'}. Create ${need - n} more to draft, or play a quick match with random characters (generic players fill the empty spots).` : `There are no characters yet. Create at least ${need}, or play a quick match with generic players.`),
         h(
           'div',
           { class: 'row' },

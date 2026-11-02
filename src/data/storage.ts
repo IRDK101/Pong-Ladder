@@ -117,6 +117,59 @@ export class Collection<T extends { id: string }> {
   }
 }
 
+/**
+ * Characters: the ones saved in this browser, merged with the shared
+ * collection everyone who opens the game sees (data/shared.ts fills it).
+ * When both have a character, the more recently updated copy wins.
+ */
+export class CharacterCollection extends Collection<Character> {
+  private shared: Character[] = [];
+  private listeners: { save: (c: Character) => void; remove: (id: string) => void }[] = [];
+
+  /** Characters only this browser has saved. */
+  localList(): Character[] {
+    return super.list();
+  }
+
+  sharedList(): Character[] {
+    return this.shared;
+  }
+
+  setShared(chars: Character[]): void {
+    this.shared = chars;
+  }
+
+  isShared(id: string): boolean {
+    return this.shared.some((c) => c.id === id);
+  }
+
+  /** Hear every save and delete (the shared sync passes them on). */
+  listen(l: { save: (c: Character) => void; remove: (id: string) => void }): void {
+    this.listeners.push(l);
+  }
+
+  override list(): Character[] {
+    const out = new Map<string, Character>();
+    for (const c of this.shared) out.set(c.id, c);
+    for (const c of super.list()) {
+      const s = out.get(c.id);
+      if (!s || (c.updatedAt ?? '') >= (s.updatedAt ?? '')) out.set(c.id, c);
+    }
+    return [...out.values()];
+  }
+
+  override save(item: Character): void {
+    super.save(item);
+    for (const l of this.listeners) l.save(item);
+  }
+
+  override remove(id: string): void {
+    super.remove(id);
+    this.shared = this.shared.filter((c) => c.id !== id);
+    for (const l of this.listeners) l.remove(id);
+  }
+}
+
 export const STORAGE_KEYS = {
   matches: 'dartmouth-pong/matches/v1',
   characters: 'dartmouth-pong/characters/v1',
@@ -126,12 +179,12 @@ export const STORAGE_KEYS = {
 /** Everything the game keeps locally, with one backup file for all of it. */
 export class AppStore {
   readonly matches: Collection<MatchRecord>;
-  readonly characters: Collection<Character>;
+  readonly characters: CharacterCollection;
   readonly profiles: Collection<Profile>;
 
   constructor(kv: KeyValueStore) {
     this.matches = new Collection(kv, STORAGE_KEYS.matches);
-    this.characters = new Collection(kv, STORAGE_KEYS.characters);
+    this.characters = new CharacterCollection(kv, STORAGE_KEYS.characters);
     this.profiles = new Collection(kv, STORAGE_KEYS.profiles);
   }
 
@@ -141,7 +194,7 @@ export class AppStore {
       schemaVersion: SCHEMA_VERSION,
       exportedAt: now.toISOString(),
       matches: this.matches.list(),
-      characters: this.characters.list(),
+      characters: this.characters.localList(),
       profiles: this.profiles.list(),
     };
     return JSON.stringify(file, null, 2);

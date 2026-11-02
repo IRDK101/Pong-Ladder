@@ -607,3 +607,14 @@ The overall layout was already right: three tables in a row, all pointing at the
   - Behind the night sky table: the windows, BROFESSOR '21, QUARTER MILE RD.
 - **Door wall:** the rest of the creed, a red-framed door, WHILE SHOWERING SHRED, and 8 CLAY DG over the bench corner.
 - **Left out:** profanity, and the real "DICK JERK" name sign, which became a plain project-manager sign.
+
+## Shared character collection
+
+- Every character in the collection plays. Drafts pick from it. Quick matches and the title-screen demo use random, different characters from it, and generic players fill a spot only when there aren't enough characters.
+- When the game runs as the published page, the characters live in a shared database, one document per character at `characters/<id>`.
+  - Everyone who opens the game reads it.
+  - Only the owner and editors write to it. Saves and deletes in the character screen go through to it.
+  - When the owner opens the page, any characters saved only in their browser are uploaded.
+- Viewers who can't write still get every shared character. Anything they make stays in their own browser.
+- If both the shared collection and the browser have a copy of a character, the more recently updated copy wins.
+- Without a database (a local file, or signed out), characters stay in the browser as before.

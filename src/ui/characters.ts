@@ -70,6 +70,13 @@ export class CharactersScreen {
     return progressFrom(this.cfg, this.store.matches.list());
   }
 
+  private listPanel: HTMLElement | null = null;
+
+  /** True while the character list (not the editor or a profile) is on screen. */
+  isShowingList(): boolean {
+    return !!this.listPanel && this.overlay.isOpen() && this.overlay.root.contains(this.listPanel);
+  }
+
   showList(note = ''): void {
     const chars = this.store.characters.list();
     const prog = this.progress();
@@ -82,7 +89,7 @@ export class CharactersScreen {
         h('h1', {}, 'Characters'),
         h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.edit(newCharacter('')) }, 'New character'), h('button', { onclick: () => this.onClose() }, 'Back to menu')),
       ),
-      h('p', { class: 'dim' }, 'Your friends, recreated. A match drafts 4 different characters from this pool. Stats show here and in the draft, never during play.'),
+      h('p', { class: 'dim' }, 'Your friends, recreated. Every character here plays in the game: drafts pick from this pool, and quick matches and the title-screen demo use random ones. Characters the owner makes are shared with everyone who opens the game. Stats show here and in the draft, never during play.'),
       note ? h('p', { class: 'ok' }, note) : null,
       chars.length
         ? h(
@@ -96,7 +103,8 @@ export class CharactersScreen {
           )
         : h('div', { class: 'box' }, h('p', {}, 'No characters yet. Create your first one with “New character”.')),
     );
-    this.overlay.show(panel);
+    this.listPanel = panel;
+    this.overlay.show(panel, true);
   }
 
   /** Career stats, level, rewards, and choosing which unlocked cosmetics to wear. */

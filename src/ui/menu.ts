@@ -240,7 +240,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
         ctx.font = theme.fonts.label;
         ctx.fillStyle = on ? ink : c.textDim;
         ctx.textAlign = 'right';
-        ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'generic players, straight in', r.x + r.w - 14, mid);
+        ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'random characters, straight in', r.x + r.w - 14, mid);
       }
     }
   });

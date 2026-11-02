@@ -166,6 +166,10 @@ export class Overlay {
     if (focusId) document.getElementById(focusId)?.focus();
   }
 
+  isOpen(): boolean {
+    return !this.root.hidden;
+  }
+
   hide(): void {
     this.root.hidden = true;
     this.root.replaceChildren();
