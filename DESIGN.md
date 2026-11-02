@@ -788,3 +788,12 @@ Decided with the owner: players keep making and submitting their own characters,
 - Such a visitor (database available, but no id or no write access) is now **view-only** with a clear explanation, instead of being told to sign in when they already are.
 - A profile request shows **Sending…** until the server accepts the write, then **Sent to the moderator**. If claude.ai refuses it, the request is dropped, the player switches to view-only, and the screen says it wasn't sent. Accepted requests appear in Moderator tools → Profiles and on the moderator's menu badge.
 - The moderator's profile screen has a **Letting friends in** note with these steps, including that Editors can also publish page versions.
+
+## Online play, reworked against the room's real limits
+
+- **Matches run in the lobby room.** Named rooms (`join`) may not be offered to every viewer and a join can time out, which left matches stuck. Both pages are already in the lobby room, so the match now travels there too: each page adds `mid` (the match id) and `net`, `inp` or `final` to its own lobby presence, and reads only its opponent's fields with the same `mid`. Leaving clears them. An opponent who leaves, goes back to the lobby or never arrives within 20 s ends the match with a message.
+- **Presence bounds are checked before sending** (`presenceIssue`): plain-identifier keys, at most 64 keys or array entries, 8 levels, 1 KiB per string with no control or invisible characters, finite numbers, 4 KiB merged. A refused card or room error now shows in the lobby instead of failing silently. Tests check a whole match's host presence and lobby cards (including a real collection character) against them.
+- The host's card drops its character while it plays, leaving room for the game state (about 3.2 KB at most). The final XP travels as `[id, xp]` pairs, since a character id isn't guaranteed to be a valid key.
+- The lobby redraws only when the lobby itself changes, not on every match update, so buttons aren't replaced mid-click.
+- **Online play needs an approved profile** (or the moderator). Everyone else sees why and what to do next.
+- Who can connect at all is claude.ai's rule: members of the owner's organization and people invited by email (as Editors, with no public link, for outsiders). Public-link visitors from outside can't join the room.

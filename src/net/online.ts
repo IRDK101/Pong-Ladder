@@ -27,11 +27,12 @@ interface PeersChange {
   peers: readonly RoomPeer[];
   left: readonly RoomPeer[];
 }
-interface RoomLike {
+export interface RoomLike {
   presence(patch: Record<string, unknown>): Promise<void>;
   peers(): readonly RoomPeer[];
-  onPeers(handler: (c: PeersChange) => void, onError?: (e: { code: string }) => void): () => void;
+  onPeers(handler: (c: PeersChange) => void, onError?: (e: { code: string; message?: string }) => void): () => void;
   connected(): boolean;
+  onConnection?(handler: (connected: boolean) => void, onError?: (e: { code: string }) => void): () => void;
 }
 export interface NamedRoom extends RoomLike {
   readonly name: string;
@@ -141,10 +142,30 @@ export class Lobby {
   private unsub: (() => void) | null = null;
   me: LobbyCard | null = null;
 
+  /** The last thing the room refused or reported (shown in the lobby), or ''. */
+  error = '';
+
   constructor(
     readonly room: RoomApi,
     private onChange: () => void,
   ) {}
+
+  private send(patch: Record<string, unknown>): void {
+    const issue = presenceIssue({ ...patch });
+    if (issue) {
+      this.error = `Your lobby card couldn't be sent (${issue}).`;
+      return this.onChange();
+    }
+    this.room.presence(patch).then(
+      () => {
+        if (this.error.startsWith('Your lobby card')) (this.error = ''), this.onChange();
+      },
+      (e: { code?: string; message?: string }) => {
+        this.error = `Your lobby card couldn't be sent (${e?.code ?? 'error'}${e?.message ? `: ${e.message}` : ''}).`;
+        this.onChange();
+      },
+    );
+  }
 
   /** This page's `peer` label, as everyone sees it. */
   get myPeer(): string | null {
@@ -160,15 +181,21 @@ export class Lobby {
 
   open(card: Omit<LobbyCard, 'pz' | 'invite' | 'answer' | 'status'>): void {
     this.me = { pz: 1, status: 'lobby', invite: null, answer: null, ...card };
-    void this.room.presence({ ...this.me }).catch(() => {});
+    this.send({ ...this.me });
     this.unsub?.();
-    this.unsub = this.room.onPeers(() => this.onChange());
+    this.unsub = this.room.onPeers(
+      () => this.onChange(),
+      (e) => {
+        this.error = `The live room stopped (${e.code}). Reload the page to reconnect.`;
+        this.onChange();
+      },
+    );
   }
 
   update(patch: Partial<LobbyCard>): void {
     if (!this.me) return;
     this.me = { ...this.me, ...patch };
-    void this.room.presence({ ...this.me }).catch(() => {});
+    this.send({ ...this.me });
     this.onChange();
   }
 
@@ -177,7 +204,7 @@ export class Lobby {
     this.unsub?.();
     this.unsub = null;
     this.me = null;
-    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null }).catch(() => {});
+    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null, ...MATCH_CLEAR }).catch(() => {});
   }
 
   /** Challenges addressed to this page. */
@@ -196,10 +223,18 @@ export class Lobby {
   }
 }
 
+/** Match fields a page keeps in its lobby presence while it plays. */
+const MATCH_CLEAR = { mid: null, net: null, inp: null, final: null };
+
 export const matchRoomName = (id: string) => `pz-${id}`.toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 48);
 export const newMatchId = () => Math.random().toString(36).slice(2, 10);
 
-/** One side of a live match. */
+/**
+ * One side of a live match. Both pages already share the lobby room, so the
+ * match travels there too, in presence fields tagged with the match id (`mid`):
+ * no extra room to join (named rooms may not be offered, and a join can time
+ * out), and each page reads only its opponent's fields for this match.
+ */
 export class MatchLink {
   private unsub: (() => void) | null = null;
   /** Newest state from the host (guest side), and the guest's newest input (host side). */
@@ -208,40 +243,67 @@ export class MatchLink {
   /** The host's final word: XP for the guest's character. */
   final: { xp: Record<string, number> } | null = null;
   gone = false;
+  /** Last error the room reported for a match update, or ''. */
+  error = '';
   private lastEvent = 0;
   private sentAt = 0;
   private evs: GuestInput['ev'] = [];
   private evN = 0;
+  seen = false;
+  private since = Date.now();
+  /** Re-check the opponent (also catches a timeout when the room is quiet). */
+  read: () => void = () => {};
 
   constructor(
-    readonly room: NamedRoom,
+    readonly room: RoomLike,
     readonly role: 'host' | 'guest',
     private otherPeer: string,
+    readonly mid: string,
   ) {
     const read = () => {
       const other = room.peers().find((p) => p.peer === this.otherPeer);
-      if (!other) return;
-      const pr = other.presence as { net?: NetState; inp?: GuestInput; final?: { xp: Record<string, number> } };
+      const pr = (other?.presence ?? {}) as { mid?: string; net?: NetState; inp?: GuestInput; final?: { xp: [string, number][] | Record<string, number> } };
+      if (!other || pr.mid !== this.mid) {
+        // Once they've been in this match, leaving the room or the match ends it; never arriving times out.
+        if (this.seen || Date.now() - this.since > 20000) this.gone = true;
+        return;
+      }
+      this.seen = true;
       if (role === 'guest' && pr.net) this.net = pr.net;
-      if (role === 'guest' && pr.final) this.final = pr.final;
+      if (role === 'guest' && pr.final) this.final = { xp: Array.isArray(pr.final.xp) ? Object.fromEntries(pr.final.xp) : pr.final.xp };
       if (role === 'host' && pr.inp) this.input = pr.inp;
     };
-    this.unsub = room.onPeers((c) => {
-      if (c.left.some((p) => p.peer === this.otherPeer)) this.gone = true;
-      read();
-    });
+    this.read = read;
+    this.unsub = room.onPeers(
+      (c) => {
+        if (c.left.some((p) => p.peer === this.otherPeer)) this.gone = true;
+        read();
+      },
+      (e) => {
+        this.error = e.code;
+        this.gone = true;
+      },
+    );
+    void room.presence({ mid }).catch(() => {});
     read();
+  }
+
+  private put(patch: Record<string, unknown>): void {
+    this.room.presence({ mid: this.mid, ...patch }).catch((e: { code?: string; message?: string }) => {
+      this.error = `${e?.code ?? 'error'}${e?.message ? `: ${e.message}` : ''}`;
+    });
   }
 
   /** Host: publish the game state, at most ~15 times a second. */
   sendState(n: NetState, now: number, force = false): void {
     if (!force && now - this.sentAt < 66) return;
     this.sentAt = now;
-    void this.room.presence({ net: n }).catch(() => {});
+    this.put({ net: n });
   }
 
+  /** Character ids aren't guaranteed to be presence keys, so XP travels as pairs. */
   sendFinal(xp: Record<string, number>): void {
-    void this.room.presence({ final: { xp } }).catch(() => {});
+    this.put({ final: { xp: Object.entries(xp).slice(0, 32) } });
   }
 
   /** Guest: queue a hit (with the timing seen here) or a penalty-cup step. */
@@ -253,7 +315,7 @@ export class MatchLink {
   sendInput(inp: Omit<GuestInput, 'ev'>, now: number, force = false): void {
     if (!force && now - this.sentAt < 50) return;
     this.sentAt = now;
-    void this.room.presence({ inp: { ...inp, ev: this.evs } }).catch(() => {});
+    this.put({ inp: { ...inp, ev: this.evs } });
   }
 
   /** Host: the guest's TeamInput for this frame (new hits and steps fire once). */
@@ -277,6 +339,51 @@ export class MatchLink {
   async close(): Promise<void> {
     this.unsub?.();
     this.unsub = null;
-    await this.room.leave().catch(() => {});
+    await this.room.presence({ ...MATCH_CLEAR }).catch(() => {});
   }
+}
+
+const FORMAT_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/;
+const KEY = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+const BAD_KEYS = new Set(Object.getOwnPropertyNames(Object.prototype).concat('prototype'));
+
+/**
+ * Why the live room would refuse this presence object, or null. The room
+ * rejects a presence patch whole (and applies nothing) when the merged object
+ * breaks its bounds: plain-identifier keys, at most 64 keys per object and 64
+ * entries per array, nesting at most 8 deep, strings at most 1 KiB with no
+ * control or invisible characters, only finite numbers, 4 KiB in all.
+ */
+export function presenceIssue(value: unknown): string | null {
+  const walk = (v: unknown, depth: number, path: string): string | null => {
+    if (depth > 8) return `${path}: nested too deep`;
+    if (v === null || typeof v === 'boolean') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? null : `${path}: not a finite number`;
+    if (typeof v === 'string') {
+      if (new TextEncoder().encode(v).length > 1024) return `${path}: string over 1 KiB`;
+      return FORMAT_CHARS.test(v) ? `${path}: control or invisible character` : null;
+    }
+    if (Array.isArray(v)) {
+      if (v.length > 64) return `${path}: array over 64 entries`;
+      for (let i = 0; i < v.length; i++) {
+        const e = walk(v[i], depth + 1, `${path}[${i}]`);
+        if (e) return e;
+      }
+      return null;
+    }
+    if (typeof v === 'object') {
+      const keys = Object.keys(v as object);
+      if (keys.length > 64) return `${path}: over 64 keys`;
+      for (const k of keys) {
+        if (!KEY.test(k) || BAD_KEYS.has(k)) return `${path}: key "${k}" is not a plain identifier`;
+        const e = walk((v as Record<string, unknown>)[k], depth + 1, `${path}.${k}`);
+        if (e) return e;
+      }
+      return null;
+    }
+    return `${path}: ${typeof v} is not JSON`;
+  };
+  const e = walk(value, 1, 'presence');
+  if (e) return e;
+  return new TextEncoder().encode(JSON.stringify(value)).length > 4096 ? 'presence: over 4 KiB' : null;
 }

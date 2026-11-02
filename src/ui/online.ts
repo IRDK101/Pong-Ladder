@@ -3,7 +3,7 @@
 
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
-import { Lobby, matchRoomName, newMatchId, packChar, unpackChar, type LobbyPeer, type MatchSettings, type NamedRoom, type RoomApi } from '../net/online';
+import { Lobby, newMatchId, packChar, unpackChar, type LobbyPeer, type MatchSettings, type RoomApi, type RoomLike } from '../net/online';
 import { DESIGNS } from '../render/designs';
 import { VENUES } from '../render/basement';
 import type { TableDesign, Venue } from '../config';
@@ -13,7 +13,9 @@ import type { NameStyle } from '../progress/nameStyles';
 
 export interface OnlineStart {
   role: 'host' | 'guest';
-  room: NamedRoom;
+  /** The lobby room: the match travels there too (see MatchLink). */
+  room: RoomLike;
+  mid: string;
   otherPeer: string;
   mine: Character;
   theirs: Character;
@@ -41,6 +43,8 @@ export class OnlineScreen {
       /** Who this player is and who they play as. */
       me: () => { name: string; level: number; style: NameStyle; char: Character | null };
       settings: () => MatchSettings;
+      /** Why this player can't play online yet (no approved profile), or null. */
+      blocked: () => string | null;
       start: (s: OnlineStart) => void;
       back: () => void;
     },
@@ -58,8 +62,10 @@ export class OnlineScreen {
       const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
       this.room = claude?.use ? (((await claude.use('room').catch(() => null)) as RoomApi | null) ?? null) : null;
     }
+    if (this.deps.blocked()) return this.render();
     if (this.room && !this.lobby) this.lobby = new Lobby(this.room, () => this.onLobby());
     const me = this.deps.me();
+    this.lastSig = '';
     this.lobby?.open({ name: me.name, level: me.level, style: me.style, char: me.char ? packChar(me.char) : null });
     this.render();
   }
@@ -89,7 +95,16 @@ export class OnlineScreen {
       this.note = `${ans.from.card.name} said no this time.`;
       this.lobby.update({ invite: null });
     }
-    if (this.isShowing()) this.render();
+    // During matches the room updates many times a second: redraw only when the lobby itself changed,
+    // so buttons aren't replaced under the player's pointer.
+    if (this.isShowing() && this.signature() !== this.lastSig) this.render();
+  }
+
+  private lastSig = '';
+  private signature(): string {
+    const lb = this.lobby;
+    if (!lb) return '';
+    return JSON.stringify([this.note, lb.error, lb.me, lb.peers().map((p) => [p.peer, p.isMe, p.card])]);
   }
 
   private async begin(role: 'host' | 'guest', other: LobbyPeer, id: string, settings: MatchSettings): Promise<void> {
@@ -100,17 +115,10 @@ export class OnlineScreen {
       return this.render();
     }
     this.starting = true;
-    this.note = 'Connecting…';
-    this.render();
-    try {
-      const room = await this.lobby!.room.join(matchRoomName(id));
-      this.lobby!.update({ status: 'playing', invite: null, answer: role === 'guest' ? { to: other.peer, id, ok: true } : null });
-      this.deps.start({ role, room, otherPeer: other.peer, mine, theirs, settings, otherName: other.card.name });
-    } catch {
-      this.starting = false;
-      this.note = 'Could not open the match room. Try again.';
-      this.render();
-    }
+    const lb = this.lobby!;
+    // The host's card drops its character while playing, to leave room in its presence for the game state.
+    lb.update({ status: 'playing', invite: null, ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true } } : { answer: null, char: null }) });
+    this.deps.start({ role, room: lb.room, mid: id, otherPeer: other.peer, mine, theirs, settings, otherName: other.card.name });
   }
 
   private challenge(p: LobbyPeer): void {
@@ -123,6 +131,8 @@ export class OnlineScreen {
 
   private render(): void {
     const panelHead = h('div', { class: 'row spread' }, h('h1', {}, 'Online match'), h('button', { onclick: () => this.deps.back() }, 'Back to menu'));
+    const blocked = this.deps.blocked();
+    if (blocked) return this.put(h('div', { class: 'panel' }, panelHead, h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' }, h('h2', {}, 'Online play needs an approved profile'), h('p', {}, blocked))));
     if (this.room === undefined) return this.put(h('div', { class: 'panel' }, panelHead, h('p', { class: 'dim' }, 'Connecting…')));
     if (!this.room || !this.lobby) {
       return this.put(
@@ -140,6 +150,7 @@ export class OnlineScreen {
       );
     }
     const lb = this.lobby;
+    this.lastSig = this.signature();
     const me = this.deps.me();
     const myInv = lb.me?.invite ?? null;
     const others = lb.peers().filter((p) => !p.isMe);
@@ -185,6 +196,8 @@ export class OnlineScreen {
         panelHead,
         h('p', { class: 'dim' }, 'Play a friend on another device: you each use your own keyboard. Games earn XP for approved profiles.'),
         this.note ? h('p', { class: 'ok' }, this.note) : null,
+        lb.error ? h('p', { class: 'error' }, lb.error) : null,
+        !lb.room.connected() ? h('p', { class: 'dim' }, 'Connecting to the live room… (if this stays, reload the page)') : null,
         meCard,
         ...invites,
         h('h2', {}, `Here now (${others.length})`),

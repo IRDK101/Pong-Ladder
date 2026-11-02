@@ -236,7 +236,7 @@ function startOnline(o: OnlineStart): void {
   const pa = participantFrom(host ? o.mine : o.theirs, null);
   const pb = participantFrom(host ? o.theirs : o.mine, null);
   const roster: Roster = { 'A-left': pa, 'A-right': pa, 'B-left': pb, 'B-right': pb };
-  const link = new MatchLink(o.room, o.role, o.otherPeer);
+  const link = new MatchLink(o.room, o.role, o.otherPeer, o.mid);
   online = { link, role: o.role, otherName: o.otherName, lastNet: null, finalDone: false };
   if (host) {
     startMatch(cfg, roster);
@@ -373,6 +373,14 @@ const onlineScreen = new OnlineScreen(overlay, {
   settings: () => {
     const cfg = menu.config(baseCfg);
     return { design: cfg.design, venue: cfg.venue, formation: cfg.formation, speed: cfg.physics.timeScale, ski: cfg.skiCollision };
+  },
+  blocked: () => {
+    if (account.canProgress) return null;
+    if (account.role === 'pending') return 'Your profile is waiting for the moderator. Once it’s approved you can play online, earn XP and get on the leaderboard.';
+    if (account.role === 'unregistered') return 'Make a profile first (menu → Your profile → Ask to join). Once the moderator approves it you can play online.';
+    if (account.role === 'player') return 'Your profile is paused by the moderator.';
+    if (account.role === 'viewonly') return 'You opened the game by a public link from outside the moderator’s claude.ai organization, so claude.ai lets you play offline only. Ask the moderator to invite your email, then open the game from that invite and make a profile.';
+    return 'Sign in to claude.ai and open the game from your invite, then make a profile for the moderator to approve.';
   },
   start: (o) => startOnline(o),
   back: () => {
@@ -551,8 +559,9 @@ function frame(dt: number): void {
   }
 
   const g = game!;
+  online?.link.read();
   if (online?.link.gone && screen !== 'matchEnd') {
-    endOnline(`${online.otherName} left the match.`);
+    endOnline(online.link.seen ? `${online.otherName} left the match.` : `Couldn’t connect to ${online.otherName}${online.link.error ? ` (${online.link.error})` : ''}. Try challenging again.`);
     return toMenu(menuNote);
   }
   if (online?.role === 'guest') {
