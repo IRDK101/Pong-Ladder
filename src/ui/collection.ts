@@ -5,7 +5,7 @@
 import { makeConfig, type GameConfig, type TableDesign } from '../config';
 import type { Character, Sprite } from '../core/character';
 import { characterSprite } from '../core/sprite';
-import type { Account, PlayerSubmissions } from '../data/shared';
+import type { Account } from '../data/shared';
 import type { AppStore } from '../data/storage';
 import { Game } from '../game/game';
 import { DESIGNS } from '../render/designs';
@@ -14,10 +14,9 @@ import { renderGame3D } from '../render/renderer3d';
 import { playerLevel, type LootItem } from '../progress/unlocks';
 import { theme } from '../theme';
 import { levelBar } from './careerView';
-import { characterCard, statBars, type CharactersScreen } from './characters';
+import { characterCard, type CharactersScreen } from './characters';
 import { h, spriteImage, type Overlay } from './dom';
 import { characterLevel } from '../progress/unlocks';
-import { getStyle } from '../core/styles';
 
 type Tab = 'tables' | 'characters' | 'submissions';
 
@@ -58,6 +57,7 @@ export class CollectionScreen {
     private account: Account,
     private characters: CharactersScreen,
     private onClose: () => void,
+    private openModerator: () => void = () => {},
   ) {}
 
   private panel: HTMLElement | null = null;
@@ -68,7 +68,12 @@ export class CollectionScreen {
   }
 
   show(tab: Tab = this.tab): void {
-    this.tab = tab === 'submissions' && !this.account.owner ? 'characters' : tab;
+    // Reviewing submissions lives in the moderator tools now.
+    if (tab === 'submissions') {
+      if (this.account.owner) return this.openModerator();
+      tab = 'characters';
+    }
+    this.tab = tab;
     const a = this.account;
     const lvl = playerLevel(this.cfg, a.progress);
     const boxes = a.boxes();
@@ -99,7 +104,7 @@ export class CollectionScreen {
       ),
     );
 
-    const body = this.tab === 'tables' ? this.tables() : this.tab === 'characters' ? this.chars() : this.submissions();
+    const body = this.tab === 'tables' ? this.tables() : this.chars();
     const panel = h(
       'div',
       { class: 'panel' },
@@ -109,7 +114,7 @@ export class CollectionScreen {
       this.note ? h('p', { class: 'ok' }, this.note) : null,
       head,
       this.reveal ? this.revealCard(this.reveal) : null,
-      h('div', { class: 'tabs' }, tabBtn('characters', 'Characters'), tabBtn('tables', 'Tables'), a.owner ? tabBtn('submissions', pending ? `Submissions (${pending})` : 'Submissions') : null),
+      h('div', { class: 'tabs' }, tabBtn('characters', 'Characters'), tabBtn('tables', 'Tables'), a.owner ? h('button', { onclick: () => this.openModerator() }, pending ? `Moderator tools · ${pending} to review` : 'Moderator tools') : null),
       body,
     );
     this.panel = panel;
@@ -202,46 +207,5 @@ export class CollectionScreen {
     this.characters.showProfile(id);
   }
 
-  private submissions(): HTMLElement {
-    const a = this.account;
-    if (!a.allSubmissions.length) return h('div', { class: 'box' }, h('p', {}, 'No submissions yet. When players submit characters, they show up here for you to approve.'));
-    const order = { pending: 0, rejected: 1, approved: 2 } as const;
-    const player = (s: PlayerSubmissions) => {
-      const items = Object.entries(s.items).sort(([, x], [, y]) => order[x.status] - order[y.status]);
-      return h(
-        'div',
-        { style: 'display:flex;flex-direction:column;gap:8px' },
-        h('h2', {}, s.name || 'A player'),
-        h(
-          'div',
-          { class: 'grid' },
-          ...items.map(([id, sub]) => {
-            const c = sub.character;
-            const noteInput = h('input', { type: 'text', placeholder: 'Note if turning down (optional)', maxlength: '200' }) as HTMLInputElement;
-            return h(
-              'div',
-              { class: 'box card' },
-              h('div', { class: 'row' }, spriteImage(characterSprite(c.sprite, null), 3), h('div', {}, h('span', { class: 'name' }, c.name), h('p', { class: 'dim' }, sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : ''))),
-              statBars(c.stats),
-              h('p', { class: 'dim', style: 'font-size:12px' }, `Hits: ${c.hitStyles.map((x) => getStyle(x).name).join(', ')}`),
-              h('span', { class: `badge status-${sub.status}` }, sub.status === 'pending' ? 'Waiting for you' : sub.status === 'approved' ? 'Approved' : 'Turned down'),
-              sub.status !== 'approved' ? noteInput : null,
-              h(
-                'div',
-                { class: 'row' },
-                sub.status !== 'approved' ? h('button', { class: 'primary', onclick: () => (a.approve(s.uid, id), (this.note = `Added ${c.name} to the collection.`), this.show('submissions')) }, 'Approve') : null,
-                sub.status === 'pending' ? h('button', { class: 'danger', onclick: () => (a.reject(s.uid, id, noteInput.value.trim()), (this.note = `Turned down ${c.name}.`), this.show('submissions')) }, 'Turn down') : null,
-              ),
-            );
-          }),
-        ),
-      );
-    };
-    return h(
-      'div',
-      { style: 'display:flex;flex-direction:column;gap:14px' },
-      h('p', { class: 'dim' }, 'Approved characters join the collection: everyone else unlocks them from loot boxes, and the player who made them always has them. To remove one later, delete it in Characters.'),
-      ...a.allSubmissions.map(player),
-    );
-  }
+
 }

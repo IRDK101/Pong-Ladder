@@ -189,6 +189,15 @@ export function injectStyles(theme: Theme): void {
   #ui .help { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px 18px; align-items: baseline; }
   #ui .help p { line-height: 1.55; }
   @media (max-width: 560px) { #ui .help { grid-template-columns: minmax(0, 1fr); gap: 4px; } #ui .help h2 { margin-top: 10px; } }
+  #ui .role-badge { font-size: 12px; font-weight: bold; letter-spacing: 0.1em; padding: 3px 8px; border: 2px solid ${c.uiEdge}; color: ${c.text}; }
+  #ui .role-badge.role-moderator { background: ${c.gold}; color: ${c.background}; border-color: ${c.gold}; }
+  #ui .role-badge.role-player { border-color: ${c.good}; color: ${c.good}; }
+  #ui .role-badge.role-guest { color: ${c.textDim}; }
+  #ui .profile-head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  #ui .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  #ui .stat-tile { display: flex; flex-direction: column; gap: 4px; }
+  #ui .stat-tile b { font-size: 18px; }
+  #ui ul.powers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));

@@ -31,7 +31,7 @@ const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
 };
 
 type OptionId = 'players' | 'cpu' | 'view' | 'table' | 'spot' | 'formation' | 'match' | 'speed' | 'ski';
-export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'characters' | 'profiles' | 'help' | 'backup';
+export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'characters' | 'account' | 'profiles' | 'help' | 'backup';
 
 const CHOICES: (Choice & { id: OptionId })[] = [
   {
@@ -57,7 +57,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
 const TABLE_ROW = CHOICES.findIndex((c) => c.id === 'table');
 const choiceIndex = (id: RowId) => CHOICES.findIndex((c) => c.id === id);
 
-export type MenuAction = 'draft' | 'quick' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'profiles' | 'help' | 'backup' | null;
+export type MenuAction = 'draft' | 'quick' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   id: RowId;
@@ -97,9 +97,10 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   quick: { x: RX, y: 228, w: RW, h: 54 },
   draft: { x: RX, y: 288, w: RW, h: 54 },
   characters: { x: RX, y: 390, w: RW, h: 29 },
-  profiles: { x: RX, y: 424, w: RW, h: 29 },
-  help: { x: RX, y: 458, w: RW, h: 29 },
-  backup: { x: RX, y: 492, w: RW, h: 29 },
+  account: { x: RX, y: 424, w: RW, h: 29 },
+  profiles: { x: RX, y: 458, w: RW, h: 29 },
+  help: { x: RX, y: 492, w: RW, h: 29 },
+  backup: { x: RX, y: 526, w: RW, h: 29 },
 };
 
 // Portrait (phones): one column on a 560-wide design — progress, play, match, rules, more.
@@ -121,9 +122,10 @@ const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = 
   ski: { x: PX + PCELL + 8, y: 802, w: PCELL, h: 29 },
   view: { x: PX, y: 836, w: PCELL, h: 29 },
   characters: { x: PX, y: 906, w: PW, h: 29 },
-  profiles: { x: PX, y: 940, w: PW, h: 29 },
-  help: { x: PX, y: 974, w: PW, h: 29 },
-  backup: { x: PX, y: 1008, w: PW, h: 29 },
+  account: { x: PX, y: 940, w: PW, h: 29 },
+  profiles: { x: PX, y: 974, w: PW, h: 29 },
+  help: { x: PX, y: 1008, w: PW, h: 29 },
+  backup: { x: PX, y: 1042, w: PW, h: 29 },
 };
 
 /** Narrow screens get the portrait layout. */
@@ -141,7 +143,7 @@ const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
   { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
   { title: 'PLAY', ids: ['quick', 'draft'] },
-  { title: 'MORE', ids: ['characters', 'profiles', 'help', 'backup'] },
+  { title: 'MORE', ids: ['characters', 'account', 'profiles', 'help', 'backup'] },
 ];
 
 export class Menu {
@@ -152,6 +154,8 @@ export class Menu {
   mySide: 'A' | 'B' = 'A';
   /** The "Playing as" row's value: the characters picked for the player's side. */
   playingAs: () => string = () => 'Random';
+  /** The profile row: its label, a hint, and how many things wait there (moderator reviews). */
+  accountInfo: () => { label: string; hint: string; alert: number } = () => ({ label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 });
   /** Starts on Quick match, so the hit key plays straight away. */
   cursor = this.rows().findIndex((r) => r.id === 'quick');
 
@@ -210,7 +214,8 @@ export class Menu {
       { id: 'quick', label: 'Quick match', action: 'quick' },
       { id: 'draft', label: 'Draft match', action: 'draft' },
       { id: 'characters', label: 'Characters', action: 'characters' },
-      { id: 'profiles', label: 'Players', action: 'profiles' },
+      { id: 'account', label: this.accountInfo().label, action: 'account' },
+      { id: 'profiles', label: 'Local players', action: 'profiles' },
       { id: 'help', label: 'How to play', action: 'help' },
       { id: 'backup', label: 'Back up / restore', action: 'backup' },
     ];
@@ -282,7 +287,7 @@ export const MENU_H = 660;
 export function menuLayout(v: View): { s: number; ox: number; oy: number; portrait: boolean } {
   const portrait = isPortrait(v);
   const W = portrait ? 560 : MENU_W;
-  const H = portrait ? 1070 : MENU_H;
+  const H = portrait ? 1110 : MENU_H;
   const s = Math.min(v.width / W, v.height / H);
   return { s, ox: (v.width - W * s) / 2, oy: portrait ? Math.max(0, (v.height - H * s) / 2) : (v.height - H * s) / 2, portrait };
 }
@@ -544,7 +549,12 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
         if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);
         else ctx.fillText('make and edit, levels, cosmetics', r.x + r.w - 14, mid);
       }
-      if (row.id === 'profiles') ctx.fillText('who is playing, records', r.x + r.w - 14, mid);
+      if (row.id === 'profiles') ctx.fillText('names for a shared keyboard, records', r.x + r.w - 14, mid);
+      if (row.id === 'account') {
+        const info = menu.accountInfo();
+        if (info.alert) badge(ctx, theme, r.x + r.w - 60, mid + 1, `${info.alert} TO REVIEW`);
+        else ctx.fillText(info.hint, r.x + r.w - 14, mid);
+      }
     }
   });
 
@@ -552,7 +562,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.textAlign = 'left';
     ctx.font = theme.fonts.label;
     ctx.fillStyle = c.textDim;
-    ctx.fillText(note || 'Tap a row to choose. Playing needs a keyboard: WASD + Space, arrows + Enter.', PX, 1054);
+    ctx.fillText(note || 'Tap a row to choose. Playing needs a keyboard: WASD + Space, arrows + Enter.', PX, 1094);
     return;
   }
   // Controls legend.
@@ -580,7 +590,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.font = theme.fonts.hud;
     ctx.fillStyle = m.accent;
     ctx.textAlign = 'left';
-    ctx.fillText(note, RX, 568);
+    ctx.fillText(note, RX, 600);
   }
 }
 

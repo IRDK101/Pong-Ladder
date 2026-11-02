@@ -40,8 +40,12 @@ interface Db {
 interface UserApi {
   isOwner(): Promise<boolean>;
   id(): Promise<string | null>;
+  me(): Promise<{ name: string; email: string | null }>;
   profiles(ids: string[]): Promise<Record<string, { name: string }>>;
 }
+
+/** What the player is, for the profile screen and what they may do. */
+export type Role = 'moderator' | 'player' | 'guest';
 type ClaudeApi = { use(name: string): Promise<unknown> };
 
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
@@ -131,6 +135,13 @@ export class Account {
   allSubmissions: PlayerSubmissions[] = [];
   /** A short message for the screens (e.g. a write that failed). */
   problem = '';
+  /** Who is signed in (read from the account each visit; never stored). */
+  me: { name: string; email: string | null } | null = null;
+  /** Account names for other players' ids (submitters, creators), as the account service gives them. */
+  names = new Map<string, string>();
+  /** Characters this player deleted (so other devices drop them too). */
+  private deletedOwn: { id: string; at: string }[] = [];
+  private ownLoaded = false;
 
   private db: Db | null = null;
   private user: UserApi | null = null;
@@ -161,8 +172,15 @@ export class Account {
     this.saveLocal();
     store.characters.decorate = (c) => this.decorate(c);
     store.characters.listen({
-      save: (c) => this.owner && this.uploadCharacter(c),
-      remove: (id) => this.owner && this.removeShared(id),
+      save: (c) => {
+        if (this.owner) this.uploadCharacter(c);
+        this.writeOwn();
+      },
+      remove: (id) => {
+        if (this.owner) this.removeShared(id);
+        this.deletedOwn = [...this.deletedOwn.filter((d) => d.id !== id), { id, at: new Date().toISOString() }].slice(-200);
+        this.writeOwn();
+      },
     });
   }
 
@@ -190,6 +208,8 @@ export class Account {
     try {
       this.owner = this.user ? await this.user.isOwner() : false;
       this.uid = this.user ? await this.user.id() : null;
+      const me = this.user ? await this.user.me() : null;
+      this.me = me ? { name: me.name || '', email: me.email ?? null } : null;
     } catch {
       /* treated as a guest */
     }
@@ -205,9 +225,16 @@ export class Account {
           list.push(c);
           if (typeof body?.creator === 'string') this.creators.set(c.id, body.creator);
         }
+        void this.nameIds([...this.creators.values()]);
         this.store.characters.setShared(list);
         if (!snap.metadata.fromCache && !this.sharedLoaded) {
           this.sharedLoaded = true;
+          // An older version copied the whole shared collection into players' browsers on every save.
+          // Those copies aren't theirs: drop them (the shared one is still there to play).
+          if (!this.owner) {
+            const sharedIds = new Set(list.map((c) => c.id));
+            for (const c of this.store.characters.localList()) if (sharedIds.has(c.id) && this.creators.get(c.id) !== this.uid) this.store.characters.removeQuiet(c.id);
+          }
           // The owner's characters saved only in this browser join the collection.
           if (this.owner) for (const c of needsUpload(this.store.characters.localList(), list)) this.uploadCharacter(c);
         }
@@ -240,6 +267,42 @@ export class Account {
       () => this.changed(),
     );
 
+    // The player's own characters, kept with their account so they follow them to any device.
+    db.doc(`data/users/${uid}/characters`).onSnapshot(
+      (snap) => {
+        if (snap.metadata.fromCache && !snap.exists) return;
+        const body = snap.exists ? snap.data() : undefined;
+        const items = (body?.items ?? {}) as Record<string, unknown>;
+        const deleted = Array.isArray(body?.deleted) ? (body!.deleted as { id: string; at: string }[]).filter((d) => d && typeof d.id === 'string') : [];
+        const local = new Map(this.store.characters.localList().map((c) => [c.id, c]));
+        let changed = false;
+        for (const raw of Object.values(items)) {
+          if (!validChar(raw)) continue;
+          const mine = local.get(raw.id);
+          if (!mine || (raw.updatedAt ?? '') > (mine.updatedAt ?? '')) {
+            this.store.characters.saveQuiet(raw);
+            changed = true;
+          }
+        }
+        for (const d of deleted) {
+          const mine = local.get(d.id);
+          if (mine && (mine.updatedAt ?? '') <= d.at && !(d.id in items)) {
+            this.store.characters.removeQuiet(d.id);
+            changed = true;
+          }
+        }
+        this.deletedOwn = deleted;
+        // First answer: anything this browser has that the account doesn't goes up.
+        if (!this.ownLoaded) {
+          this.ownLoaded = true;
+          const remote = new Set(Object.keys(items));
+          if (this.store.characters.localList().some((c) => !remote.has(c.id) || (c.updatedAt ?? '') > ((items[c.id] as Character | undefined)?.updatedAt ?? ''))) this.writeOwn();
+        }
+        if (changed) this.changed();
+      },
+      () => this.changed(),
+    );
+
     if (this.owner) {
       db.collection('submissions').onSnapshot(
         (snap) => {
@@ -264,21 +327,61 @@ export class Account {
   }
 
   private async nameSubmitters(): Promise<void> {
-    if (!this.user || !this.allSubmissions.length) return;
-    try {
-      const ps = await this.user.profiles(this.allSubmissions.map((s) => s.uid));
-      let any = false;
-      for (const s of this.allSubmissions) {
-        const n = ps[s.uid]?.name || '';
-        if (n && n !== s.name) {
-          s.name = n;
-          any = true;
-        }
+    await this.nameIds(this.allSubmissions.map((s) => s.uid));
+    let any = false;
+    for (const s of this.allSubmissions) {
+      const n = this.names.get(s.uid) || '';
+      if (n && n !== s.name) {
+        s.name = n;
+        any = true;
       }
-      if (any) this.changed();
+    }
+    if (any) this.changed();
+  }
+
+  /** Look up account names for ids not seen yet (only shown, never stored). */
+  private async nameIds(ids: string[]): Promise<void> {
+    const want = [...new Set(ids)].filter((id) => id && !this.names.has(id));
+    if (!this.user || !want.length) return;
+    try {
+      const ps = await this.user.profiles(want.slice(0, 64));
+      for (const id of want) this.names.set(id, ps[id]?.name || '');
+      this.changed();
     } catch {
       /* names are only a nicety */
     }
+  }
+
+  /** A player's account name for screens, or a fallback. */
+  nameOf(uid: string | undefined | null): string {
+    if (!uid) return 'the moderator';
+    if (uid === this.uid) return 'you';
+    return this.names.get(uid) || 'a player';
+  }
+
+  /** Moderator (the game's owner), signed-in player, or guest (offline / signed out). */
+  get role(): Role {
+    if (this.owner) return 'moderator';
+    return this.mode === 'online' ? 'player' : 'guest';
+  }
+
+  /** Save the player's own characters to their account. */
+  private writeOwn(): void {
+    if (this.mode !== 'online' || !this.db || !this.uid || !this.ownLoaded) return;
+    const db = this.db;
+    const path = `data/users/${this.uid}/characters`;
+    const items: Record<string, unknown> = {};
+    for (const c of this.store.characters.localList()) if (sharedDocId(c.id) && validChar(c)) items[c.id] = plain(c);
+    const body = { items, deleted: this.deletedOwn };
+    this.writer.queue(path, () => db.doc(path).set(plain(body)));
+  }
+
+  /** Remember the home screen's picks with the account. */
+  saveSelection(sel: { design: string; chars: (string | null)[]; mySide: 'A' | 'B' }): void {
+    const cur = this.progress.selection;
+    if (cur && JSON.stringify(cur) === JSON.stringify(sel)) return;
+    this.progress.selection = structuredClone(sel);
+    this.saveProgress();
   }
 
   // -------------------------------------------------------- characters
@@ -385,11 +488,12 @@ export class Account {
   }
 
   /** Owner: add a submitted character to the collection (in everyone's loot pool; its creator always has it). */
-  approve(uid: string, id: string): void {
+  approve(uid: string, id: string, edited?: Character): void {
     const sub = this.allSubmissions.find((s) => s.uid === uid)?.items[id];
     if (!this.owner || !this.db || !sub) return;
     const db = this.db;
-    let c = structuredClone(sub.character);
+    let c = structuredClone(edited ?? sub.character);
+    c.id = sub.character.id;
     // Never let a submission replace someone else's character.
     const clash = this.store.characters.isShared(c.id) && this.creators.get(c.id) !== uid;
     if (clash) c = { ...c, id: `${c.id}-${uid.slice(-6)}`.replace(/[^A-Za-z0-9_\-~:@+.]/g, '') };

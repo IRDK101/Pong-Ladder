@@ -23,6 +23,7 @@ import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
 import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
+import { ModeratorScreen, ProfileScreen } from './ui/profile';
 import { CharacterPicker, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
@@ -87,14 +88,37 @@ const selection = loadSelection(kv.getItem(SELECTION_KEY));
 const saveSelection = () => {
   kv.setItem(SELECTION_KEY, JSON.stringify(selection));
   menu.mySide = selection.mySide;
+  account.saveSelection(selection);
 };
+/** Picks saved with the account win over this browser's, once, when the account first answers. */
+let selectionAdopted = false;
+function adoptSelection(): void {
+  const remote = account.progress.selection;
+  if (selectionAdopted || account.mode !== 'online' || !remote) return;
+  selectionAdopted = true;
+  selection.design = remote.design as typeof selection.design;
+  selection.chars = [...remote.chars];
+  selection.mySide = remote.mySide;
+  kv.setItem(SELECTION_KEY, JSON.stringify(selection));
+  menu.restoreDesign(selection.design);
+  menu.mySide = selection.mySide;
+}
 menu.restoreDesign(selection.design);
 menu.mySide = selection.mySide;
 menu.playingAs = () => playingAsLabel(menu.config(baseCfg), selection, account.usable());
+menu.accountInfo = () => {
+  const who = account.me?.name || account.me?.email || '';
+  if (account.role === 'moderator') return { label: 'Moderator profile', hint: who ? `${who} · review, edit, approve` : 'review, edit, approve', alert: account.pendingCount() };
+  if (account.role === 'player') return { label: 'Your profile', hint: who ? `${who} · saved to your account` : 'saved to your account', alert: 0 };
+  return { label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 };
+};
 account.onChange(() => {
+  adoptSelection();
   if (screen !== 'panel') return;
   if (characters.isShowingList()) characters.showList();
   else if (collection.isShowing()) collection.show();
+  else if (profileScreen.isShowing()) profileScreen.show();
+  else if (moderator.isShowing()) moderator.show();
 });
 void account.connect();
 injectStyles(theme);
@@ -213,7 +237,14 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
 }
 
 const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
-const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu());
+const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu(), () => moderator.show('review'));
+const moderator = new ModeratorScreen(overlay, store, baseCfg, account, characters, () => toMenu());
+const profileScreen = new ProfileScreen(overlay, store, baseCfg, account, {
+  collection: () => collection.show(),
+  characters: () => characters.showList(),
+  moderator: () => moderator.show(),
+  back: () => toMenu(),
+});
 
 const menuSprites = new Map<string, ReturnType<typeof characterSprite>>();
 /** The title screen's progress card and picks. */
@@ -293,6 +324,8 @@ function runMenuAction(action: MenuAction): void {
       );
     case 'collection':
       return openPanel(() => collection.show());
+    case 'account':
+      return openPanel(() => profileScreen.show());
     case 'pickTable':
       return openPanel(() => tablePicker.show(cfg.design));
     case 'pickCharacters':

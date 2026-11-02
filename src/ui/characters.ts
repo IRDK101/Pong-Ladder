@@ -243,6 +243,18 @@ export class CharactersScreen {
     );
   }
 
+  /** Open the editor on any character with custom save / cancel (the moderator uses it to fix a submission before approving). */
+  editWith(c: Character, save: (c: Character) => void, cancel: () => void, remove: (() => void) | null = null): void {
+    new CharacterEditor(this.overlay, structuredClone(c), {
+      save: (done) => {
+        done.updatedAt = new Date().toISOString();
+        save(done);
+      },
+      cancel,
+      remove,
+    }).render();
+  }
+
   /** Where Back from a profile goes (the Collection opens profiles too). */
   backTo: (() => void) | null = null;
 

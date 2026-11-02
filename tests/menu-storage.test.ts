@@ -80,14 +80,14 @@ describe('pre-game menu', () => {
     const m = new Menu();
     m.focus('collection');
     const seen: string[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       seen.push(m.current);
       m.move(1, 0);
     }
-    expect(seen).toEqual(['collection', 'quick', 'draft', 'characters', 'profiles', 'help', 'backup']);
+    expect(seen).toEqual(['collection', 'quick', 'draft', 'characters', 'account', 'profiles', 'help', 'backup']);
     expect(m.current).toBe('collection'); // wrapped
     const actions = seen.map((id) => (m.focus(id as never), m.activate()));
-    expect(actions).toEqual(['collection', 'quick', 'draft', 'characters', 'profiles', 'help', 'backup']);
+    expect(actions).toEqual(['collection', 'quick', 'draft', 'characters', 'account', 'profiles', 'help', 'backup']);
     // Left from Quick match hops to the left column; the house-rules grid steps by column.
     m.focus('quick');
     m.move(0, -1);

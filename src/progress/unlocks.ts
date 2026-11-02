@@ -41,6 +41,8 @@ export interface PlayerProgress {
   seeded?: boolean;
   /** The character level whose rewards the player has seen (for the "new rewards" alert). */
   seen?: Record<string, number>;
+  /** The home screen's picks (table, characters, team), so they follow the player too. */
+  selection?: { design: string; chars: (string | null)[]; mySide: 'A' | 'B' };
 }
 
 export function emptyProgress(): PlayerProgress {
@@ -59,6 +61,9 @@ export function normalizeProgress(raw: unknown): PlayerProgress {
   p.opened = Array.isArray(r.opened) ? r.opened.filter((o) => o && (o.kind === 'table' || o.kind === 'character') && typeof o.id === 'string') : [];
   if (r.equipped && typeof r.equipped === 'object') p.equipped = { ...r.equipped };
   if (r.seeded) p.seeded = true;
+  if (r.selection && typeof r.selection === 'object' && typeof r.selection.design === 'string' && Array.isArray(r.selection.chars)) {
+    p.selection = { design: r.selection.design, chars: r.selection.chars.slice(0, 2).map((x) => (typeof x === 'string' ? x : null)), mySide: r.selection.mySide === 'B' ? 'B' : 'A' };
+  }
   if (r.seen && typeof r.seen === 'object') {
     p.seen = {};
     for (const [k, v] of Object.entries(r.seen)) if (typeof v === 'number') p.seen[k] = v;

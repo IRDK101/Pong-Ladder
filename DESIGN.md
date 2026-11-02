@@ -715,3 +715,18 @@ Decided with the owner (asked first):
 - **HUD on narrow screens:** the team panels shrink and their cup dots tighten, the status pill drops below them, and all HUD text is clamped to its panel.
 - **Rendering:** the three low-resolution scene layers are flattened before the single upscale to the screen.
 - **Checked:** every screen opens at 1280×720 and 390×760 with no console errors, and a full game plays through the end screens and the summary.
+
+## Profiles and the moderator
+
+- **Account:** a profile is the player's claude.ai account, which is their email login. The page can't read email addresses (only the `profile` scope is available), so the profile screen shows the account name and says progress is saved to the account.
+- **Saved with the account, private to each player** (under `data/users/<uid>/`):
+  - `progress`: level, XP, unlocks, boxes, character levels and cosmetics, the "seen" rewards, and the home-screen picks (`selection`).
+  - `characters`: `{items, deleted}`, the characters the player made. Merges keep the newest copy, and tombstones carry deletions to other devices. On the account's first answer, anything missing online is uploaded.
+- **Roles:** moderator (the owner), player (signed in) or guest (offline or signed out, browser only).
+- **Your profile / Moderator profile** (menu → More): role badge, account name, level, tiles (boxes, tables, characters unlocked, characters made, submissions, new rewards), and what's saved where.
+- **Moderator tools** (owner only; Collection's Submissions tab moved here):
+  - Review: approve, *edit then approve*, or turn down with a note.
+  - Collection: edit or remove any character, with who made it.
+  - What you can do: the moderator's and players' powers.
+- **Local players** (the old "Players" row) are only names for a shared keyboard.
+- **Fixed: shared characters copied into players' storage.** `Collection.save` and `remove` read the merged list, so every save copied the shared collection into the player's browser storage. They now use only the store's own records, and copies that already leaked are dropped for non-owners when the collection loads.

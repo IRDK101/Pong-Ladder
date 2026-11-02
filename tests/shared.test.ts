@@ -24,6 +24,16 @@ describe('shared character collection', () => {
     expect(store.characters.get(b.id)?.name).toBe('Bravo');
   });
 
+  it('saving one character never copies the shared collection into this browser', () => {
+    const store = new AppStore(memoryStore());
+    store.characters.setShared([named('Shared One'), named('Shared Two')]);
+    store.characters.save(named('Mine'));
+    expect(store.characters.localList().map((c) => c.name)).toEqual(['Mine']);
+    expect(store.characters.list()).toHaveLength(3);
+    store.characters.remove(store.characters.localList()[0].id);
+    expect(store.characters.localList()).toEqual([]);
+  });
+
   it('passes saves and deletes to listeners', () => {
     const store = new AppStore(memoryStore());
     const seen: string[] = [];

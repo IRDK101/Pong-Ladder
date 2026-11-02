@@ -103,9 +103,20 @@ export class Collection<T extends { id: string }> {
     return this.list().find((x) => x.id === id);
   }
 
+  /** Only what this store itself holds (subclasses may add records to list()). */
+  protected stored(): T[] {
+    try {
+      const raw = this.kv.getItem(this.key);
+      const v = raw ? JSON.parse(raw) : [];
+      return Array.isArray(v) ? (v as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Insert or replace by id (keeps list order for replacements). */
   save(item: T): void {
-    const all = this.list();
+    const all = this.stored();
     const i = all.findIndex((x) => x.id === item.id);
     if (i >= 0) all[i] = item;
     else all.push(item);
@@ -113,7 +124,7 @@ export class Collection<T extends { id: string }> {
   }
 
   remove(id: string): void {
-    this.kv.setItem(this.key, JSON.stringify(this.list().filter((x) => x.id !== id)));
+    this.kv.setItem(this.key, JSON.stringify(this.stored().filter((x) => x.id !== id)));
   }
 }
 
@@ -130,7 +141,7 @@ export class CharacterCollection extends Collection<Character> {
 
   /** Characters only this browser has saved. */
   localList(): Character[] {
-    return super.list();
+    return this.stored();
   }
 
   sharedList(): Character[] {
@@ -153,12 +164,21 @@ export class CharacterCollection extends Collection<Character> {
   override list(): Character[] {
     const out = new Map<string, Character>();
     for (const c of this.shared) out.set(c.id, c);
-    for (const c of super.list()) {
+    for (const c of this.stored()) {
       const s = out.get(c.id);
       if (!s || (c.updatedAt ?? '') >= (s.updatedAt ?? '')) out.set(c.id, c);
     }
     const all = [...out.values()];
     return this.decorate ? all.map(this.decorate) : all;
+  }
+
+  /** Save or delete without telling listeners (for copies arriving from the player's online account). */
+  saveQuiet(item: Character): void {
+    super.save(item);
+  }
+
+  removeQuiet(id: string): void {
+    super.remove(id);
   }
 
   override save(item: Character): void {
