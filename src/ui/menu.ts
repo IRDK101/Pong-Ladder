@@ -47,24 +47,18 @@ const CHOICES: Choice[] = [
   { label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
   { label: 'Game speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
   { label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
-  {
-    label: 'Your side',
-    values: [
-      { label: 'Team A', apply: (cfg) => void (cfg.players.mySide = 'A') },
-      { label: 'Team B', apply: (cfg) => void (cfg.players.mySide = 'B') },
-    ],
-  },
 ];
 
 const TABLE_ROW = CHOICES.findIndex((c) => c.label === 'Table');
-const SIDE_ROW = CHOICES.findIndex((c) => c.label === 'Your side');
 
-export type MenuAction = 'draft' | 'quick' | 'collection' | 'characters' | 'profiles' | 'help' | 'backup' | null;
+export type MenuAction = 'draft' | 'quick' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'profiles' | 'help' | 'backup' | null;
 
 export interface MenuRow {
   label: string;
   value?: string;
   action?: Exclude<MenuAction, null>;
+  /** An option row whose value comes from a picker screen (no ◀ ▶ cycling). */
+  picker?: boolean;
 }
 
 export class Menu {
@@ -72,6 +66,16 @@ export class Menu {
   private picks: number[] = CHOICES.map(() => 0);
   /** Tables this player hasn't unlocked can't be picked. */
   tableLocked: (venue: string) => boolean = () => false;
+  /** Which team the signed-in player is on in head-to-head (set in the character picker). */
+  mySide: 'A' | 'B' = 'A';
+  /** The "Playing as" row's value: the characters picked for the player's side. */
+  playingAs: () => string = () => 'Random';
+
+  /** Choose a table from the table picker. */
+  setDesign(id: string): void {
+    const i = DESIGN_ORDER.indexOf(id as (typeof DESIGN_ORDER)[number]);
+    if (i >= 0 && !this.tableLocked(id)) this.picks[TABLE_ROW] = i;
+  }
 
   /** The picked table, or the first unlocked one if the pick is locked. */
   private tablePick(): number {
@@ -87,7 +91,8 @@ export class Menu {
 
   rows(): MenuRow[] {
     return [
-      ...CHOICES.map((c, i) => ({ label: c.label, value: i === SIDE_ROW && this.picksMode() === 'coop' ? 'Team A (vs CPU)' : c.values[this.pickOf(i)].label })),
+      ...CHOICES.map((c, i) => ({ label: c.label, value: c.values[this.pickOf(i)].label })),
+      { label: 'Playing as', value: this.playingAs(), action: 'pickCharacters' as const, picker: true },
       { label: 'Draft match', action: 'draft' as const },
       { label: 'Quick match', action: 'quick' as const },
       { label: 'Collection', action: 'collection' as const },
@@ -117,6 +122,8 @@ export class Menu {
   activate(): MenuAction {
     const row = this.rows()[this.cursor];
     if (row.action) return row.action;
+    // The Table row opens the table picker (left/right still flips through tables).
+    if (this.cursor === TABLE_ROW) return 'pickTable';
     this.move(0, 1);
     return null;
   }
@@ -124,14 +131,8 @@ export class Menu {
   config(base: GameConfig = makeConfig()): GameConfig {
     const cfg = structuredClone(base);
     CHOICES.forEach((c, i) => c.values[this.pickOf(i)].apply(cfg));
-    if (cfg.players.mode === 'coop') cfg.players.mySide = 'A';
+    cfg.players.mySide = cfg.players.mode === 'coop' ? 'A' : this.mySide;
     return cfg;
-  }
-
-  private picksMode(): GameConfig['players']['mode'] {
-    const cfg = makeConfig();
-    CHOICES[0].values[this.picks[0]].apply(cfg);
-    return cfg.players.mode;
   }
 }
 
@@ -142,7 +143,7 @@ const ACTION_X = 588;
 const ACTION_W = 486;
 const TOP = 232;
 const ROW = 34;
-const OPTION_ROWS = CHOICES.length;
+const OPTION_ROWS = CHOICES.length + 1;
 const PLAY_ROWS = 2;
 
 /** The menu is laid out on a 1131×660 design and scaled (uniformly, centered) to the screen. */
@@ -269,7 +270,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
       ctx.fillText(row.label, r.x + 14, mid);
       ctx.textAlign = 'right';
       ctx.fillStyle = on ? ink : c.text;
-      ctx.fillText(on ? `◀  ${row.value}  ▶` : row.value, r.x + r.w - 14, mid);
+      ctx.fillText(on ? (row.picker ? `${row.value}  ▸ pick` : `◀  ${row.value}  ▶`) : row.value, r.x + r.w - 14, mid);
     } else {
       ctx.textAlign = 'left';
       ctx.font = play ? theme.fonts.title : theme.fonts.bar;
@@ -279,7 +280,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, v: View, menu
         ctx.font = theme.fonts.label;
         ctx.fillStyle = on ? ink : c.textDim;
         ctx.textAlign = 'right';
-        ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'random characters, straight in', r.x + r.w - 14, mid);
+        ctx.fillText(row.action === 'draft' ? 'pick profiles, draft characters' : 'your picks, straight in', r.x + r.w - 14, mid);
       }
     }
   });
@@ -353,7 +354,7 @@ const HELP: [string, string][] = [
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
-  ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. Your side (menu) picks which team earns XP.'],
+  ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Playing as sets your team, which earns the XP.'],
 ];
 
 /** Split text into lines no wider than maxWidth with the current font. */

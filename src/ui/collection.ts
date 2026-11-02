@@ -28,7 +28,7 @@ function silhouette(s: Sprite): Sprite {
 
 const tableShots = new Map<TableDesign, string>();
 /** A picture of a table design (played in the middle of the room), rendered once from the game's own camera. */
-function tableShot(design: TableDesign): string {
+export function tableShot(design: TableDesign): string {
   const hit = tableShots.get(design);
   if (hit) return hit;
   const cfg = makeConfig({ venue: 'saints', design, formation: 'tree' });

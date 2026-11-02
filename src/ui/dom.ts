@@ -171,6 +171,21 @@ export function injectStyles(theme: Theme): void {
   @keyframes burst-spin { to { transform: rotate(360deg); } }
   @keyframes burst-fade { from { opacity: 0; } to { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { #ui .loot-box.ready, #ui .loot-box.ready b, #ui .loot-reveal, #ui .loot-reveal .reveal-art, #ui .loot-reveal .burst { animation: none; } }
+  #ui .pickgrid { display: grid; gap: 10px; }
+  #ui .pickgrid.tables { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  #ui .pickgrid.chars { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+  #ui .pickcard { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px; min-width: 0; background: ${c.button}; }
+  #ui .pickcard .name, #ui .pickcard .pickname { font-size: 13px; font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #ui .pickcard.on { border-color: ${c.gold}; background: #4a3f24; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
+  #ui .pickcard.locked { opacity: 0.5; }
+  #ui .pickcard.locked .table-shot { filter: grayscale(1) brightness(0.45); }
+  #ui .pickcard:hover:not(:disabled) { border-color: ${c.gold}; }
+  #ui .slots { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+  #ui .slot { display: flex; gap: 10px; align-items: center; min-width: 190px; padding: 6px 12px; text-align: left; }
+  #ui .slot.on { border-color: ${c.gold}; box-shadow: 0 0 0 2px ${c.gold}; background: #4a3f24; color: ${c.text}; font-weight: normal; }
+  #ui .slot-random { display: grid; place-items: center; width: 34px; height: 46px; border: 2px dashed ${c.uiEdge}; color: ${c.gold}; font-weight: bold; font-size: 20px; }
+  #ui .slot-random.big { width: 48px; height: 66px; font-size: 28px; }
+  #ui .side-toggle { display: flex; flex-direction: column; gap: 4px; justify-content: center; margin-left: auto; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));

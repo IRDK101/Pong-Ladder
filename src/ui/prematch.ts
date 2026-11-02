@@ -62,7 +62,7 @@ export function rosterFrom(
  * from its own pool (a player's unlocked characters; the CPU can use any).
  * Generic players fill in only when a pool runs out.
  */
-export function quickRoster(pools: Character[] | Record<TeamId, Character[]>, teamSize: 1 | 2, rng: () => number = Math.random): Roster {
+export function quickRoster(pools: Character[] | Record<TeamId, Character[]>, teamSize: 1 | 2, rng: () => number = Math.random, fixed: Partial<Record<PositionKey, Character>> = {}): Roster {
   const by = Array.isArray(pools) ? { A: pools, B: pools } : pools;
   const shuffled = (list: Character[]) => {
     const pool = list.filter((c) => validateCharacter(c).length === 0);
@@ -73,11 +73,16 @@ export function quickRoster(pools: Character[] | Record<TeamId, Character[]>, te
     return pool;
   };
   const roster = genericRoster(teamSize);
-  const used = new Set<string>();
+  const used = new Set<string>(Object.values(fixed).map((c) => c!.id));
   const keys: Record<TeamId, PositionKey[]> = teamSize === 1 ? { A: ['A-left'], B: ['B-left'] } : { A: ['A-left', 'A-right'], B: ['B-left', 'B-right'] };
   for (const t of ['A', 'B'] as TeamId[]) {
     const pool = shuffled(by[t]);
     for (const k of keys[t]) {
+      const pinned = fixed[k];
+      if (pinned) {
+        roster[k] = participantFrom(pinned, null);
+        continue;
+      }
       const c = pool.find((x) => !used.has(x.id));
       if (!c) continue;
       used.add(c.id);

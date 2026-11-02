@@ -661,3 +661,14 @@ Decided with the owner (asked first):
   - The cartoon characters on the orange table: the paint is kept and the figures are left off.
   - The beer brand's name on the cans: the wordmark is drawn as plain slanted bars.
   - The players' names signed on the gummy table.
+
+## Home-screen pickers
+
+- **Table row:** Enter or a click opens a grid of every table design, with locked ones greyed out. Left and right still flip through the unlocked tables.
+- **Playing as row** (this replaces the old Your side row):
+  - It opens a character picker with one spot per position on the player's side (1 in 1v1, 2 in 2v2), plus Random.
+  - Quick matches put those characters on the player's side. Picks that are missing or locked count as Random.
+  - In head-to-head, the same screen picks the player's team, which earns their XP.
+  - With more than 8 characters, a search box appears.
+- **Saving:** the picks are saved in this browser (`dartmouth-pong/selection/v1`).
+- **Keyboard:** when focus is on an HTML screen, the game no longer swallows Enter, Space or the arrow keys, so buttons and grids work from the keyboard.

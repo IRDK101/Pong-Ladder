@@ -17,6 +17,8 @@ export class Keyboard {
     target.addEventListener('keydown', (e) => {
       // Typing in a text box (a character's name, a backup) is not game input: leave the key alone.
       if (isTyping(e.target)) return;
+      // Nor are keys on the HTML screens' buttons (Enter / Space press them, arrows move around grids).
+      if (inScreen(e.target)) return;
       if (bound.has(e.code)) e.preventDefault();
       if (!e.repeat) {
         this.pressed.add(e.code);
@@ -57,6 +59,12 @@ export class Keyboard {
     this.pressed.clear();
     this.queue = [];
   }
+}
+
+/** True for elements on the HTML screens over the canvas (#ui). */
+export function inScreen(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  return !!el && typeof el.closest === 'function' && !!el.closest('#ui');
 }
 
 /** True for text fields, text areas, selects and editable content, where keys must reach the page. */

@@ -20,6 +20,7 @@ import { ProfilesScreen } from './ui/profiles';
 import { PrematchFlow, quickRoster } from './ui/prematch';
 import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
+import { CharacterPicker, loadSelection, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -78,6 +79,15 @@ const menu = new Menu();
 // The player's account: level, loot boxes, unlocks, and the shared character collection.
 const account = new Account(store, baseCfg, kv);
 menu.tableLocked = (v) => !account.tableUnlocked(v);
+// The player's picks (table, characters, team), remembered in this browser.
+const selection = loadSelection(kv.getItem(SELECTION_KEY));
+const saveSelection = () => {
+  kv.setItem(SELECTION_KEY, JSON.stringify(selection));
+  menu.mySide = selection.mySide;
+};
+menu.setDesign(selection.design);
+menu.mySide = selection.mySide;
+menu.playingAs = () => playingAsLabel(menu.config(baseCfg), selection, account.usable());
 account.onChange(() => {
   if (screen !== 'panel') return;
   if (characters.isShowingList()) characters.showList();
@@ -193,12 +203,26 @@ function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
 const characters = new CharactersScreen(overlay, store, baseCfg, account, () => toMenu());
 const collection = new CollectionScreen(overlay, store, baseCfg, account, characters, () => toMenu());
 
-/** Quick match: the player's unlocked characters on their side; the CPU can use any. */
+/** Quick match: the player's picks (or random unlocked characters) on their side; the CPU can use any. */
 function quickFor(cfg: GameConfig): Roster {
   const mine = account.usable();
-  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize);
-  return quickRoster(mine, cfg.teamSize);
+  const pins = pinnedFor(cfg, selection, mine);
+  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize, Math.random, pins);
+  return quickRoster(mine, cfg.teamSize, Math.random, pins);
 }
+
+const tablePicker = new TablePicker(
+  overlay,
+  account,
+  (d) => {
+    menu.setDesign(d);
+    selection.design = d;
+    saveSelection();
+    toMenu();
+  },
+  () => toMenu(),
+);
+const characterPicker = new CharacterPicker(overlay, () => menu.config(baseCfg), account, selection, saveSelection, () => toMenu());
 const profiles = new ProfilesScreen(overlay, store, baseCfg, () => toMenu());
 
 function runMenuAction(action: MenuAction): void {
@@ -218,6 +242,10 @@ function runMenuAction(action: MenuAction): void {
       );
     case 'collection':
       return openPanel(() => collection.show());
+    case 'pickTable':
+      return openPanel(() => tablePicker.show(cfg.design));
+    case 'pickCharacters':
+      return openPanel(() => characterPicker.show());
     case 'characters':
       return openPanel(() => characters.showList());
     case 'profiles':
@@ -267,8 +295,14 @@ function frame(dt: number): void {
         .find(Boolean);
       if (role === 'up') menu.move(-1, 0);
       else if (role === 'down') menu.move(1, 0);
-      else if (role === 'left') menu.move(0, -1);
-      else if (role === 'right') menu.move(0, 1);
+      else if (role === 'left' || role === 'right') {
+        menu.move(0, role === 'left' ? -1 : 1);
+        const d = menu.config(baseCfg).design;
+        if (d !== selection.design) {
+          selection.design = d;
+          saveSelection();
+        }
+      }
       else if (role === 'hit') runMenuAction(menu.activate());
     }
     if (screen !== 'menu') return;
