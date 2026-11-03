@@ -166,6 +166,8 @@ export interface HitTuning {
   reach: { comfortable: number; max: number };
   /** Spin a player adds by holding a direction as they hit (0–1, before the Spin stat). */
   spin: { top: number; back: number; side: number };
+  /** Paddle spin vs ball spin (see spinClash): push (m) per unit of unanswered spin, how much perfect timing softens it, and how much matching spin carries over. */
+  clash: { depthPush: number; sidePush: number; timingRelief: number; carry: number };
   /** How fast a held aim key moves the crosshair (full range per second, real time). */
   aimSpeed: number;
   /** Server toss: launch speed (m/s) and start height above the table (m). */
@@ -230,6 +232,7 @@ export const defaultConfig: GameConfig = {
     rallyPace: { startAfter: 2, perHit: 0.035, min: 0.72 },
     reach: { comfortable: 0.75, max: 1.7 },
     spin: { top: 0.85, back: 0.8, side: 0.95 },
+    clash: { depthPush: 0.2, sidePush: 0.15, timingRelief: 0.35, carry: 0.3 },
     aimSpeed: 1.6,
     tossSpeed: 2.4,
     tossHeight: 0.1,

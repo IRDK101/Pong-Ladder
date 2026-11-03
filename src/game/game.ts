@@ -12,7 +12,7 @@ import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
 import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, getStyle, type ShotStyle } from '../core/styles';
 import { diagonalOf, laneOf, quarterOf, quarterRect } from '../core/table';
 import { otherTeam, playerKey, type Cup, type PlayerId, type Side, type TeamId } from '../core/types';
-import { apexOffset, computeHit, computeServe, SPIN_LABELS, timingLabel, timingQuality, timingWindow, type Aim, type AimSpec, type SpinChoice, type SwingContext } from './shot';
+import { apexOffset, computeHit, computeServe, SPIN_LABELS, spinOf, timingLabel, timingQuality, timingWindow, type Aim, type AimSpec, type IncomingSpin, type SpinChoice, type SwingContext } from './shot';
 
 /** Who is playing a position this game: a character (or a generic player) and the human behind it. */
 export interface Participant {
@@ -185,6 +185,8 @@ export class Game {
   private tossSwung = false;
   /** Power stat of whoever hit the ball in play (faster balls are harder to return). */
   private incomingPower: number | undefined;
+  /** Spin the last shot put on the ball (the receiver's return clashes with it). */
+  incomingSpin: IncomingSpin | null = null;
   /** Listeners for engine calls (HUD, sound later, stats). */
   onCall: ((c: Call) => void) | null = null;
 
@@ -420,6 +422,9 @@ export class Game {
         this.aimLock[team] = false;
         continue;
       }
+      // Before the toss the server always aims freely (a lock from the last point never carries over).
+      const st = this.engine.peek();
+      if (st.phase === 'awaitServe' && !this.tossing) this.aimLock[team] = false;
       if (this.timingCue(team)) this.aimLock[team] = true;
       if (this.aimLock[team]) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
@@ -434,7 +439,10 @@ export class Game {
   /** The crosshair is locked for the current ball (see moveAim). */
   private aimLock: Record<TeamId, boolean> = { A: false, B: false };
   aimLocked(team: TeamId): boolean {
-    return this.aimLock[team] || this.timingCue(team) !== null;
+    if (this.timingCue(team)) return true;
+    const st = this.engine.peek();
+    if (st.phase === 'awaitServe' && !this.tossing) return false;
+    return this.aimLock[team] && this.aiming(team);
   }
 
   /** Game time each player last struck the ball, keyed "A-left" etc. (drives the hit jolt). */
@@ -657,6 +665,7 @@ export class Game {
     const t = this.aimTarget(server.team, aim, style);
     const spec: AimSpec = { x: t.x, y: t.y, forward: server.team === 'A' ? 1 : -1, lateness, spin };
     const shot = computeServe(this.cfg, style, from, spec, q, this.rng, stats);
+    this.incomingSpin = spinOf(this.cfg, shot.fx);
     this.tossing = false;
     this.resetBallTracking();
     this.incomingPower = stats.power;
@@ -685,8 +694,10 @@ export class Game {
     const from = { ...this.ball.pos };
     const stats = this.statsOf(player);
     const t = this.aimTarget(team, this.aim[team], style);
-    const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin };
+    const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin, incoming: this.incomingSpin };
     const shot = computeHit(this.cfg, pacedStyle(this.cfg, style, rally.hits), from, spec, q, this.rng, stats);
+    if (shot.clash && this.feedback) this.feedback.label += clashNote(shot.clash, this.incomingSpin);
+    this.incomingSpin = spinOf(this.cfg, shot.fx);
     this.resetBallTracking();
     this.incomingPower = stats.power;
     // Launch first: if the engine ends the rally on the hit (a low hit), the ball goes straight back to the server.
@@ -749,6 +760,16 @@ export class Game {
 }
 
 /** "Perfect · Topspin" when a hit connects with spin. */
+/** What the incoming spin did to a return, for the hit feedback (empty when it didn't matter). */
+function clashNote(c: { dx: number; dy: number; countered: boolean }, inc: IncomingSpin | null): string {
+  if (c.countered) return ' · countered';
+  if (!inc) return '';
+  const depth = Math.abs(c.dx);
+  const side = Math.abs(c.dy);
+  if (Math.max(depth, side) < 0.05) return '';
+  return depth >= side ? (inc.top > 0 ? ' · topspin pushed it long' : ' · backspin dropped it short') : ' · sidespin pulled it wide';
+}
+
 function withSpin(label: string, q: number | null, spin: SpinChoice | null): string {
   return q !== null && spin ? `${label} · ${SPIN_LABELS[spin.type]}` : label;
 }

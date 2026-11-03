@@ -832,3 +832,16 @@ Decided with the owner: run the game on its own site, so any approved profile ge
 
 - **Crosshair, revised:** it moves only while its team is aiming: serving (before the toss), or with the ball coming to it (after the other side's hit, before the timing rings). At every other time it stays exactly where it was: after your own shot, through the other side's turn and during penalty picks. It's then still in that spot for your next serve or return. Once the rings appear it locks for the rest of that ball, even after a whiff. Its setting is relative to the area being aimed at (the serve quarter, or the other side of the table), so the same setting can point at a different spot when switching between serving and returning.
 - **Spin balance:** sidespin is stronger (`spin.side` 0.85 to 0.95, `sideCurve` 2.0 to 2.3, `sideKick` 0.55 to 0.65: about 29% more curve in the air and 32% more kick off the bounce). Topspin is a little weaker (`spin.top` 0.9 to 0.85).
+
+## Serve lock fix, and paddle spin vs ball spin
+
+Decided with the owner: the serve cursor locks at the toss, and the clash is realistic and noticeable.
+
+- **Serve lock:** before the toss the server always aims freely. A lock left over from the last point could stay on while the same team kept serving; it's now cleared, and the marker never flashes before the toss. The toss locks it until the serve is struck. A 16,500-frame CPU simulation found no locked frames before a toss.
+- **Spin clash** (`spinClash` in `game/shot.ts`): each shot's spin is remembered as it's struck (`Game.incomingSpin`), because the ball's own spin is used up on the bounce before the return.
+  - **Push:** spin left unanswered pushes the return: topspin long, backspin short, sidespin the way the ball curved. That's `clash.depthPush` 0.2 m and `sidePush` 0.15 m per unit of spin, about one to one and a half cups for heavy spin.
+  - **Softening:** good timing softens it (`timingRelief` 0.35 at perfect), and so does a high Spin stat (divided by the square root of the spin stat effect).
+  - **Opposite spin** cancels the push in proportion to how much spin you put on.
+  - **Same spin** keeps the push, but carries 30% of the incoming spin into yours (`carry`).
+  - **Feedback:** hit feedback adds "countered", "topspin pushed it long", "backspin dropped it short" or "sidespin pulled it wide".
+  - **CPU:** counters heavy spin some of the time (`counterRate`: Easy 15%, Medium 45%, Hard 75%).

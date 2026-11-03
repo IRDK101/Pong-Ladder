@@ -25,6 +25,8 @@ export interface CpuLevel {
   cupRate: number;
   /** Chance it adds spin to a hit or serve. */
   spinRate: number;
+  /** Chance it reads heavy incoming spin and hits the opposite spin to cancel it. */
+  counterRate: number;
   /** Chance of using a non-default style on a hit. */
   styleMix: number;
   /** Game seconds it waits before tossing a serve. */
@@ -32,9 +34,9 @@ export interface CpuLevel {
 }
 
 export const CPU_LEVELS: Record<Difficulty, CpuLevel> = {
-  easy: { timingSigma: 0.09, saveSigma: 0.11, whiff: 0.07, aimJitter: 0.2, cupRate: 0.4, spinRate: 0.05, styleMix: 0.15, serveDelay: 0.9 },
-  medium: { timingSigma: 0.05, saveSigma: 0.065, whiff: 0.025, aimJitter: 0.1, cupRate: 0.7, spinRate: 0.2, styleMix: 0.3, serveDelay: 0.6 },
-  hard: { timingSigma: 0.025, saveSigma: 0.035, whiff: 0.006, aimJitter: 0.04, cupRate: 0.9, spinRate: 0.35, styleMix: 0.4, serveDelay: 0.4 },
+  easy: { timingSigma: 0.09, saveSigma: 0.11, whiff: 0.07, aimJitter: 0.2, cupRate: 0.4, spinRate: 0.05, counterRate: 0.15, styleMix: 0.15, serveDelay: 0.9 },
+  medium: { timingSigma: 0.05, saveSigma: 0.065, whiff: 0.025, aimJitter: 0.1, cupRate: 0.7, spinRate: 0.2, counterRate: 0.45, styleMix: 0.3, serveDelay: 0.6 },
+  hard: { timingSigma: 0.025, saveSigma: 0.035, whiff: 0.006, aimJitter: 0.04, cupRate: 0.9, spinRate: 0.35, counterRate: 0.75, styleMix: 0.4, serveDelay: 0.4 },
 };
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
@@ -87,7 +89,13 @@ export class CpuController {
     const point = { x: goal.x + this.gauss() * L.aimJitter, y: goal.y + this.gauss() * L.aimJitter };
     const aim = game.aimToward(this.team, point, styleNow);
     const spins: SpinKey[] = ['top', 'back', 'left', 'right'];
-    const spin = this.rng() < L.spinRate ? spins[Math.floor(this.rng() * spins.length)] : null;
+    let spin: SpinKey | null = this.rng() < L.spinRate ? spins[Math.floor(this.rng() * spins.length)] : null;
+    // Returning a spinning ball: sometimes counter it (the opposite spin cancels its push).
+    const inc = game.incomingSpin;
+    if (!serving && inc && this.rng() < L.counterRate) {
+      if (Math.abs(inc.top) >= Math.abs(inc.side) && Math.abs(inc.top) > 0.2) spin = inc.top > 0 ? 'back' : 'top';
+      else if (Math.abs(inc.side) > 0.2) spin = inc.side > 0 ? 'left' : 'right';
+    }
     const style: 0 | 1 | 2 = serving || this.rng() > L.styleMix ? 0 : this.rng() < 0.5 ? 1 : 2;
     return { key, swingAt, aim, style, spin };
   }

@@ -97,6 +97,8 @@ export interface Shot {
   target: { x: number; y: number };
   /** Spin / bounce behaviour to launch the ball with. */
   fx: BallEffects;
+  /** How the incoming spin moved this shot (returns only). */
+  clash?: ReturnType<typeof spinClash>;
 }
 
 /**
@@ -131,12 +133,12 @@ export const SPIN_LABELS: Record<SpinChoice['type'], string> = { top: 'Topspin',
  * Spin effects of a shot for a player's Spin stat: the player's chosen spin
  * if any, otherwise the style's own. `dir` picks the side for a style's sidespin.
  */
-export function spinEffects(cfg: GameConfig, style: ShotStyle, stats: Stats, dir: 1 | -1 = 1, choice: SpinChoice | null = null): BallEffects {
+export function spinEffects(cfg: GameConfig, style: ShotStyle, stats: Stats, dir: 1 | -1 = 1, choice: SpinChoice | null = null, boost = 0): BallEffects {
   const ph = cfg.physics;
   const type = choice ? choice.type : style.spin.type;
   const base = choice ? cfg.hitting.spin[choice.type] : style.spin.amount;
   if (choice) dir = choice.dir;
-  const amt = base * statEffect(cfg, 'spinAmount', stats.spin);
+  const amt = base * statEffect(cfg, 'spinAmount', stats.spin) + boost;
   const fx = { ...NO_EFFECTS, restitutionScale: style.bounce.restitutionScale, frictionScale: style.bounce.frictionScale };
   if (type === 'top') fx.topspin = Math.min(1, amt);
   else if (type === 'back') fx.topspin = -Math.min(1, amt);
@@ -158,6 +160,55 @@ export interface AimSpec {
   /** Swing offset from the ideal moment, as a fraction of the window (-1 early … +1 late). */
   lateness?: number;
   spin?: SpinChoice | null;
+  /** Spin on the ball coming in (see spinClash). */
+  incoming?: IncomingSpin | null;
+}
+
+/**
+ * Spin on an incoming ball, as it was struck: `top` from -1 (heavy backspin)
+ * to +1 (heavy topspin), and `side` signed by the world-y way it curved.
+ */
+export interface IncomingSpin {
+  top: number;
+  side: number;
+}
+
+/** The spin a shot put on the ball, for the player who returns it. */
+export function spinOf(cfg: GameConfig, fx: BallEffects): IncomingSpin {
+  return { top: fx.topspin, side: cfg.physics.sideCurve ? fx.curve / cfg.physics.sideCurve : 0 };
+}
+
+/**
+ * Paddle spin against ball spin. Spin left unanswered pushes the return off
+ * target: topspin sends it long, backspin drops it short, sidespin pulls it
+ * the way the ball was curving. Hitting the opposite spin cancels the push (in
+ * proportion to how much spin you put on); hitting the same spin keeps the push
+ * but carries some of the incoming spin into your shot. Good timing and a high
+ * Spin stat soften the push.
+ */
+export function spinClash(cfg: GameConfig, inc: IncomingSpin | null | undefined, choice: SpinChoice | null | undefined, q: number, stats: Stats, forward: 1 | -1): { dx: number; dy: number; boost: number; countered: boolean } {
+  const c = cfg.hitting.clash;
+  if (!inc || (Math.abs(inc.top) < 0.05 && Math.abs(inc.side) < 0.05)) return { dx: 0, dy: 0, boost: 0, countered: false };
+  const mine = choice ? cfg.hitting.spin[choice.type] * statEffect(cfg, 'spinAmount', stats.spin) : 0;
+  const myTop = choice?.type === 'top' ? mine : choice?.type === 'back' ? -mine : 0;
+  const mySide = choice?.type === 'side' ? mine * choice.dir : 0;
+  const resist = (1 - c.timingRelief * Math.max(0, Math.min(1, q))) / Math.sqrt(statEffect(cfg, 'spinAmount', stats.spin));
+  const part = (incoming: number, own: number) => {
+    if (Math.abs(incoming) < 0.05) return { left: 0, boost: 0, cancel: 0 };
+    if (own * incoming < 0) {
+      const cancel = Math.min(1, Math.abs(own) / Math.abs(incoming));
+      return { left: incoming * (1 - cancel), boost: 0, cancel };
+    }
+    return { left: incoming, boost: own ? c.carry * Math.abs(incoming) : 0, cancel: 0 };
+  };
+  const t = part(inc.top, myTop);
+  const s = part(inc.side, mySide);
+  return {
+    dx: t.left * c.depthPush * resist * forward,
+    dy: s.left * c.sidePush * resist,
+    boost: myTop ? t.boost : mySide ? s.boost : 0,
+    countered: Math.max(t.cancel * Math.abs(inc.top), s.cancel * Math.abs(inc.side)) > 0.3,
+  };
 }
 
 /**
@@ -173,11 +224,12 @@ export function computeHit(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: A
   const radius =
     baseScatter(cfg, q) * style.scatterScale * statEffect(cfg, 'accuracyScatter', stats.accuracy) * statEffect(cfg, 'powerScatter', stats.power);
   const { dx, dy } = scatter(radius, rng);
-  const target = { x: aim.x + dx + timingDrift(cfg, aim), y: aim.y + dy };
-  const fx = spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null);
+  const clash = spinClash(cfg, aim.incoming, aim.spin, q, stats, aim.forward);
+  const target = { x: aim.x + dx + timingDrift(cfg, aim) + clash.dx, y: aim.y + dy + clash.dy };
+  const fx = spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null, clash.boost);
   const peak = shotPeak(cfg, style, q, rng) * statEffect(cfg, 'powerPeak', stats.power);
   const vel = solveArc(from, target, peak, cfg.physics.gravity, fx.curve, aim.z ?? 0);
-  return { vel, peak: predictPeak(from, vel, cfg.physics.gravity), target, fx };
+  return { vel, peak: predictPeak(from, vel, cfg.physics.gravity), target, fx, clash };
 }
 
 export function computeServe(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: AimSpec, q: number, rng: () => number, stats: Stats = NEUTRAL_STATS): Shot {

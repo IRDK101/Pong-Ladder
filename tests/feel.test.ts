@@ -123,3 +123,65 @@ describe('the crosshair moves only while aiming', () => {
     if (!g.timingCue(other)) expect(g.aim[other]).not.toEqual(recvBefore);
   });
 });
+
+import { spinClash } from '../src/game/shot';
+
+describe('serve aiming', () => {
+  it('the server always aims freely before the toss, even if a lock was left from the last point', () => {
+    const g = new Game(makeConfig({ teamSize: 1 }), () => 0.5, genericRoster(1));
+    const server = g.engine.peek().server.team;
+    (g as unknown as { aimLock: Record<string, boolean> }).aimLock[server] = true; // left over from a point the server's team kept serving through
+    expect(g.aimLocked(server)).toBe(false);
+    const before = { ...g.aim[server] };
+    g.update(1 / 60, { A: { ...idleInput(), left: true }, B: { ...idleInput(), left: true } });
+    expect(g.aim[server]).not.toEqual(before);
+    // The toss locks it.
+    g.update(1 / 60, { A: { ...idleInput(), hit: server === 'A' }, B: { ...idleInput(), hit: server === 'B' } });
+    expect(g.aimLocked(server)).toBe(true);
+    const tossed = { ...g.aim[server] };
+    g.update(1 / 60, { A: { ...idleInput(), left: true }, B: { ...idleInput(), left: true } });
+    expect(g.aim[server]).toEqual(tossed);
+  });
+});
+
+describe('paddle spin vs ball spin', () => {
+  const cfg = makeConfig();
+  const stats = { accuracy: 5, power: 5, spin: 5, serve: 5, saves: 5 };
+  it('unanswered spin pushes the return: topspin long, backspin short, sidespin the way it curved', () => {
+    expect(spinClash(cfg, { top: 0.85, side: 0 }, null, 0.8, stats, 1).dx).toBeGreaterThan(0.08);
+    expect(spinClash(cfg, { top: 0.85, side: 0 }, null, 0.8, stats, -1).dx).toBeLessThan(-0.08);
+    expect(spinClash(cfg, { top: -0.8, side: 0 }, null, 0.8, stats, 1).dx).toBeLessThan(-0.08);
+    expect(spinClash(cfg, { top: 0, side: 0.95 }, null, 0.8, stats, 1).dy).toBeGreaterThan(0.06);
+    // About a cup or two (a cup is 0.095 m) for heavy spin.
+    const heavy = spinClash(cfg, { top: 0.85, side: 0 }, null, 0.5, stats, 1).dx;
+    expect(heavy).toBeGreaterThan(0.095);
+    expect(heavy).toBeLessThan(0.2);
+  });
+  it('the opposite spin cancels it; the same spin keeps the push but carries spin over', () => {
+    const pushed = spinClash(cfg, { top: 0.85, side: 0 }, null, 0.8, stats, 1);
+    const countered = spinClash(cfg, { top: 0.85, side: 0 }, { type: 'back', dir: 1 }, 0.8, stats, 1);
+    expect(Math.abs(countered.dx)).toBeLessThan(Math.abs(pushed.dx) * 0.25);
+    expect(countered.countered).toBe(true);
+    const same = spinClash(cfg, { top: 0.85, side: 0 }, { type: 'top', dir: 1 }, 0.8, stats, 1);
+    expect(same.dx).toBeCloseTo(pushed.dx);
+    expect(same.boost).toBeGreaterThan(0.2);
+    const side = spinClash(cfg, { top: 0, side: 0.95 }, { type: 'side', dir: -1 }, 0.8, stats, 1);
+    expect(Math.abs(side.dy)).toBeLessThan(0.01);
+  });
+  it('better timing and a higher Spin stat soften the push; no spin, no push', () => {
+    const at = (q: number, spin: number) => spinClash(cfg, { top: 0.85, side: 0 }, null, q, { ...stats, spin }, 1).dx;
+    expect(at(1, 5)).toBeLessThan(at(0.4, 5));
+    expect(at(0.8, 9)).toBeLessThan(at(0.8, 2));
+    expect(spinClash(cfg, { top: 0, side: 0 }, null, 0.8, stats, 1).dx).toBe(0);
+  });
+  it('a real rally carries spin from one shot to the next return', () => {
+    const g = new Game(makeConfig({ teamSize: 1 }), () => 0.5, genericRoster(1));
+    const s = g.engine.peek().server.team;
+    const fwd = { ...idleInput(), up: true };
+    g.update(1 / 60, { A: { ...idleInput(), hit: s === 'A' }, B: { ...idleInput(), hit: s === 'B' } });
+    for (let i = 0; i < 600 && Math.abs(g.timingCue(s)?.offset ?? 1) > 0.01; i++) g.update(1 / 60, { A: s === 'A' ? fwd : idleInput(), B: s === 'B' ? fwd : idleInput() });
+    g.update(1 / 60, { A: { ...fwd, hit: s === 'A' }, B: { ...fwd, hit: s === 'B' } });
+    const inc = g.incomingSpin!;
+    expect(Math.max(Math.abs(inc.top), Math.abs(inc.side))).toBeGreaterThan(0.3);
+  });
+});
