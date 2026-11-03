@@ -20,9 +20,25 @@ const set =
   (cfg: GameConfig) => {
     cfg[key] = value;
   };
-const speed = (timeScale: number) => (cfg: GameConfig) => {
+/** Speed / difficulty levels: faster play and smaller timing windows (saves included). */
+export const LEVELS = [
+  { label: 'Normal', timeScale: 0.62, window: 1 },
+  { label: 'Quick', timeScale: 0.78, window: 1 },
+  { label: 'Fast', timeScale: 0.88, window: 0.88 },
+  { label: 'Pro', timeScale: 0.98, window: 0.76 },
+  { label: 'Masters', timeScale: 1.08, window: 0.64 },
+  { label: 'Relaxed', timeScale: 0.46, window: 1.1 },
+] as const;
+const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
+  cfg.hitting.windowScale = window;
 };
+/** The level a config was set to (by its speed), for display. */
+export function levelOf(timeScale: number): string {
+  let best: (typeof LEVELS)[number] = LEVELS[0];
+  for (const l of LEVELS) if (Math.abs(l.timeScale - timeScale) < Math.abs(best.timeScale - timeScale)) best = l;
+  return best.label;
+}
 
 const players = (mode: GameConfig['players']['mode'], teamSize: 1 | 2 = 2) => (cfg: GameConfig) => {
   cfg.players.mode = mode;
@@ -52,7 +68,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
   { id: 'spot', label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
   { id: 'formation', label: 'Cups', values: [{ label: 'Tree · 11', apply: set('formation', 'tree') }, { label: 'Shrub · 7', apply: set('formation', 'shrub') }] },
   { id: 'match', label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
-  { id: 'speed', label: 'Speed', values: [{ label: 'Normal', apply: speed(0.62) }, { label: 'Quick', apply: speed(0.78) }, { label: 'Relaxed', apply: speed(0.46) }] },
+  { id: 'speed', label: 'Speed', values: LEVELS.map((l) => ({ label: l.label, apply: speed(l.timeScale, l.window) })) },
   { id: 'ski', label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
@@ -700,11 +716,12 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
 export const HELP: [string, string][] = [
   ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles.'],
   ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
-  ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long. Fast balls, long rallies and balls far from you leave less time.'],
+  ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long, and the further from perfect, the less accurate the shot. Fast balls, long rallies and balls far from you leave less time.'],
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too.'],
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
+  ['Speed', 'The Speed setting goes Relaxed, Normal, Quick, Fast, Pro and Masters: each step plays faster with smaller timing windows (saves included).'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Playing as sets your team, which earns the XP.'],

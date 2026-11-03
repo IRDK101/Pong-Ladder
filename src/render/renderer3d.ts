@@ -294,12 +294,18 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
     return;
   }
   const sprite = smooth(raw);
-  const w = (hgt * sprite.w) / sprite.h;
-  const x = Math.round(base.x - w / 2);
-  const y = Math.round(head.y);
+  // The hit jolt: for a moment after striking the ball, the player lunges at it (a quick dip and a
+  // lean toward the ball, squashing a little), then springs back.
+  const j = hitJolt(game, p);
+  const ballAt = j ? project(cam, game.ball.pos) : null;
+  const lean = j && ballAt ? Math.sign(ballAt.x - base.x) * j * hgt * 0.07 : 0;
+  const dh = hgt * (1 - 0.06 * j);
+  const w = ((hgt * sprite.w) / sprite.h) * (1 + 0.08 * j);
+  const x = Math.round(base.x - w / 2 + lean);
+  const y = Math.round(head.y + (hgt - dh) + j * hgt * 0.03);
   // Your own team, seen over their shoulders, is a little see-through so the table stays readable.
   if (fromBehind) b.globalAlpha = 0.88;
-  b.drawImage(bitmap(sprite), x, y, Math.round(w), Math.round(hgt));
+  b.drawImage(bitmap(sprite), x, y, Math.round(w), Math.round(dh));
   b.globalAlpha = 1;
   if (active) {
     // A small bobbing marker over the head of whoever is up.
@@ -312,6 +318,15 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
     b.fillStyle = theme.colors.activeRing;
     tri(b, tx, ty, s);
   }
+}
+
+/** How far into its hit jolt a player is: 0 at rest, rising quickly to 1 and easing back over about a fifth of a second. */
+export function hitJolt(game: Game, p: PlayerId): number {
+  const t = game.hitTimes[`${p.team}-${p.side}`];
+  if (t === undefined) return 0;
+  const e = (game.time - t) / Math.max(0.05, 0.2 * game.cfg.physics.timeScale);
+  if (e < 0 || e >= 1) return 0;
+  return e < 0.25 ? e / 0.25 : 1 - (e - 0.25) / 0.75;
 }
 
 /** A downward-pointing pixel triangle with its tip at (x, y). */
@@ -371,7 +386,7 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   const style = game.currentStyle(team);
   if (!style) return;
   const t = game.aimTarget(team, game.aim[team], style);
-  const locked = game.timingCue(team) !== null;
+  const locked = game.aimLocked(team);
   const { length: L, width: W } = cfg.table;
   const off = t.x < 0 || t.x > L || t.y < 0 || t.y > W;
   const base = off ? theme.colors.bad : team === 'A' ? theme.colors.aimA : theme.colors.aimB;

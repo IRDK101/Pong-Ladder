@@ -137,6 +137,8 @@ export interface PhysicsTuning {
 export interface HitTuning {
   /** Seconds either side of the ideal moment in which a swing connects. */
   timingWindow: number;
+  /** Difficulty: every timing window is multiplied by this (1 = Normal; smaller is harder). */
+  windowScale: number;
   /** Window multiplier for saves (a cup was hit, react fast). Phase 2's Saves stat widens it. */
   saveWindowScale: number;
   /** Landing scatter (m, max radius) for a perfectly timed / worst-timed hit. */
@@ -213,7 +215,8 @@ export const defaultConfig: GameConfig = {
   },
   hitting: {
     timingWindow: 0.24,
-    saveWindowScale: 0.55,
+    windowScale: 1,
+    saveWindowScale: 0.48,
     scatterPerfect: 0.018,
     scatterWorst: 0.45,
     peakLossWorst: 0.6,

@@ -821,3 +821,11 @@ Decided with the owner: run the game on its own site, so any approved profile ge
 - Leaving the Online screen keeps the player in the lobby. The card returns to "in the lobby" (with their character) when a match ends.
 - **Rematch:** on an online end screen, Space/Enter asks the opponent for a rematch with the same settings (the asker hosts). If the opponent already asked, it accepts. If both ask at once, one side accepts automatically. If the opponent has left, the end screen says so and Space/Enter goes to the menu. Esc always goes to the menu.
 - Opponents' characters are remembered, since a host's card drops its character while it plays on claude.ai.
+
+## Feel: aim lock, speed levels, saves, accuracy, hit jolt
+
+- **Aim lock:** once a team's timing rings appear, its crosshair stays locked for the rest of that ball, even after a whiff (which ends the rings while the ball is still coming). Held direction keys only pick spin. It unlocks when the team stops aiming (the ball is hit back or the point ends). The marker keeps flashing while locked (`Game.aimLocked`).
+- **Speed levels** (`LEVELS` in `ui/menu.ts`): Relaxed, Normal, Quick, Fast, Pro, Masters. Each sets the game speed (`physics.timeScale`) and a timing-window multiplier (`hitting.windowScale`: 1.1, 1, 1, 0.88, 0.76, 0.64), which applies to every hit, serve and save. The CPU's timing scales with the window, so it keeps pace. Online matches carry the level through the challenger's speed.
+- **Saves:** `saveWindowScale` went from 0.55 to 0.48 (about 13% less time on every save).
+- **Accuracy vs timing:** the scatter curve is now `(1 − q)^1.5 · (1 + 1.5(1 − q))`, capped at 1.6. Near-perfect timing is almost unchanged, while a q of 0.6 spreads about 1.6 times as far as before.
+- **Hit jolt:** when a player strikes the ball (hit or serve), their sprite lunges for about a fifth of a second, in proportion to game speed: a quick dip, a slight squash and a lean toward the ball, then back. Hit times travel to the online guest in the host's state (`hz`).

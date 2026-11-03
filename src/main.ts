@@ -13,7 +13,7 @@ import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
 import { makeView } from './render/renderer';
 import { renderHud } from './render/hud';
-import { HELP, Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
+import { HELP, LEVELS, levelOf, Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
 import { playerLevel } from './progress/unlocks';
 import { characterSprite } from './core/sprite';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
@@ -250,6 +250,7 @@ function onlineConfig(s: OnlineStart['settings'], role: 'host' | 'guest'): GameC
   cfg.venue = s.venue as GameConfig['venue'];
   cfg.formation = s.formation;
   cfg.physics.timeScale = s.speed;
+  cfg.hitting.windowScale = LEVELS.find((l) => l.label === levelOf(s.speed))?.window ?? 1;
   cfg.skiCollision = s.ski;
   cfg.penaltyCupSelection = 'choose';
   return cfg;

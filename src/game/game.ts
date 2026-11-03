@@ -113,6 +113,8 @@ export interface NetState {
   fxs: Game['cupFx'];
   cel: Game['celebrations'];
   pc: number;
+  /** When each player last hit the ball (for the hit jolt). */
+  hz?: Record<string, number>;
 }
 
 export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, style: 0, nav: 0 });
@@ -410,8 +412,11 @@ export class Game {
     for (const team of ['A', 'B'] as TeamId[]) {
       if (only && team !== only) continue;
       if (this.remoteAim[team] && !only) continue;
-      // Once the timing ring is up, the crosshair freezes: direction keys now pick spin.
-      if (this.timingCue(team)) continue;
+      // Once the timing ring is up, the crosshair freezes (direction keys now pick spin), and it
+      // stays frozen for the rest of that ball, even after a whiff, until the team aims afresh.
+      if (this.timingCue(team)) this.aimLock[team] = true;
+      if (!this.aiming(team)) this.aimLock[team] = false;
+      if (this.aimLock[team]) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
       const f = this.controlFrames[team];
       const d = { x: -k.y * f.up[0] + k.x * f.right[0], y: -k.y * f.up[1] + k.x * f.right[1] };
@@ -419,6 +424,18 @@ export class Game {
       a.x = Math.max(-1, Math.min(1, a.x + d.x * step));
       a.y = Math.max(-1, Math.min(1, a.y + d.y * step));
     }
+  }
+
+  /** The crosshair is locked for the current ball (see moveAim). */
+  private aimLock: Record<TeamId, boolean> = { A: false, B: false };
+  aimLocked(team: TeamId): boolean {
+    return this.aimLock[team] || this.timingCue(team) !== null;
+  }
+
+  /** Game time each player last struck the ball, keyed "A-left" etc. (drives the hit jolt). */
+  hitTimes: Record<string, number> = {};
+  private markHit(p: PlayerId): void {
+    this.hitTimes[`${p.team}-${p.side}`] = this.time;
   }
 
   /** Online play: set on both devices (each shows only its own crosshair). */
@@ -444,6 +461,7 @@ export class Game {
       fxs: this.cupFx.filter((f) => this.time - f.time < 1.5).slice(-4),
       cel: this.celebrations.filter((k) => this.time - k.time < 2).slice(-2),
       pc: this.penaltyCursor,
+      hz: Object.fromEntries(Object.entries(this.hitTimes).map(([k, v]) => [k, +v.toFixed(3)])),
     };
   }
 
@@ -468,6 +486,7 @@ export class Game {
     for (const f of n.fxs) if (!this.cupFx.some((x) => x.time === f.time && x.cupId === f.cupId)) this.cupFx.push(f);
     for (const k of n.cel) if (!this.celebrations.some((x) => x.time === k.time)) this.celebrations.push(k);
     this.penaltyCursor = n.pc;
+    if (n.hz) this.hitTimes = { ...n.hz };
   }
 
   /** Online play (guest): between host updates, move the ball on and steer this device's own crosshair. */
@@ -638,6 +657,7 @@ export class Game {
     this.incomingPower = stats.power;
     // Launch first: if the engine ends the rally on the hit, the ball goes straight back to the server.
     this.ball.launch(from, shot.vel, shot.fx);
+    this.markHit(server);
     this.dispatch({ type: 'hit', player: server, peak: shot.peak, style: style.id, timing: q });
   }
 
@@ -666,6 +686,7 @@ export class Game {
     this.incomingPower = stats.power;
     // Launch first: if the engine ends the rally on the hit (a low hit), the ball goes straight back to the server.
     this.ball.launch(from, shot.vel, shot.fx);
+    this.markHit(player);
     this.dispatch({ type: 'hit', player, peak: shot.peak, style: style.id, timing: q });
   }
 

@@ -71,8 +71,10 @@ export class CpuController {
     const L = this.level;
     const serving = key.startsWith('serve');
     const save = !!st.rally?.cupAtRisk;
-    const w = game.cfg.hitting.timingWindow;
-    let swingAt = this.gauss() * (save ? L.saveSigma : L.timingSigma);
+    // Harder speed levels shrink every window, so the CPU's timing tightens with them.
+    const scale = game.cfg.hitting.windowScale ?? 1;
+    const w = game.cfg.hitting.timingWindow * scale;
+    let swingAt = this.gauss() * (save ? L.saveSigma : L.timingSigma) * scale;
     if (this.rng() < L.whiff) swingAt = w * 2; // too late: whiff
     swingAt = Math.max(-w * 1.5, swingAt);
     // Aim (in meters) at a live opponent cup, or a safe mid-table ball, with some wander.

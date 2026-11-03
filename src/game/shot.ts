@@ -47,7 +47,7 @@ const neutral: SwingContext = { stats: NEUTRAL_STATS };
 /** Half-width (seconds) of the timing window for this swing. */
 export function timingWindow(cfg: GameConfig, style: ShotStyle, ctx: SwingContext = neutral): number {
   const h = cfg.hitting;
-  let w = h.timingWindow * style.timing.windowScale;
+  let w = h.timingWindow * (h.windowScale ?? 1) * style.timing.windowScale;
   if (style.kind === 'serve') w *= statEffect(cfg, 'serveWindow', ctx.stats.serve);
   else {
     if (ctx.save) w *= h.saveWindowScale * statEffect(cfg, 'saveWindow', ctx.stats.saves);
@@ -99,10 +99,14 @@ export interface Shot {
   fx: BallEffects;
 }
 
-/** Scatter radius (m, max) for a timing quality, before multipliers. */
+/**
+ * Scatter radius (m, max) for a timing quality, before multipliers. Near-perfect
+ * timing stays tight; the further from perfect, the faster the spread grows.
+ */
 export function baseScatter(cfg: GameConfig, q: number): number {
   const { scatterPerfect, scatterWorst } = cfg.hitting;
-  return scatterPerfect + (scatterWorst - scatterPerfect) * Math.pow(1 - q, 1.5);
+  const off = 1 - Math.max(0, Math.min(1, q));
+  return scatterPerfect + (scatterWorst - scatterPerfect) * Math.min(1.6, Math.pow(off, 1.5) * (1 + 1.5 * off));
 }
 
 function scatter(radius: number, rng: () => number): { dx: number; dy: number } {

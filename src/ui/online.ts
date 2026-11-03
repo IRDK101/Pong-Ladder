@@ -8,6 +8,7 @@ import { DESIGNS } from '../render/designs';
 import { VENUES } from '../render/basement';
 import type { TableDesign, Venue } from '../config';
 import { h, spriteImage, type Overlay } from './dom';
+import { levelOf } from './menu';
 import { styledName } from './nameStyle';
 import type { NameStyle } from '../progress/nameStyles';
 
@@ -26,7 +27,7 @@ export interface OnlineStart {
 export function settingsLine(s: MatchSettings): string {
   const t = DESIGNS[s.design as TableDesign]?.name ?? 'Table';
   const v = VENUES[s.venue as Venue]?.spot ?? '';
-  const speed = s.speed > 0.7 ? 'quick' : s.speed < 0.5 ? 'relaxed' : 'normal speed';
+  const speed = `${levelOf(s.speed)} speed`;
   return `${t} · ${v} · ${s.formation === 'tree' ? 'tree (11 cups)' : 'shrub (7 cups)'} · ${speed}${s.ski ? ' · ski collision' : ''}`;
 }
 
