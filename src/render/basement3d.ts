@@ -261,8 +261,11 @@ export function drawBasement(b: CanvasRenderingContext2D, theme: Theme, cfg: Gam
   things.push({ d: depth({ x: 1.75, y: 0.45, z: 0 }), draw: () => cylinder(b, cam, xf({ x: 1.75, y: 0.45, z: 0 }), 0.25, floorZ, floorZ + 0.8, { light: R.binLight, mid: R.bin, dark: R.binDark }) });
   things.sort((a, c) => c.d - a.d).forEach((t) => t.draw());
 
-  // Ceiling: the tube fixtures, then the beams (far to near).
-  for (const fx of FIXTURES) drawFixture(b, theme, cam, xf, fx.x, fx.y, ceilZ, fx.axis);
+  // Ceiling: the tube fixtures, then the beams (far to near). From a camera up at or above the
+  // ceiling the fixtures would be seen from on top, their glows washing over the whole scene in a
+  // white haze, so they're left out then (their light still shows as the washes on the floor).
+  const aboveCeiling = cam.eye.z >= ceilZ - 0.12;
+  if (!aboveCeiling) for (const fx of FIXTURES) drawFixture(b, theme, cam, xf, fx.x, fx.y, ceilZ, fx.axis);
   BEAMS.map((bm) => {
     const mid = (bm.from + bm.to) / 2;
     return { bm, d: depth(bm.axis === 'x' ? { x: mid, y: bm.at, z: ceilZ } : { x: bm.at, y: mid, z: ceilZ }) };

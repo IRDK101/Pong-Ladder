@@ -927,3 +927,4 @@ Decided with the owner: bigger sprites, and Fast stays the default.
   - **Pause:** Escape in a local match pauses it (Space resumes, R restarts, Esc again quits), and leaving the window pauses too. Online, Escape asks before leaving while the match runs on.
   - **Rematch:** after a local match, R rematches with the same players.
   - **Saved settings:** the home screen's settings are remembered in the browser (`Menu.snapshot` / `restore`).
+- **White haze, fixed:** since the camera moved up (2.3 m above the table), it sits above the basement ceiling (2.05 m). The ceiling's tube fixtures and their white glows were drawn from on top, over the whole scene, which washed everything out. When the camera is at or above the ceiling they're left out now. Their light still shows as the glows on the floor, and the beams and the rest of the room are unchanged.
