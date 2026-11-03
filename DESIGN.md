@@ -929,3 +929,13 @@ Decided with the owner: bigger sprites, and Fast stays the default.
   - **Saved settings:** the home screen's settings are remembered in the browser (`Menu.snapshot` / `restore`).
 - **White haze, fixed:** since the camera moved up (2.3 m above the table), it sits above the basement ceiling (2.05 m). The ceiling's tube fixtures and their white glows were drawn from on top, over the whole scene, which washed everything out. When the camera is at or above the ceiling they're left out now. Their light still shows as the glows on the floor, and the beams and the rest of the room are unchanged.
 - **Pause card, fixed:** it's an HTML panel with real buttons (Resume, Restart this match, Quit to the menu; online: Keep playing, Leave the match), with Resume focused. A click or Space / Enter always works, and the keys still apply: Esc quits, R restarts. The game now claims the Escape key (`preventDefault`), so the page around it (the artifact viewer) doesn't take keyboard focus away. That used to leave the home screen deaf until you clicked into it again.
+
+## Speed spectrum
+
+Speed is a bar on the home screen instead of a list: 13 notches from Relaxed (far
+left) to Masters (far right), with Normal (the realistic base pace) in the middle.
+The six named levels keep their exact speeds and timing windows (Relaxed 0, Slow 3,
+Normal 6, Fast 8, Extreme 10, Masters 12); the notches between blend their
+neighbours evenly, named after the nearer level ("Slow +", "Normal −"). Click or drag
+on the bar, or use ◀ ▶; the ends stop instead of wrapping. The row shows the pace
+relative to Normal. Saved picks and old saves (named levels) both load.

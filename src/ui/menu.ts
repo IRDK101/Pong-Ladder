@@ -35,15 +35,59 @@ export const LEVELS = [
   { label: 'Masters', timeScale: 0.96, window: 0.68 },
 ] as const;
 export const DEFAULT_LEVEL = 'Normal';
+
+/**
+ * The Speed spectrum: 13 notches from Relaxed (far left) to Masters (far right),
+ * with Normal in the middle. The named levels sit on notches (Relaxed 0, Slow 3,
+ * Normal 6, Fast 8, Extreme 10, Masters 12); the notches between them blend
+ * their neighbours' speed and timing window evenly. In-between notches are
+ * named after the closest level: "Slow +" is a touch faster than Slow, "Normal −"
+ * a touch slower than Normal.
+ */
+const ANCHOR_AT: Record<(typeof LEVELS)[number]['label'], number> = { Relaxed: 0, Slow: 3, Normal: 6, Fast: 8, Extreme: 10, Masters: 12 };
+export interface SpeedStep {
+  label: string;
+  timeScale: number;
+  window: number;
+}
+export const SPEED_STEPS: SpeedStep[] = (() => {
+  const out: SpeedStep[] = [];
+  const at = LEVELS.map((l) => ({ ...l, pos: ANCHOR_AT[l.label] }));
+  for (let k = 0; k <= 12; k++) {
+    const hi = at.findIndex((a) => a.pos >= k);
+    const b = at[hi];
+    if (b.pos === k) {
+      out.push({ label: b.label, timeScale: b.timeScale, window: b.window });
+      continue;
+    }
+    const a = at[hi - 1];
+    const t = (k - a.pos) / (b.pos - a.pos);
+    const r3 = (x: number) => Math.round(x * 1000) / 1000;
+    // Name it after the nearer level (ties go to the slower one, with a +).
+    const label = t <= 0.5 ? `${a.label} +` : `${b.label} −`;
+    out.push({ label, timeScale: r3(a.timeScale + (b.timeScale - a.timeScale) * t), window: r3(a.window + (b.window - a.window) * t) });
+  }
+  return out;
+})();
+export const SPEED_MID = SPEED_STEPS.findIndex((st) => st.label === DEFAULT_LEVEL);
+/** The spectrum notch closest to a speed (time scale). */
+export function speedStepOf(timeScale: number): SpeedStep {
+  let best = SPEED_STEPS[0];
+  for (const st of SPEED_STEPS) if (Math.abs(st.timeScale - timeScale) < Math.abs(best.timeScale - timeScale)) best = st;
+  return best;
+}
 const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
   cfg.hitting.windowScale = window;
 };
-/** The level a config was set to (by its speed), for display. */
+/** The level (spectrum notch) a config was set to, by its speed, for display. */
 export function levelOf(timeScale: number): string {
-  let best: (typeof LEVELS)[number] = LEVELS[0];
-  for (const l of LEVELS) if (Math.abs(l.timeScale - timeScale) < Math.abs(best.timeScale - timeScale)) best = l;
-  return best.label;
+  return speedStepOf(timeScale).label;
+}
+
+/** Where the Speed bar's track runs inside its row (menu coordinates). */
+export function speedTrack(r: { x: number; y: number; w: number; h: number }): { x0: number; x1: number; y: number } {
+  return { x0: r.x + 14, x1: r.x + r.w - 14, y: r.y + r.h - 13 };
 }
 
 const players = (mode: GameConfig['players']['mode'], teamSize: 1 | 2 = 2) => (cfg: GameConfig) => {
@@ -74,7 +118,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
   { id: 'spot', label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
   { id: 'formation', label: 'Cups', values: [{ label: 'Tree · 11', apply: set('formation', 'tree') }, { label: 'Shrub · 7', apply: set('formation', 'shrub') }] },
   { id: 'match', label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
-  { id: 'speed', label: 'Speed', values: LEVELS.map((l) => ({ label: l.label, apply: speed(l.timeScale, l.window) })), start: LEVELS.findIndex((l) => l.label === DEFAULT_LEVEL) },
+  { id: 'speed', label: 'Speed', values: SPEED_STEPS.map((l) => ({ label: l.label, apply: speed(l.timeScale, l.window) })), start: SPEED_MID },
   { id: 'ski', label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
@@ -114,9 +158,9 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   spot: { x: LX, y: 398, w: LW, h: 29 },
   formation: { x: LX, y: RULES_Y, w: CELL, h: 29 },
   match: { x: LX + CELL + 8, y: RULES_Y, w: CELL, h: 29 },
-  speed: { x: LX, y: RULES_Y + 34, w: CELL, h: 29 },
+  view: { x: LX, y: RULES_Y + 34, w: CELL, h: 29 },
   ski: { x: LX + CELL + 8, y: RULES_Y + 34, w: CELL, h: 29 },
-  view: { x: LX, y: RULES_Y + 68, w: CELL, h: 29 },
+  speed: { x: LX, y: RULES_Y + 68, w: LW, h: 46 },
   collection: { x: RX, y: 40, w: RW, h: 132 },
   quick: { x: RX, y: 228, w: RW, h: 44 },
   draft: { x: RX, y: 277, w: RW, h: 44 },
@@ -144,14 +188,14 @@ const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = 
   spot: { x: PX, y: 734, w: PW, h: 29 },
   formation: { x: PX, y: 804, w: PCELL, h: 29 },
   match: { x: PX + PCELL + 8, y: 804, w: PCELL, h: 29 },
-  speed: { x: PX, y: 838, w: PCELL, h: 29 },
+  view: { x: PX, y: 838, w: PCELL, h: 29 },
   ski: { x: PX + PCELL + 8, y: 838, w: PCELL, h: 29 },
-  view: { x: PX, y: 872, w: PCELL, h: 29 },
-  characters: { x: PX, y: 942, w: PW, h: 33 },
-  account: { x: PX, y: 982, w: PW, h: 33 },
-  leaderboard: { x: PX, y: 1022, w: PW, h: 33 },
-  help: { x: PX, y: 1062, w: PW, h: 33 },
-  backup: { x: PX, y: 1102, w: PW, h: 33 },
+  speed: { x: PX, y: 872, w: PW, h: 46 },
+  characters: { x: PX, y: 960, w: PW, h: 33 },
+  account: { x: PX, y: 1000, w: PW, h: 33 },
+  leaderboard: { x: PX, y: 1040, w: PW, h: 33 },
+  help: { x: PX, y: 1080, w: PW, h: 33 },
+  backup: { x: PX, y: 1120, w: PW, h: 33 },
 };
 
 /** Narrow screens get the portrait layout. */
@@ -172,7 +216,7 @@ function groupOf(id: RowId): number {
 
 const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
-  { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
+  { title: 'HOUSE RULES', ids: ['formation', 'match', 'view', 'ski', 'speed'] },
   { title: 'PLAY', ids: ['quick', 'draft', 'online'] },
   { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'help', 'backup'] },
 ];
@@ -264,9 +308,9 @@ export class Menu {
       opt('spot'),
       opt('formation'),
       opt('match'),
-      opt('speed'),
-      opt('ski'),
       { ...opt('view'), dim: mode === 'coop' },
+      opt('ski'),
+      opt('speed'),
       { id: 'collection', label: 'Collection', action: 'collection' },
       { id: 'quick', label: 'Quick match', action: 'quick' },
       { id: 'draft', label: 'Draft match', action: 'draft' },
@@ -306,6 +350,13 @@ export class Menu {
     const ci = choiceIndex(rows[this.cursor].id);
     if (ci >= 0) {
       const k = CHOICES[ci].values.length;
+      if (CHOICES[ci].id === 'speed') {
+        // The spectrum stops at its ends instead of wrapping around.
+        const n = Math.max(0, Math.min(k - 1, this.picks[ci] + Math.sign(dx)));
+        if (n === this.picks[ci]) return;
+        this.setSpeedStep(n);
+        return;
+      }
       if (ci === TABLE_ROW) this.picks[TABLE_ROW] = this.tablePick();
       // Locked tables are skipped.
       for (let n = 0; n < k; n++) {
@@ -410,7 +461,30 @@ export class Menu {
    * the Table row the arrows flip tables and the rest opens the picker. Other
    * rows run their action.
    */
-  click(i: number, mx: number): MenuAction {
+  /** The Speed spectrum's notch (0 = Relaxed … 12 = Masters). */
+  speedStep(): number {
+    return this.picks[choiceIndex('speed')];
+  }
+
+  /** Move the Speed spectrum to a notch (clamped). */
+  setSpeedStep(n: number): void {
+    const ci = choiceIndex('speed');
+    const k = Math.max(0, Math.min(SPEED_STEPS.length - 1, Math.round(n)));
+    if (k === this.picks[ci]) return;
+    const dir = Math.sign(k - this.picks[ci]);
+    this.picks[ci] = k;
+    this.changeAt = { id: 'speed', dir, at: typeof performance !== 'undefined' ? performance.now() : 0 };
+    this.onChange();
+  }
+
+  /** The Speed notch under menu x `mx` on the bar (for clicks and drags). */
+  speedStepAt(mx: number, portrait = false): number {
+    const t = speedTrack(rowRect('speed', portrait));
+    const f = (mx - t.x0) / (t.x1 - t.x0);
+    return Math.max(0, Math.min(SPEED_STEPS.length - 1, Math.round(f * (SPEED_STEPS.length - 1))));
+  }
+
+  click(i: number, mx: number, portrait = false): MenuAction {
     const rows = this.rows();
     const row = rows[i];
     if (!row) return null;
@@ -422,6 +496,11 @@ export class Menu {
       if (z && mx <= z.l + 22) return this.move(0, -1), null;
       if (z && mx >= z.r - 22) return this.move(0, 1), null;
       return 'pickTable';
+    }
+    if (row.id === 'speed') {
+      // The bar: a click picks the notch under the pointer.
+      this.setSpeedStep(this.speedStepAt(mx, portrait));
+      return null;
     }
     this.move(0, z && mx < z.cx ? -1 : 1);
     return null;
@@ -445,6 +524,9 @@ export class Menu {
     return cfg;
   }
 }
+
+/** The Speed bar's thumb position (it glides between notches). */
+const speedThumb = new WeakMap<Menu, number>();
 
 /** The menu is laid out on a 1131×660 design (560×1070 in portrait) and scaled (uniformly, centered) to the screen. */
 export const MENU_W = 1131;
@@ -784,10 +866,86 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   });
   return drawNotes();
 
+  /** The Speed row: a spectrum from Relaxed (left) to Masters (right), with a thumb on the picked notch. */
+  function drawSpeedBar(r: { x: number; y: number; w: number; h: number }, on: boolean, ink: string): void {
+    const n = SPEED_STEPS.length;
+    const k = menu.speedStep();
+    const t = speedTrack(r);
+    const xAt = (i: number) => t.x0 + ((t.x1 - t.x0) * i) / (n - 1);
+    const top = r.y + 14;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = on ? ink : c.textDim;
+    ctx.fillText('Speed', r.x + 14, top);
+    // The value, and how its pace compares with Normal.
+    const st = SPEED_STEPS[k];
+    const pace = Math.round((st.timeScale / SPEED_STEPS[SPEED_MID].timeScale) * 100);
+    ctx.textAlign = 'right';
+    ctx.font = theme.fonts.bar;
+    ctx.fillStyle = on ? ink : c.text;
+    const ch = menu.changeAmount('speed', now);
+    ctx.fillText(st.label, r.x + r.w - 14, top);
+    const vw = ctx.measureText(st.label).width;
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = on ? ink : c.textDim;
+    ctx.save();
+    ctx.globalAlpha *= 0.75;
+    ctx.fillText(k === SPEED_MID ? 'realistic pace  ·' : `${pace}% pace  ·`, r.x + r.w - 22 - vw, top);
+    ctx.restore();
+    // The track: cool on the slow end, warm toward Masters.
+    const grad = ctx.createLinearGradient(t.x0, 0, t.x1, 0);
+    grad.addColorStop(0, '#4fb3c9');
+    grad.addColorStop(0.5, '#e8d27a');
+    grad.addColorStop(0.75, '#f08a3c');
+    grad.addColorStop(1, '#e0413a');
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(t.x0 - 1, t.y - 3, t.x1 - t.x0 + 2, 6);
+    ctx.save();
+    ctx.globalAlpha *= on ? 0.55 : 0.4;
+    ctx.fillStyle = grad;
+    ctx.fillRect(t.x0, t.y - 2, t.x1 - t.x0, 4);
+    ctx.restore();
+    // The filled part, up to the thumb.
+    const tx = xAt(k);
+    ctx.fillStyle = grad;
+    ctx.fillRect(t.x0, t.y - 2, tx - t.x0, 4);
+    // Notches: taller for the named levels, tallest for Normal.
+    for (let i = 0; i < n; i++) {
+      const named = !/[+−]$/.test(SPEED_STEPS[i].label);
+      const hgt = i === SPEED_MID ? 7 : named ? 5 : 3;
+      ctx.fillStyle = i <= k ? (on ? ink : 'rgba(255, 244, 220, 0.85)') : 'rgba(255, 244, 220, 0.35)';
+      ctx.fillRect(Math.round(xAt(i)) - 1, t.y - hgt, 2, hgt * 2);
+    }
+    // The thumb glides to its notch, and gives a little pop when it lands.
+    const prev = speedThumb.get(menu) ?? tx;
+    const gx = dt ? prev + (tx - prev) * (1 - Math.exp(-dt * 22)) : tx;
+    speedThumb.set(menu, Math.abs(gx - tx) < 0.3 ? tx : gx);
+    const pop = ch ? ch.e : 0;
+    const R = 6 + pop * 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = on ? ink : '#fff4dc';
+    ctx.fillRect(Math.round(gx - R), Math.round(t.y - R), R * 2, R * 2);
+    ctx.restore();
+    ctx.fillStyle = grad;
+    ctx.fillRect(Math.round(gx - R + 2), Math.round(t.y - R + 2), R * 2 - 4, R * 2 - 4);
+    if (on) {
+      // Arrow hints at the ends while the row is selected.
+      ctx.font = theme.fonts.label;
+      ctx.fillStyle = ink;
+      ctx.textAlign = 'center';
+      if (k > 0) ctx.fillText('◀', r.x + 6, t.y);
+      if (k < n - 1) ctx.fillText('▶', r.x + r.w - 6, t.y);
+    }
+  }
+
   function drawRowText(row: MenuRow, r: { x: number; y: number; w: number; h: number }, on: boolean, play: boolean): void {
     const ink = on ? c.activeText : c.text;
     const mid = r.y + r.h / 2 - 1;
     ctx.textBaseline = 'middle';
+    if (row.id === 'speed') return drawSpeedBar(r, on, ink);
     if (row.value !== undefined) {
       const cell = r.w < 300;
       ctx.textAlign = 'left';

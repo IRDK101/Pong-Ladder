@@ -13,7 +13,7 @@ import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
 import { makeView } from './render/renderer';
 import { renderHud } from './render/hud';
-import { HELP, LEVELS, levelOf, Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
+import { HELP, speedStepOf, Menu, drawEndScreen, drawHelp, drawMenu, menuLayout, rowRect, type MenuAction, type MenuExtras } from './ui/menu';
 import { playerLevel } from './progress/unlocks';
 import { characterSprite } from './core/sprite';
 import { AppStore, memoryStore, newMatchRecord, type KeyValueStore, type MatchRecord } from './data/storage';
@@ -271,7 +271,7 @@ function onlineConfig(s: OnlineStart['settings'], role: 'host' | 'guest'): GameC
   cfg.venue = s.venue as GameConfig['venue'];
   cfg.formation = s.formation;
   cfg.physics.timeScale = s.speed;
-  cfg.hitting.windowScale = LEVELS.find((l) => l.label === levelOf(s.speed))?.window ?? 1;
+  cfg.hitting.windowScale = speedStepOf(s.speed).window;
   cfg.skiCollision = s.ski;
   cfg.penaltyCupSelection = 'choose';
   return cfg;
@@ -814,6 +814,8 @@ function menuPoint(e: PointerEvent | MouseEvent) {
   const L = menuLayout(view);
   return { mx: (sx - L.ox) / L.s, my: (sy - L.oy) / L.s, portrait: L.portrait };
 }
+/** Dragging the Speed bar's thumb. */
+let speedDrag = false;
 // Hover and press effects on the home screen.
 canvas.addEventListener('pointermove', (e) => {
   if (screen !== 'menu') {
@@ -822,6 +824,10 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   const p = menuPoint(e);
+  if (speedDrag) {
+    menu.setSpeedStep(menu.speedStepAt(p.mx, p.portrait));
+    return;
+  }
   const i = menuRowAt(p.mx, p.my, p.portrait);
   menu.hover = i >= 0 ? menu.rows()[i].id : null;
   canvas.style.cursor = i >= 0 ? 'pointer' : '';
@@ -834,7 +840,22 @@ canvas.addEventListener('pointerdown', (e) => {
   if (screen !== 'menu') return;
   const p = menuPoint(e);
   const i = menuRowAt(p.mx, p.my, p.portrait);
-  if (i >= 0) menu.pressed(menu.rows()[i].id);
+  if (i < 0) return;
+  const id = menu.rows()[i].id;
+  menu.pressed(id);
+  // Drag along the Speed bar to slide through the spectrum.
+  if (id === 'speed') {
+    speedDrag = true;
+    menu.focus('speed');
+    menu.setSpeedStep(menu.speedStepAt(p.mx, p.portrait));
+    canvas.setPointerCapture?.(e.pointerId);
+  }
+});
+canvas.addEventListener('pointerup', () => {
+  speedDrag = false;
+});
+canvas.addEventListener('pointercancel', () => {
+  speedDrag = false;
 });
 
 canvas.addEventListener('click', (e) => {
@@ -850,7 +871,7 @@ canvas.addEventListener('click', (e) => {
     const mx = (sx - L.ox) / L.s;
     const my = (sy - L.oy) / L.s;
     const i = menuRowAt(mx, my, L.portrait);
-    if (i >= 0) runMenuAction(menu.click(i, mx));
+    if (i >= 0) runMenuAction(menu.click(i, mx, L.portrait));
   } else if (screen === 'playing' && game) {
     // Against the CPU, the human can't make the CPU's penalty choice for it.
     const pen = game.engine.peek().penalty;

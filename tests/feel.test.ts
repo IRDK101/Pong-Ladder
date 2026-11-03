@@ -3,7 +3,7 @@ import { makeConfig } from '../src/config';
 import { Game, genericRoster, idleInput } from '../src/game/game';
 import { baseScatter, timingWindow } from '../src/game/shot';
 import { getStyle } from '../src/core/styles';
-import { LEVELS, Menu } from '../src/ui/menu';
+import { LEVELS, Menu, SPEED_MID, SPEED_STEPS, speedStepOf } from '../src/ui/menu';
 import { hitJolt } from '../src/render/renderer3d';
 
 /** Serve with A, then run until B's timing rings are up. */
@@ -53,6 +53,38 @@ describe('timing, saves and accuracy', () => {
       m.move(0, 1);
     }
     expect(seen.size).toBe(LEVELS.length);
+  });
+
+  it('speed is a spectrum: Relaxed far left, Normal in the middle, Masters far right, smooth steps between', () => {
+    expect(SPEED_STEPS.length).toBe(13);
+    expect(SPEED_STEPS[0].label).toBe('Relaxed');
+    expect(SPEED_STEPS[SPEED_MID].label).toBe('Normal');
+    expect(SPEED_MID).toBe((SPEED_STEPS.length - 1) / 2);
+    expect(SPEED_STEPS.at(-1)!.label).toBe('Masters');
+    for (const l of LEVELS) expect(SPEED_STEPS.find((st) => st.label === l.label)).toMatchObject({ timeScale: l.timeScale, window: l.window });
+    expect(new Set(SPEED_STEPS.map((st) => st.label)).size).toBe(SPEED_STEPS.length);
+    for (let i = 1; i < SPEED_STEPS.length; i++) {
+      const d = SPEED_STEPS[i].timeScale - SPEED_STEPS[i - 1].timeScale;
+      expect(d).toBeGreaterThan(0);
+      expect(d).toBeLessThan(0.07); // no big jumps
+      expect(SPEED_STEPS[i].window).toBeLessThan(SPEED_STEPS[i - 1].window);
+    }
+    for (const st of SPEED_STEPS) expect(speedStepOf(st.timeScale)).toBe(st);
+    // The default is Normal; the ends stop instead of wrapping; saved picks come back.
+    const m = new Menu();
+    expect(m.config(makeConfig()).physics.timeScale).toBe(0.62);
+    m.focus('speed');
+    for (let i = 0; i < 20; i++) m.move(0, -1);
+    expect(m.speedStep()).toBe(0);
+    for (let i = 0; i < 20; i++) m.move(0, 1);
+    expect(m.speedStep()).toBe(SPEED_STEPS.length - 1);
+    m.setSpeedStep(4);
+    const again = new Menu();
+    again.restore(m.snapshot());
+    expect(again.speedStep()).toBe(4);
+    // Old saves (named levels) still load.
+    again.restore({ speed: 'Fast' });
+    expect(SPEED_STEPS[again.speedStep()].label).toBe('Fast');
   });
 
   it('the window shrinks with the level, and saves are tighter than before', () => {

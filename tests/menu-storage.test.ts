@@ -2,7 +2,7 @@ import { makeConfig } from '../src/config';
 import { RulesEngine } from '../src/core/rules';
 import { newCharacter, newProfile } from '../src/core/character';
 import { AppStore, memoryStore, newMatchRecord } from '../src/data/storage';
-import { Menu } from '../src/ui/menu';
+import { Menu, rowRect, speedTrack } from '../src/ui/menu';
 import { AL, Script } from './helpers';
 
 describe('pre-game menu', () => {
@@ -59,13 +59,13 @@ describe('pre-game menu', () => {
     m.focus('match');
     m.move(0, -1); // best of 3 (wraps backwards)
     m.focus('speed');
-    m.move(0, -1); // Slow: left is one level slower than the default (Normal)
+    m.move(0, -1); // one notch slower than the default (Normal)
     m.focus('ski');
     m.activate(); // on (activate cycles an option row)
     const cfg = m.config();
     expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'choose', skiCollision: true });
     expect(m.rows().map((r) => r.label)).not.toContain('Penalty cup');
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Slow');
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Normal −');
   });
 
   it('game speed: Normal (the base physics) is the default; right is faster, left is slower', () => {
@@ -76,10 +76,11 @@ describe('pre-game menu', () => {
     expect(m.config().hitting.windowScale).toBe(1);
     m.focus('speed');
     m.move(0, 1);
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Normal +');
+    m.move(0, 1);
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
     expect(m.config().physics.timeScale).toBeGreaterThan(fast);
-    m.move(0, -1);
-    m.move(0, -1);
+    for (let i = 0; i < 5; i++) m.move(0, -1);
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Slow');
     expect(m.config().physics.timeScale).toBeLessThan(fast);
   });
@@ -102,7 +103,9 @@ describe('pre-game menu', () => {
     expect(['players', 'cpu']).toContain(m.current);
     m.focus('formation');
     m.move(1, 0);
-    expect(m.current).toBe('speed');
+    expect(m.current).toBe('view');
+    m.move(1, 0);
+    expect(m.current).toBe('speed'); // the full-width Speed bar
     m.focus('match');
     m.move(1, 0);
     expect(m.current).toBe('ski');
@@ -219,13 +222,21 @@ describe('local storage and backups', () => {
 describe('clicking a setting', () => {
   it('the right side (▶) steps forward and the left side (◀) steps back', () => {
     const m = new Menu();
+    const f = m.rows().findIndex((r) => r.id === 'formation');
+    m.valueZones.set('formation', { cx: 200, l: 150, r: 250 });
+    m.click(f, 245);
+    expect(m.rows()[f].value).toBe('Shrub · 7');
+    m.click(f, 155);
+    expect(m.rows()[f].value).toBe('Tree · 11');
+    // The Speed bar: a click picks the notch under the pointer, from Relaxed at the left end to Masters at the right.
     const i = m.rows().findIndex((r) => r.id === 'speed');
-    m.valueZones.set('speed', { cx: 400, l: 340, r: 460 });
-    expect(m.click(i, 455)).toBeNull();
-    expect(m.rows()[i].value).toBe('Fast');
-    m.click(i, 345);
-    m.click(i, 345);
-    expect(m.rows()[i].value).toBe('Slow');
+    const bar = speedTrack(rowRect('speed'));
+    expect(m.click(i, bar.x0)).toBeNull();
+    expect(m.rows()[i].value).toBe('Relaxed');
+    m.click(i, bar.x1 + 5);
+    expect(m.rows()[i].value).toBe('Masters');
+    m.click(i, (bar.x0 + bar.x1) / 2);
+    expect(m.rows()[i].value).toBe('Normal');
     // The Table row: its arrows flip tables, the rest opens the picker.
     const t = m.rows().findIndex((r) => r.id === 'table');
     m.valueZones.set('table', { cx: 400, l: 300, r: 500 });
