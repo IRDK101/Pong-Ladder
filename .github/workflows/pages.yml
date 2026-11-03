@@ -1,8 +1,8 @@
 # Builds the game and publishes it to GitHub Pages: your own site, which only
 # people with push access to this repository can change.
-# Setup (once): Settings → Pages → Source: "GitHub Actions", and
-# Settings → Secrets and variables → Actions → Variables → FIREBASE_CONFIG
-# (the web app config JSON from Firebase). See SELF_HOSTING.md.
+# Setup (once): Settings → Pages → Source: "GitHub Actions". The Firebase web
+# config comes from firebase-web-config.json (or a FIREBASE_CONFIG variable).
+# See SELF_HOSTING.md.
 name: Deploy site
 
 on:
@@ -30,9 +30,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run build:site
+      # The Firebase web config: the FIREBASE_CONFIG repository variable if set, else firebase-web-config.json.
+      # (It identifies the project; it isn't a secret. The database rules are what protect the data.)
+      - run: |
+          CFG="$FIREBASE_CONFIG_VAR"
+          if [ -z "$CFG" ] && [ -f firebase-web-config.json ]; then CFG="$(cat firebase-web-config.json)"; fi
+          if [ -z "$CFG" ]; then echo "::warning::No Firebase config yet: the site builds without sign-in or online play."; fi
+          VITE_FIREBASE_CONFIG="$CFG" npm run build:site
         env:
-          VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          FIREBASE_CONFIG_VAR: ${{ vars.FIREBASE_CONFIG }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
