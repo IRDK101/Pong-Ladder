@@ -8,6 +8,7 @@ import { BallPhysics, type PhysicsEvent, type Vec3 } from '../core/physics';
 import type { Call, GameState, RulesEvent } from '../core/rules';
 import type { Sprite } from '../core/character';
 import { composeSprite } from '../core/sprite';
+import { withPassiveStats } from '../core/passives';
 import { effectiveStats, NEUTRAL_STATS, type Stats } from '../core/stats';
 import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, getStyle, type ShotStyle } from '../core/styles';
 import { diagonalOf, laneOf, quarterOf, quarterRect } from '../core/table';
@@ -30,6 +31,8 @@ export interface Participant {
   celebration: string | null;
   characterId: string | null;
   profileId: string | null;
+  /** Passive ability ids the character brings (core/passives.ts). */
+  passives?: string[];
 }
 
 export type PositionKey = 'A-left' | 'A-right' | 'B-left' | 'B-right';
@@ -225,7 +228,7 @@ export class Game {
 
   /** Effective stats for a player right now (base stats through the modifier pipeline). */
   statsOf(p: PlayerId): Stats {
-    return effectiveStats(this.participant(p).stats);
+    return withPassiveStats(effectiveStats(this.participant(p).stats), this.participant(p).passives);
   }
 
   /** The style `p` would use with style index `i` (falls back to the default style). */
@@ -393,7 +396,7 @@ export class Game {
   }
 
   private swingContext(p: PlayerId, save: boolean, serving = false): SwingContext {
-    const ctx: SwingContext = { stats: this.statsOf(p), save, incomingPower: this.incomingPower };
+    const ctx: SwingContext = { stats: this.statsOf(p), save, incomingPower: this.incomingPower, passives: this.participant(p).passives };
     if (!serving) {
       ctx.ballSpeed = Math.hypot(this.ball.vel.x, this.ball.vel.y);
       ctx.rallyHits = this.engine.peek().rally?.hits ?? 0;
@@ -664,7 +667,7 @@ export class Game {
     const stats = this.statsOf(server);
     const t = this.aimTarget(server.team, aim, style);
     const spec: AimSpec = { x: t.x, y: t.y, forward: server.team === 'A' ? 1 : -1, lateness, spin };
-    const shot = computeServe(this.cfg, style, from, spec, q, this.rng, stats);
+    const shot = computeServe(this.cfg, style, from, spec, q, this.rng, stats, this.participant(server).passives);
     this.incomingSpin = spinOf(this.cfg, shot.fx);
     this.tossing = false;
     this.resetBallTracking();
@@ -695,7 +698,7 @@ export class Game {
     const stats = this.statsOf(player);
     const t = this.aimTarget(team, this.aim[team], style);
     const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin, incoming: this.incomingSpin };
-    const shot = computeHit(this.cfg, pacedStyle(this.cfg, style, rally.hits), from, spec, q, this.rng, stats);
+    const shot = computeHit(this.cfg, pacedStyle(this.cfg, style, rally.hits), from, spec, q, this.rng, stats, this.participant(player).passives);
     // The spin pair: the ball's spin, then the spin of the return ("Backspin + Topspin").
     const pair = spinPair(this.incomingSpin, spin);
     if (pair && this.feedback) this.feedback.label = `${timingLabel(q, off, w <= 0)} · ${pair}`;

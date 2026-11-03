@@ -32,6 +32,7 @@ export function participantFrom(c: Character, profileId: string | null): Partici
     celebration: c.cosmetics.celebration && theme.celebrations[c.cosmetics.celebration] ? c.cosmetics.celebration : null,
     characterId: c.id,
     profileId,
+    passives: [...(c.passives ?? [])],
   };
 }
 

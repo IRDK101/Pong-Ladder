@@ -24,16 +24,17 @@ const set =
     cfg[key] = value;
   };
 /** Speed / difficulty levels: faster play and smaller timing windows (saves included). */
-// Slowest to fastest; Fast is the default. Five levels, each about 6.7% under the original ladder
-// (Fast was 0.88; slowed three times by 2.3%), keeping the same steps between them.
+// Slowest to fastest. Normal is the game's realistic pace (the base physics) and the default;
+// the others spread a wide range around it, each a step faster with a smaller timing window.
 export const LEVELS = [
-  { label: 'Relaxed', timeScale: 0.43, window: 1.1 },
-  { label: 'Slow', timeScale: 0.578, window: 1 },
-  { label: 'Fast', timeScale: 0.821, window: 0.88 },
-  { label: 'Extreme', timeScale: 0.914, window: 0.76 },
-  { label: 'Masters', timeScale: 1.007, window: 0.64 },
+  { label: 'Relaxed', timeScale: 0.44, window: 1.15 },
+  { label: 'Slow', timeScale: 0.53, window: 1.07 },
+  { label: 'Normal', timeScale: 0.62, window: 1 },
+  { label: 'Fast', timeScale: 0.72, window: 0.92 },
+  { label: 'Extreme', timeScale: 0.84, window: 0.8 },
+  { label: 'Masters', timeScale: 0.96, window: 0.68 },
 ] as const;
-export const DEFAULT_LEVEL = 'Fast';
+export const DEFAULT_LEVEL = 'Normal';
 const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
   cfg.hitting.windowScale = window;
@@ -178,6 +179,28 @@ const GROUPS: { title: string; ids: RowId[] }[] = [
 
 export class Menu {
   private picks: number[] = CHOICES.map((c) => c.start ?? 0);
+  /** Called after any setting changes (the home screen saves them). */
+  onChange: () => void = () => {};
+
+  /** The settings, by row and value label (the table is saved with the player's picks instead). */
+  snapshot(): Record<string, string> {
+    const out: Record<string, string> = {};
+    CHOICES.forEach((c, i) => {
+      if (i !== TABLE_ROW) out[c.id] = c.values[this.picks[i]].label;
+    });
+    return out;
+  }
+
+  /** Put back saved settings; unknown rows or values are skipped. */
+  restore(saved: unknown): void {
+    if (!saved || typeof saved !== 'object') return;
+    CHOICES.forEach((c, i) => {
+      if (i === TABLE_ROW) return;
+      const label = (saved as Record<string, unknown>)[c.id];
+      const k = c.values.findIndex((v) => v.label === label);
+      if (k >= 0) this.picks[i] = k;
+    });
+  }
   /** Tables this player hasn't unlocked can't be picked. */
   tableLocked: (venue: string) => boolean = () => false;
   /** Which team the signed-in player is on in head-to-head (set in the character picker). */
@@ -290,6 +313,7 @@ export class Menu {
         if (ci !== TABLE_ROW || !this.tableLocked(DESIGN_ORDER[this.picks[TABLE_ROW]])) break;
       }
       this.changeAt = { id: rows[this.cursor].id, dir: Math.sign(dx), at: typeof performance !== 'undefined' ? performance.now() : 0 };
+      this.onChange();
       return;
     }
     // Hop columns, to the row nearest in height.
@@ -1022,14 +1046,14 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
 }
 
 export const HELP: [string, string][] = [
-  ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles.'],
+  ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles. Esc pauses (R restarts from the pause card, or rematches after a match).'],
   ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
   ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long, and the further from perfect, the less accurate the shot. Fast balls, long rallies and balls far from you leave less time.'],
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too. Spin on the ball you return pushes your shot (topspin long, backspin short, sidespin wide) unless you hit the opposite spin to cancel it; the same spin adds to yours.'],
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
-  ['Speed', 'The Speed setting goes Relaxed, Slow, Fast, Extreme and Masters: each step plays faster with smaller timing windows (saves included).'],
+  ['Speed', 'The Speed setting goes Relaxed, Slow, Normal, Fast, Extreme and Masters (Normal is the realistic pace): each step plays faster with smaller timing windows (saves included).'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],

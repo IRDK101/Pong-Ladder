@@ -3,6 +3,7 @@
 
 import { STAT_KEYS, STAT_MAX, STAT_MIN, type Stats } from './stats';
 import { DEFAULT_HIT_STYLES, DEFAULT_SERVE_STYLES, STYLES } from './styles';
+import { MAX_PASSIVES } from './passives';
 
 export interface Sprite {
   w: number;
@@ -54,6 +55,8 @@ export interface Character {
   level: number;
   /** Equipped cosmetic rewards (reward ids), unlocked by level. */
   cosmetics: Cosmetics;
+  /** Passive ability ids (see core/passives.ts), at most MAX_PASSIVES. */
+  passives?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -93,6 +96,7 @@ export function newCharacter(name = 'New character', now = new Date()): Characte
     sprite: { parts: { ...DEFAULT_PARTS }, pixels: null },
     level: 1,
     cosmetics: { nameColor: null, badges: [], spriteItem: null, celebration: null },
+    passives: [],
     createdAt: t,
     updatedAt: t,
   };
@@ -117,5 +121,8 @@ export function validateCharacter(c: Character): string[] {
   for (const id of c.hitStyles) if (STYLES[id]?.kind !== 'hit') errs.push(`Unknown hit style "${id}".`);
   for (const id of c.serveStyles) if (STYLES[id]?.kind !== 'serve') errs.push(`Unknown serve style "${id}".`);
   if (c.sprite.pixels && c.sprite.pixels.pixels.length !== c.sprite.pixels.w * c.sprite.pixels.h) errs.push('Sprite pixel data is the wrong size.');
+  if (c.passives && (!Array.isArray(c.passives) || c.passives.some((p) => typeof p !== 'string'))) errs.push('Passive abilities are malformed.');
+  else if (c.passives && c.passives.length > MAX_PASSIVES) errs.push(`A character can have at most ${MAX_PASSIVES} passive abilities.`);
+  else if (c.passives && new Set(c.passives).size !== c.passives.length) errs.push('Each passive ability can be picked once.');
   return errs;
 }

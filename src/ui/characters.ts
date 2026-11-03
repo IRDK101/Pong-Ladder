@@ -12,6 +12,7 @@ import { BADGE_LABELS, isUnlocked, REWARDS, type RewardKind } from '../progress/
 import { theme } from '../theme';
 import { careerTable, levelBar, progressFrom, type Progress } from './careerView';
 import { h, nameTag, spriteImage, type Overlay } from './dom';
+import { getPassive, MAX_PASSIVES, PASSIVES, passivesOf } from '../core/passives';
 
 /** A character's equipped name color as a CSS color, if any. */
 export function nameColorOf(c: Character): string | null {
@@ -49,6 +50,13 @@ export function withAccountLevels(cfg: GameConfig, p: Progress, account: Account
   return { ...p, characterLevel: (id) => characterLevel(cfg, account.progress, id) };
 }
 
+/** A character's passive abilities as small chips (nothing when it has none). */
+export function passiveChips(c: Character): HTMLElement | null {
+  const list = passivesOf(c.passives);
+  if (!list.length) return null;
+  return h('div', { class: 'chips' }, ...list.map((p) => h('span', { class: 'badge passive', title: p.description }, `${p.icon} ${p.name}`)));
+}
+
 export function characterCard(c: Character, level: number, extra: HTMLElement[] = [], attrs: Record<string, string | EventListener> = {}): HTMLElement {
   return h(
     'div',
@@ -61,6 +69,7 @@ export function characterCard(c: Character, level: number, extra: HTMLElement[] 
     ),
     statBars(c.stats),
     h('p', { class: 'dim', style: 'font-size:12px' }, `Hits: ${c.hitStyles.map((id) => getStyle(id).name).join(', ')}`),
+    passiveChips(c),
     ...extra,
   );
 }
@@ -371,7 +380,7 @@ class CharacterEditor {
         'div',
         { class: 'cols2' },
         h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.identityPanel(), this.statsPanel()),
-        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.footer()),
+        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.passivesPanel(), this.footer()),
       ),
     );
     // Re-rendering after a change keeps the scroll position (the first show starts at the top).
@@ -442,6 +451,42 @@ class CharacterEditor {
           h('p', { class: 'dim', style: 'font-size:12px;margin-left:98px' }, STAT_INFO[k].effect),
         );
       }),
+    );
+  }
+
+  /** Passive abilities: always-on traits from the catalog in core/passives.ts, up to MAX_PASSIVES. */
+  private passivesPanel(): HTMLElement {
+    const c = this.c;
+    if (!c.passives) c.passives = [];
+    const chosen = c.passives;
+    const slots = Array.from({ length: MAX_PASSIVES }, (_, i) => {
+      const id = chosen[i];
+      const p = id ? getPassive(id) : undefined;
+      return h(
+        'div',
+        { class: `passive-slot${id ? ' filled' : ''}` },
+        id
+          ? h(
+              'div',
+              { class: 'row spread', style: 'width:100%' },
+              h('span', { class: 'row', style: 'gap:8px' }, h('span', { class: 'passive-icon' }, p?.icon ?? '?'), h('span', {}, h('b', {}, p?.name ?? id), h('p', { class: 'dim', style: 'font-size:12px' }, p?.description ?? 'This ability is no longer in the catalog; it does nothing until it is added back.'))),
+              h('button', { onclick: () => (chosen.splice(i, 1), this.render()) }, 'Remove'),
+            )
+          : h('span', { class: 'dim' }, `Empty slot ${i + 1}`),
+      );
+    });
+    const addable = PASSIVES.filter((p) => !chosen.includes(p.id));
+    return h(
+      'div',
+      { class: 'box', style: 'display:flex;flex-direction:column;gap:10px' },
+      h('h2', {}, 'Passive abilities'),
+      h('p', { class: 'dim' }, `Always-on traits this character brings to every match, up to ${MAX_PASSIVES}.`),
+      ...slots,
+      !PASSIVES.length
+        ? h('p', { class: 'dim', style: 'font-size:12px' }, 'No passive abilities exist yet. Once they are added, pick them here.')
+        : chosen.length < MAX_PASSIVES && addable.length
+          ? h('div', { class: 'chips' }, ...addable.map((p) => h('button', { title: p.description, onclick: () => (chosen.push(p.id), this.render()) }, `+ ${p.icon} ${p.name}`)))
+          : null,
     );
   }
 

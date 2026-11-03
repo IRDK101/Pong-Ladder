@@ -9,6 +9,7 @@ import { NO_EFFECTS, type BallEffects, type Vec3 } from '../core/physics';
 import { NEUTRAL_STATS, statEffect, type Stats } from '../core/stats';
 import type { ShotStyle } from '../core/styles';
 import { predictPeak, solveArc, solveServe } from '../core/trajectory';
+import { passiveEffect } from '../core/passives';
 
 /** Aim input, each axis in [-1, 1], in table axes (x = length, y = width). */
 export interface Aim {
@@ -29,6 +30,8 @@ export interface SwingContext {
   rallyHits?: number;
   /** Distance (m) from where the hitter stands to the ball: farther = smaller window, none out of reach. */
   reach?: number;
+  /** The swinger's passive abilities (their window effects apply). */
+  passives?: readonly string[];
 }
 
 /** 0–1 multiplier for how far the hitter must reach (1 = comfortable, 0 = out of reach). */
@@ -48,9 +51,10 @@ const neutral: SwingContext = { stats: NEUTRAL_STATS };
 export function timingWindow(cfg: GameConfig, style: ShotStyle, ctx: SwingContext = neutral): number {
   const h = cfg.hitting;
   let w = h.timingWindow * (h.windowScale ?? 1) * style.timing.windowScale;
-  if (style.kind === 'serve') w *= statEffect(cfg, 'serveWindow', ctx.stats.serve);
+  if (style.kind === 'serve') w *= statEffect(cfg, 'serveWindow', ctx.stats.serve) * passiveEffect(ctx.passives, 'serveWindow');
   else {
-    if (ctx.save) w *= h.saveWindowScale * statEffect(cfg, 'saveWindow', ctx.stats.saves);
+    w *= passiveEffect(ctx.passives, 'hitWindow');
+    if (ctx.save) w *= h.saveWindowScale * statEffect(cfg, 'saveWindow', ctx.stats.saves) * passiveEffect(ctx.passives, 'saveWindow');
     if (ctx.incomingPower !== undefined) w *= statEffect(cfg, 'powerIncomingWindow', ctx.incomingPower);
     if (ctx.ballSpeed !== undefined && ctx.ballSpeed > 0) {
       const sp = h.windowSpeed;
@@ -119,6 +123,12 @@ function scatter(radius: number, rng: () => number): { dx: number; dy: number } 
 
 function shotPeak(cfg: GameConfig, style: ShotStyle, q: number, rng: () => number): number {
   return style.peak * (1 - cfg.hitting.peakLossWorst * (1 - q) * (0.5 + 0.5 * rng()));
+}
+
+/** Ease the very highest aimed peaks down (a soft knee), so they stay on screen; everything below the knee is untouched. */
+export function softPeak(cfg: GameConfig, peak: number): number {
+  const k = cfg.physics.peakSoftCap ?? Infinity;
+  return peak <= k ? peak : k + (peak - k) * 0.25;
 }
 
 /** Spin the hitter adds by holding a direction as they hit. `dir` is the world-y side a sidespin curves to. */
@@ -220,24 +230,26 @@ export function timingDrift(cfg: GameConfig, aim: AimSpec): number {
   return Math.sign(l) * l * l * cfg.hitting.timingDepthError * aim.forward;
 }
 
-export function computeHit(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: AimSpec, q: number, rng: () => number, stats: Stats = NEUTRAL_STATS): Shot {
+export function computeHit(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: AimSpec, q: number, rng: () => number, stats: Stats = NEUTRAL_STATS, passives?: readonly string[]): Shot {
   const radius =
-    baseScatter(cfg, q) * style.scatterScale * statEffect(cfg, 'accuracyScatter', stats.accuracy) * statEffect(cfg, 'powerScatter', stats.power);
+    baseScatter(cfg, q) * style.scatterScale * statEffect(cfg, 'accuracyScatter', stats.accuracy) * statEffect(cfg, 'powerScatter', stats.power) * passiveEffect(passives, 'scatter');
   const { dx, dy } = scatter(radius, rng);
-  const clash = spinClash(cfg, aim.incoming, aim.spin, q, stats, aim.forward);
+  const raw = spinClash(cfg, aim.incoming, aim.spin, q, stats, aim.forward);
+  const push = passiveEffect(passives, 'spinPush');
+  const clash = push === 1 ? raw : { ...raw, dx: raw.dx * push, dy: raw.dy * push };
   const target = { x: aim.x + dx + timingDrift(cfg, aim) + clash.dx, y: aim.y + dy + clash.dy };
   const fx = spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null, clash.boost);
-  const peak = shotPeak(cfg, style, q, rng) * statEffect(cfg, 'powerPeak', stats.power);
+  const peak = softPeak(cfg, shotPeak(cfg, style, q, rng) * statEffect(cfg, 'powerPeak', stats.power) * passiveEffect(passives, 'peak'));
   const vel = solveArc(from, target, peak, cfg.physics.gravity, fx.curve, aim.z ?? 0);
   return { vel, peak: predictPeak(from, vel, cfg.physics.gravity), target, fx, clash };
 }
 
-export function computeServe(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: AimSpec, q: number, rng: () => number, stats: Stats = NEUTRAL_STATS): Shot {
-  const radius = baseScatter(cfg, q) * style.scatterScale * statEffect(cfg, 'serveScatter', stats.serve);
+export function computeServe(cfg: GameConfig, style: ShotStyle, from: Vec3, aim: AimSpec, q: number, rng: () => number, stats: Stats = NEUTRAL_STATS, passives?: readonly string[]): Shot {
+  const radius = baseScatter(cfg, q) * style.scatterScale * statEffect(cfg, 'serveScatter', stats.serve) * passiveEffect(passives, 'scatter');
   const { dx, dy } = scatter(radius, rng);
   const target = { x: aim.x + dx + timingDrift(cfg, aim) * 0.5, y: aim.y + dy };
   // Serve spin lasts two bounces, so it still kicks on the receiver's side.
   const fx = { ...spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null), bounces: 2 };
-  const { vel } = solveServe(cfg, from, target, shotPeak(cfg, style, q, rng), fx);
+  const { vel } = solveServe(cfg, from, target, softPeak(cfg, shotPeak(cfg, style, q, rng) * passiveEffect(passives, 'peak')), fx);
   return { vel, peak: predictPeak(from, vel, cfg.physics.gravity), target, fx };
 }

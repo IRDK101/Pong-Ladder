@@ -59,7 +59,7 @@ describe('pre-game menu', () => {
     m.focus('match');
     m.move(0, -1); // best of 3 (wraps backwards)
     m.focus('speed');
-    m.move(0, -1); // Slow: left is one level slower than the default (Fast)
+    m.move(0, -1); // Slow: left is one level slower than the default (Normal)
     m.focus('ski');
     m.activate(); // on (activate cycles an option row)
     const cfg = m.config();
@@ -68,14 +68,15 @@ describe('pre-game menu', () => {
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Slow');
   });
 
-  it('game speed: Fast is the default; right is faster, left is slower', () => {
+  it('game speed: Normal (the base physics) is the default; right is faster, left is slower', () => {
     const m = new Menu();
     const fast = m.config().physics.timeScale;
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
-    expect(fast).toBeCloseTo(0.88 * 0.977 ** 3, 2);
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Normal');
+    expect(fast).toBe(makeConfig().physics.timeScale);
+    expect(m.config().hitting.windowScale).toBe(1);
     m.focus('speed');
     m.move(0, 1);
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Extreme');
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
     expect(m.config().physics.timeScale).toBeGreaterThan(fast);
     m.move(0, -1);
     m.move(0, -1);
@@ -221,7 +222,7 @@ describe('clicking a setting', () => {
     const i = m.rows().findIndex((r) => r.id === 'speed');
     m.valueZones.set('speed', { cx: 400, l: 340, r: 460 });
     expect(m.click(i, 455)).toBeNull();
-    expect(m.rows()[i].value).toBe('Extreme');
+    expect(m.rows()[i].value).toBe('Fast');
     m.click(i, 345);
     m.click(i, 345);
     expect(m.rows()[i].value).toBe('Slow');

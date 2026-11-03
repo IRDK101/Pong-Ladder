@@ -85,6 +85,14 @@ const kv = browserStore();
 const store = new AppStore(kv);
 const menu = new Menu();
 menu.entered();
+// The home screen's settings are remembered in this browser.
+const MENU_KEY = 'dartmouth-pong/menu/v1';
+try {
+  menu.restore(JSON.parse(kv.getItem(MENU_KEY) ?? 'null'));
+} catch {
+  /* start from the defaults */
+}
+menu.onChange = () => kv.setItem(MENU_KEY, JSON.stringify(menu.snapshot()));
 // The player's account: level, loot boxes, unlocks, and the shared character collection.
 const account = new Account(store, baseCfg, kv);
 menu.tableLocked = (v) => !account.tableUnlocked(v);
@@ -185,6 +193,10 @@ let cpu: CpuController | null = null;
 let record: MatchRecord | null = null;
 let menuNote = '';
 let gameOverAt = 0;
+/** A local match is paused (Escape, or the window losing focus). Online, the same overlay asks before leaving, and the match runs on. */
+let paused = false;
+/** The last local match's settings and players, for Restart and Rematch. */
+let lastMatch: { cfg: GameConfig; roster: Roster } | null = null;
 
 // Debug hook (open the page with #debug): lets scripted bots drive the game for automated checks.
 let debugInputs: ((g: Game) => Record<TeamId, TeamInput>) | null = null;
@@ -228,6 +240,8 @@ function openPanel(show: () => void): void {
 
 function startMatch(cfg: GameConfig, roster: Roster): void {
   overlay.hide();
+  paused = false;
+  lastMatch = { cfg: structuredClone(cfg), roster };
   game = new Game(cfg, Math.random, roster);
   // Aim keys follow the screen each human is looking at.
   const frameFor = (team: 'A' | 'B') => cameraFrame(teamCamera(cfg, team, 16, 9));
@@ -640,12 +654,21 @@ function frame(dt: number): void {
     guestFrame(g, dt);
     renderGame3D(ctx, theme, view, g, 'behindB');
     renderHud(ctx, theme, view, g);
+    if (paused && screen === 'playing') drawLeaveCard();
     if (screen === 'gameEnd') {
       const st = g.engine.peek();
       const ready = performance.now() - gameOverAt > 800;
       drawEndScreen(ctx, theme, view, st.winner === 'B' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`, [g.teamLine(st.winner ?? 'A'), g.cupsLeftLine(), xpNote, rematchLine()].filter(Boolean), ready ? rematchPrompt() : '');
       if (ready && anyPressed(['hit'])) rematchPressed();
     }
+    return;
+  }
+  if (screen === 'playing' && paused && !online) {
+    // Paused: the scene holds still under the pause card.
+    renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
+    renderHud(ctx, theme, view, g);
+    drawEndScreen(ctx, theme, view, 'PAUSED', ['Space / Enter: resume', 'R: restart this match', 'Esc: quit to the menu'], '');
+    if (anyPressed(['hit'])) paused = false;
     return;
   }
   if (screen === 'playing') {
@@ -667,6 +690,7 @@ function frame(dt: number): void {
 
   renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
   renderHud(ctx, theme, view, g);
+  if (paused && online && screen === 'playing') drawLeaveCard();
 
   // Short pause so the final call is readable before the overlay accepts input.
   const ready = performance.now() - gameOverAt > 800;
@@ -697,7 +721,7 @@ function frame(dt: number): void {
       } else screen = 'playing';
     }
   } else if (screen === 'matchEnd') {
-    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, xpNote || 'Match log saved'], 'Press Space / Enter for the menu');
+    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, xpNote || 'Match log saved', 'R: rematch with the same players'], 'Press Space / Enter for the menu');
     if (anyPressed(['hit'])) {
       if (record && hasTrackedPlayers(record)) {
         const rec = record;
@@ -707,12 +731,36 @@ function frame(dt: number): void {
   }
 }
 
+/** Online, Escape asks before leaving (the match can't pause for the other player). */
+function drawLeaveCard(): void {
+  drawEndScreen(ctx, theme, view, 'LEAVE THE MATCH?', ['Esc again: leave', 'Any other key: keep playing (the match is still going)'], '');
+}
+window.addEventListener('keydown', (e) => {
+  if (paused && online && e.code !== 'Escape') paused = false;
+});
+
+// R: restart a paused local match, or rematch after one ends.
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyR' || isTyping(e.target) || online || !lastMatch) return;
+  if ((screen === 'playing' && paused) || screen === 'matchEnd') startMatch(structuredClone(lastMatch.cfg), lastMatch.roster);
+});
+// Leaving the window mid-match pauses a local game.
+window.addEventListener('blur', () => {
+  if (screen === 'playing' && !online) paused = true;
+});
+
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
   // Escape in a text box just leaves the box, so a half-typed name is not thrown away.
   if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
+  // Mid-match, the first Escape pauses (online: asks first, the match keeps going); the second quits.
+  if (screen === 'playing' && !paused) {
+    paused = true;
+    return;
+  }
   if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') {
     const finished = screen !== 'playing';
+    paused = false;
     endOnline();
     toMenu(finished ? '' : 'Match abandoned.');
   } else if (screen === 'panel' && onlineScreen.isShowing()) {

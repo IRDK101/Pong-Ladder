@@ -912,3 +912,18 @@ Decided with the owner: bigger sprites, and Fast stays the default.
   3. shades every shape (a two-pixel shadow right and below, lit left and top) and outlines it in one fine pixel.
 
   Hand-drawn characters are upscaled the same way. UI sprite scales are in 16-pixel-grid units, so screens keep their sizes, and the 3D view adds one more smoothing pass.
+
+## Far-side perspective, height caps, passive abilities, speeds back to Normal, QOL
+
+- **Far half of the table:** the texture mapping was already exact (each strip is at one depth, so the affine map is right). What made the far half feel off was perspective: a close, wide camera shrank the far half to 58% of the near half's size. The camera now sits further back with a longer lens (`camera`: behind 2.85, height 2.3, lookAt 0.5, lookHeight 0.3, fovY 35). The far half is now 62% of the near half and the far players are bigger, with the same framing. Pulling back further would put Team B's camera outside the room behind the benches (a basement test checks this).
+- **Ball height** (non-disruptive): a table bounce can't rise more than `physics.maxBounceApex` (1.3 m), which only hard smashes ever reach. Aimed peaks above `physics.peakSoftCap` (1.3 m) keep only 25% of the excess (`softPeak`), so only the highest lobs are trimmed. Measured over CPU rallies, the median flight (0.39 m) is unchanged and the highest dropped from 2.56 m to under 1.45 m, inside the view. The rest come from contact points after big bounces, which the bounce cap now prevents.
+- **Passive abilities** (`core/passives.ts`): every character has `passives` (ids, at most `MAX_PASSIVES` = 2), and the `PASSIVES` catalog is empty for now.
+  - An ability has a name, icon and description, flat stat changes, and effect multipliers: hit, serve and save windows, scatter, spin push and peak.
+  - They're wired into the game: `statsOf` adds stat changes, `timingWindow` takes window effects through `SwingContext.passives`, and `computeHit` and `computeServe` apply the scatter, spin-push and peak effects.
+  - The character editor has a Passive abilities section with two slots, and cards show ability chips.
+  - Unknown ids are kept, so an ability removed from the catalog comes back if it's re-added.
+- **Speeds, back to Normal:** Normal is the base physics again (timeScale 0.62, window 1) and the default. Around it: Relaxed 0.44 / 1.15, Slow 0.53 / 1.07, Normal 0.62 / 1, Fast 0.72 / 0.92, Extreme 0.84 / 0.8, Masters 0.96 / 0.68.
+- **QOL:**
+  - **Pause:** Escape in a local match pauses it (Space resumes, R restarts, Esc again quits), and leaving the window pauses too. Online, Escape asks before leaving while the match runs on.
+  - **Rematch:** after a local match, R rematches with the same players.
+  - **Saved settings:** the home screen's settings are remembered in the browser (`Menu.snapshot` / `restore`).

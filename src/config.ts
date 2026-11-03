@@ -111,6 +111,10 @@ export interface PhysicsTuning {
   gravity: number;
   /** Vertical speed kept after a table bounce. */
   restitution: number;
+  /** Highest a table bounce can rise (m above the table): keeps rare smash rebounds on screen. */
+  maxBounceApex?: number;
+  /** Aimed peaks above this (m) are eased down (`peakSoftCap` + 25% of the rest), so the highest lobs stay on screen. */
+  peakSoftCap?: number;
   /** Horizontal speed kept after a table bounce. */
   tableFriction: number;
   ballRadius: number;
@@ -191,7 +195,7 @@ export const defaultConfig: GameConfig = {
   venue: 'saints',
   design: 'plain',
   view: 'behindA',
-  camera: { behind: 2.2, height: 2.1, lookAt: 0.55, lookHeight: 0.15, fovY: 44, pixelSize: 2, rows: 400, detail: 1 },
+  camera: { behind: 2.85, height: 2.3, lookAt: 0.5, lookHeight: 0.3, fovY: 35, pixelSize: 2, rows: 400, detail: 1 },
   controls: {
     A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
     B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },
@@ -203,6 +207,8 @@ export const defaultConfig: GameConfig = {
   physics: {
     gravity: 9.81,
     restitution: 0.88,
+    maxBounceApex: 1.3,
+    peakSoftCap: 1.3,
     tableFriction: 0.92,
     ballRadius: 0.02,
     cupHeight: 0.12,

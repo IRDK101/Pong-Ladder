@@ -38,8 +38,8 @@ describe('the aim lock', () => {
 
 describe('timing, saves and accuracy', () => {
   it('speed levels get faster with smaller windows, up to Masters', () => {
-    expect(LEVELS.map((l) => l.label)).toEqual(['Relaxed', 'Slow', 'Fast', 'Extreme', 'Masters']);
-    const order = ['Relaxed', 'Slow', 'Fast', 'Extreme', 'Masters'].map((n) => LEVELS.find((l) => l.label === n)!);
+    expect(LEVELS.map((l) => l.label)).toEqual(['Relaxed', 'Slow', 'Normal', 'Fast', 'Extreme', 'Masters']);
+    const order = ['Relaxed', 'Slow', 'Normal', 'Fast', 'Extreme', 'Masters'].map((n) => LEVELS.find((l) => l.label === n)!);
     for (let i = 1; i < order.length; i++) {
       expect(order[i].timeScale).toBeGreaterThan(order[i - 1].timeScale);
       expect(order[i].window).toBeLessThanOrEqual(order[i - 1].window);

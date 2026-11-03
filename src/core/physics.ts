@@ -110,6 +110,9 @@ export class BallPhysics {
       const fx = this.fx;
       const kick = 1 + ph.topspinKick * fx.topspin;
       v.z = -v.z * ph.restitution * fx.restitutionScale * (1 - ph.topspinBounceLoss * fx.topspin);
+      // A smash can't bounce up out of view: the rebound tops out at maxBounceApex (normal bounces never reach it).
+      const cap = Math.sqrt(2 * ph.gravity * (ph.maxBounceApex ?? 1.35));
+      if (v.z > cap) v.z = cap;
       v.x *= ph.tableFriction * fx.frictionScale * kick;
       v.y = v.y * ph.tableFriction * fx.frictionScale * kick + fx.sideKick;
       // Spin is spent after its bounces; a serve's sidespin curve only bends the first segment.
