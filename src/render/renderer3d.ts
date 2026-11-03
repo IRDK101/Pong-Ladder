@@ -297,19 +297,27 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
     return;
   }
   const sprite = smooth(raw);
-  // The hit jolt: for a moment after striking the ball, the player lunges at it (a quick dip and a
-  // lean toward the ball, squashing a little), then springs back.
-  const j = hitJolt(game, p);
-  const ballAt = j ? project(cam, game.ball.pos) : null;
-  const lean = j && ballAt ? Math.sign(ballAt.x - base.x) * j * hgt * 0.07 : 0;
-  const dh = hgt * (1 - 0.06 * j);
-  const w = ((hgt * sprite.w) / sprite.h) * (1 + 0.08 * j);
-  const x = Math.round(base.x - w / 2 + lean);
-  const y = Math.round(head.y + (hgt - dh) + j * hgt * 0.03);
+  // The hit animation (see hitPose): a ready crouch as the rings close, a snap lunge with a stretch
+  // and a tilt toward the ball at the hit, then a springy recovery. Drawn about the player's feet.
+  const pose = hitPose(game, p);
+  const moving = pose.lunge !== 0 || pose.crouch !== 0 || pose.stretch !== 0;
+  const ballAt = moving ? project(cam, game.ball.pos) : null;
+  const dir = ballAt ? Math.sign(ballAt.x - base.x) || 1 : 1;
+  const w0 = (hgt * sprite.w) / sprite.h;
+  const sy = 1 - 0.07 * pose.crouch + 0.06 * pose.stretch;
+  const sx = 1 + 0.06 * pose.crouch - 0.04 * pose.stretch + 0.05 * Math.max(0, pose.lunge);
   // Your own team, seen over their shoulders, is a little see-through so the table stays readable.
   if (fromBehind) b.globalAlpha = fade ? 0.45 : 0.88;
-  b.drawImage(bitmap(sprite), x, y, Math.round(w), Math.round(dh));
+  if (moving) {
+    b.save();
+    b.translate(Math.round(base.x + dir * pose.lunge * hgt * 0.08), Math.round(base.y + pose.crouch * hgt * 0.02));
+    b.rotate(dir * pose.lunge * 0.11);
+    b.scale(sx, sy);
+    b.drawImage(bitmap(sprite), Math.round(-w0 / 2), Math.round(-hgt), Math.round(w0), Math.round(hgt));
+    b.restore();
+  } else b.drawImage(bitmap(sprite), Math.round(base.x - w0 / 2), Math.round(head.y), Math.round(w0), Math.round(hgt));
   b.globalAlpha = 1;
+  const y = Math.round(head.y);
   if (active) {
     // A small bobbing marker over the head of whoever is up.
     const bob = Math.round(Math.sin(game.time * 6) * 2);
@@ -325,11 +333,36 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
 
 /** How far into its hit jolt a player is: 0 at rest, rising quickly to 1 and easing back over about a fifth of a second. */
 export function hitJolt(game: Game, p: PlayerId): number {
+  return Math.max(0, hitPose(game, p).lunge);
+}
+
+/**
+ * A player's hit pose right now:
+ * - `crouch` (0..1): getting ready as their timing rings close in;
+ * - `lunge` (-0.3..1): the strike toward the ball, snapping out fast, then a
+ *   damped spring back (it overshoots a little behind before settling);
+ * - `stretch` (-1..1): tall at contact, a squash as they recover.
+ */
+export function hitPose(game: Game, p: PlayerId): { crouch: number; lunge: number; stretch: number } {
+  let crouch = 0;
+  const up = game.activePlayer(p.team);
+  const cue = up && up.side === p.side ? game.timingCue(p.team) : null;
+  if (cue && cue.window > 0) crouch = 0.8 * Math.max(0, 1 - Math.abs(cue.offset) / (cue.window * 1.6));
   const t = game.hitTimes[`${p.team}-${p.side}`];
-  if (t === undefined) return 0;
-  const e = (game.time - t) / Math.max(0.05, 0.2 * game.cfg.physics.timeScale);
-  if (e < 0 || e >= 1) return 0;
-  return e < 0.25 ? e / 0.25 : 1 - (e - 0.25) / 0.75;
+  if (t === undefined) return { crouch, lunge: 0, stretch: 0 };
+  const D = Math.max(0.06, 0.3 * game.cfg.physics.timeScale);
+  const e = (game.time - t) / D;
+  if (e < 0 || e >= 1) return { crouch, lunge: 0, stretch: 0 };
+  const strike = 0.16;
+  let lunge: number;
+  if (e < strike) lunge = 1 - Math.pow(1 - e / strike, 3); // snap out
+  else {
+    const k = (e - strike) / (1 - strike);
+    lunge = Math.exp(-4.5 * k) * Math.cos(k * Math.PI * 2.2); // spring back with a small overshoot
+  }
+  const stretch = e < strike ? e / strike : e < 0.45 ? 1 - ((e - strike) / (0.45 - strike)) * 1.8 : -0.8 * (1 - (e - 0.45) / 0.55);
+  // Contact interrupts the crouch at once.
+  return { crouch: e < 0.35 ? crouch * (1 - e / 0.35) : 0, lunge: Math.abs(lunge) < 0.01 ? 0 : lunge, stretch: Math.abs(stretch) < 0.01 ? 0 : stretch };
 }
 
 /** A downward-pointing pixel triangle with its tip at (x, y). */
@@ -404,21 +437,6 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   if (locked) {
     h.globalAlpha = flash ? 0.45 : 0.25;
     disc(h, cam, c, R, col, 24);
-    h.globalAlpha = 1;
-  }
-  // Depth guide: near the far end of the table (the end this shot is aimed at), that end's edge lights
-  // up in the team color, brighter the closer the marker gets, with a line from the marker to it, so
-  // how far the shot is from going long reads at a glance, even foreshortened.
-  const endX = team === 'A' ? L : 0;
-  const toEnd = (endX - t.x) * (team === 'A' ? 1 : -1); // > 0: still on the table
-  if (toEnd < 0.4 && t.y > -0.2 && t.y < W + 0.2) {
-    const k = Math.max(0, Math.min(1, 1 - toEnd / 0.4));
-    const edgeCol = toEnd < 0 ? theme.colors.bad : base;
-    h.globalAlpha = 0.35 + 0.55 * k;
-    line(h, cam, { x: endX, y: 0, z }, { x: endX, y: W, z }, dark, 5);
-    line(h, cam, { x: endX, y: 0, z }, { x: endX, y: W, z }, edgeCol, 3);
-    const ey = Math.max(0, Math.min(W, t.y));
-    line(h, cam, { x: t.x, y: ey, z }, { x: endX, y: ey, z }, edgeCol, 1);
     h.globalAlpha = 1;
   }
   ring(h, cam, c, R, dark, 4, 28);
@@ -546,6 +564,101 @@ function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
   ctx.fillText(text, x0 + w / 2, y0 + 10);
 }
 
+/** How long (game seconds) a hit callout stays up. */
+const FEEDBACK_LIFE = 1.05;
+
+/** The look of each timing word: colors, how big it pops, and whether it sparkles or shakes. */
+function calloutStyle(theme: Theme, word: string, q: number | null): { fill: string[]; glow: string; pop: number; sparkle: boolean; shake: boolean } {
+  const c = theme.colors;
+  if (q === null) return { fill: [c.bad, '#ff9a8a'], glow: 'rgba(255, 80, 60, 0.55)', pop: 1.15, sparkle: false, shake: true };
+  if (word === 'Perfect') return { fill: ['#fff4c2', '#ffd76a', '#ffb43c'], glow: 'rgba(255, 210, 90, 0.85)', pop: 1.45, sparkle: true, shake: false };
+  if (word === 'Good') return { fill: ['#d8ffd0', c.good], glow: 'rgba(110, 230, 120, 0.6)', pop: 1.3, sparkle: false, shake: false };
+  return { fill: ['#fff0c8', '#ffb45a'], glow: 'rgba(255, 170, 70, 0.45)', pop: 1.2, sparkle: false, shake: false };
+}
+
+/**
+ * The hit callout: the timing word pops in (overshooting, then settling) with a
+ * thick outline, a color gradient and a glow; Perfect throws out sparkles and
+ * a Whiff shakes. The spin note ("Backspin + Topspin") sits smaller underneath.
+ * It then drifts up and fades.
+ */
+function drawHitCallout(ctx: CanvasRenderingContext2D, theme: Theme, fb: NonNullable<Game['feedback']>, age: number, x: number, y: number, vp: Viewport, minY: number, maxY: number): void {
+  const [word, ...rest] = fb.label.split(' · ');
+  const note = rest.join(' · ');
+  const st = calloutStyle(theme, word, fb.quality);
+  // Pop: 0 → overshoot → 1 over the first 0.22 s (an elastic ease), then hold, then fade and drift up.
+  const e = Math.min(1, age / 0.22);
+  const pop = e < 1 ? 1 + (st.pop - 1) * Math.sin(e * Math.PI) - (1 - e) * (1 - e) * 0.9 : 1;
+  const fade = age > FEEDBACK_LIFE - 0.35 ? Math.max(0, (FEEDBACK_LIFE - age) / 0.35) : 1;
+  const rise = age * 26;
+  const shake = st.shake && age < 0.3 ? Math.sin(age * 90) * (0.3 - age) * 18 : 0;
+  ctx.save();
+  ctx.font = 'bold 30px monospace';
+  const ww = ctx.measureText(word).width;
+  ctx.font = theme.fonts.label;
+  const nw = note ? ctx.measureText(note).width : 0;
+  const half = Math.max(ww * st.pop, nw) / 2 + 14;
+  const tx = Math.max(vp.x + half, Math.min(vp.x + vp.w - half, x)) + shake;
+  const ty = Math.max(minY + 34, Math.min(maxY - 16, y - rise));
+  ctx.globalAlpha = fade;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Sparkles for a Perfect: eight points flying out and twinkling.
+  if (st.sparkle && age < 0.7) {
+    const t = age / 0.7;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.4;
+      const r = (ww / 2 + 10) * (0.6 + t * 0.9);
+      const sx = tx + Math.cos(a) * r;
+      const sy = ty + Math.sin(a) * r * 0.55;
+      const sz = (1 - t) * (i % 2 ? 5 : 8);
+      ctx.fillStyle = i % 2 ? '#fff4c2' : '#ffd76a';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - sz);
+      ctx.lineTo(sx + sz * 0.3, sy - sz * 0.3);
+      ctx.lineTo(sx + sz, sy);
+      ctx.lineTo(sx + sz * 0.3, sy + sz * 0.3);
+      ctx.lineTo(sx, sy + sz);
+      ctx.lineTo(sx - sz * 0.3, sy + sz * 0.3);
+      ctx.lineTo(sx - sz, sy);
+      ctx.lineTo(sx - sz * 0.3, sy - sz * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  // The word.
+  ctx.save();
+  ctx.translate(tx, ty);
+  ctx.scale(pop, pop);
+  ctx.font = 'bold 30px monospace';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = st.glow;
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = theme.colors.ballOutline;
+  ctx.strokeText(word, 0, 0);
+  ctx.shadowBlur = 0;
+  const g = ctx.createLinearGradient(0, -15, 0, 15);
+  st.fill.forEach((col, i) => g.addColorStop(i / Math.max(1, st.fill.length - 1), col));
+  ctx.fillStyle = g;
+  ctx.fillText(word, 0, 0);
+  ctx.restore();
+  // The spin note, smaller, sliding in under the word.
+  if (note) {
+    ctx.font = theme.fonts.label;
+    const ne = Math.min(1, Math.max(0, (age - 0.08) / 0.2));
+    ctx.globalAlpha = fade * ne;
+    const ny = ty + 26 + (1 - ne) * 6;
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = theme.colors.ballOutline;
+    ctx.strokeText(note, tx, ny);
+    ctx.fillStyle = '#f2ead8';
+    ctx.fillText(note, tx, ny);
+  }
+  ctx.restore();
+}
+
 /** Crisp full-resolution names, turn tags and timing feedback over the scaled-up scene. */
 function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Viewport): void {
   const k = vp.w / vp.buf.width;
@@ -603,24 +716,12 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
     ctx.fillText('SINK!', 0, 0);
     ctx.restore();
   }
-  // Timing feedback ("Perfect", "Late"...) rising from the hitter.
+  // Timing feedback ("Perfect", "Late"...) popping up over the hitter.
   const fb = game.feedback;
-  if (fb && game.time - fb.time < 0.9) {
+  if (fb && game.time - fb.time < FEEDBACK_LIFE) {
     const p = fb.player ?? game.activePlayer(fb.team) ?? { team: fb.team, side: 'left' as const };
     const at = project(vp.cam, { ...standSpot(game, p), z: 0.05 });
-    if (at) {
-      const age = game.time - fb.time;
-      ctx.globalAlpha = 1 - age / 0.9;
-      ctx.font = theme.fonts.title;
-      const half = ctx.measureText(fb.label).width / 2 + 12;
-      const tx = Math.max(vp.x + half, Math.min(vp.x + vp.w - half, vp.x + at.x * k));
-      const ty = Math.max(minY + 30, Math.min(maxY, vp.y + at.y * k - 30 - age * 30));
-      ctx.fillStyle = c.ballOutline;
-      ctx.fillText(fb.label, tx + 2, ty + 2);
-      ctx.fillStyle = fb.quality === null ? c.bad : fb.quality > 0.55 ? c.good : c.text;
-      ctx.fillText(fb.label, tx, ty);
-      ctx.globalAlpha = 1;
-    }
+    if (at) drawHitCallout(ctx, theme, fb, game.time - fb.time, vp.x + at.x * k, vp.y + at.y * k - 34, vp, minY, maxY);
   }
   // Ball out of view (a sky-high lob): an arrow at the screen edge where it is.
   const ball = game.ball;

@@ -28,7 +28,7 @@ import { MatchLink, type MatchSettings } from './net/online';
 import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
 import { ProfileEditor } from './ui/profileEdit';
-import { CharacterPicker, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
+import { CharacterPicker, cpuPinnedFor, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -113,6 +113,7 @@ function adoptSelection(): void {
   selection.design = remote.design as typeof selection.design;
   selection.chars = [...remote.chars];
   selection.mySide = remote.mySide;
+  if (remote.cpu) selection.cpu = [...remote.cpu];
   kv.setItem(SELECTION_KEY, JSON.stringify(selection));
   menu.restoreDesign(selection.design);
   menu.mySide = selection.mySide;
@@ -486,6 +487,17 @@ function menuExtras(): MenuExtras {
       return sp;
     }),
     tableArt: tableArt(theme, cfg.design),
+    cpuTeam:
+      cfg.players.mode === 'coop'
+        ? (cfg.teamSize === 1 ? (['B-left'] as const) : (['B-left', 'B-right'] as const)).map((k) => {
+            const c = cpuPinnedFor(cfg, selection, account.everyone(), pins)[k];
+            if (!c) return null;
+            const key = `${c.id}:${c.updatedAt}:${c.cosmetics.spriteItem ?? ''}`;
+            let sp = menuSprites.get(key);
+            if (!sp) menuSprites.set(key, (sp = characterSprite(c.sprite, c.cosmetics.spriteItem ?? null)));
+            return sp;
+          })
+        : [],
     me: account.myProfile ? { name: account.myProfile.name, style: account.myStyle } : null,
   };
 }
@@ -494,7 +506,7 @@ function menuExtras(): MenuExtras {
 function quickFor(cfg: GameConfig): Roster {
   const mine = account.usable();
   const pins = pinnedFor(cfg, selection, mine);
-  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize, Math.random, pins);
+  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize, Math.random, { ...pins, ...cpuPinnedFor(cfg, selection, account.everyone(), pins) });
   return quickRoster(mine, cfg.teamSize, Math.random, pins);
 }
 

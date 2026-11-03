@@ -666,7 +666,7 @@ export class Account {
   }
 
   /** Remember the home screen's picks with the account. */
-  saveSelection(sel: { design: string; chars: (string | null)[]; mySide: 'A' | 'B' }): void {
+  saveSelection(sel: { design: string; chars: (string | null)[]; mySide: 'A' | 'B'; cpu?: (string | null)[] }): void {
     const cur = this.progress.selection;
     if (cur && JSON.stringify(cur) === JSON.stringify(sel)) return;
     this.progress.selection = structuredClone(sel);

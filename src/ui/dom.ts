@@ -186,6 +186,9 @@ export function injectStyles(theme: Theme): void {
   #ui .slot.on { border-color: ${c.gold}; box-shadow: 0 0 0 2px ${c.gold}; background: #4a3f24; color: ${c.text}; font-weight: normal; }
   #ui .slot-random { display: grid; place-items: center; width: 34px; height: 46px; border: 2px dashed ${c.uiEdge}; color: ${c.gold}; font-weight: bold; font-size: 20px; }
   #ui .slot-random.big { width: 48px; height: 66px; font-size: 28px; }
+  #ui .slot.cpu { border-color: ${c.teamB}; }
+  #ui .slot.cpu.on { box-shadow: 0 0 0 2px ${c.teamB}; background: #1f2a44; }
+  #ui .vs-mark { align-self: center; font-weight: bold; letter-spacing: 0.1em; color: ${c.gold}; padding: 0 4px; }
   #ui .side-toggle { display: flex; flex-direction: column; gap: 4px; justify-content: center; margin-left: auto; }
   #ui .help { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px 18px; align-items: baseline; }
   #ui .help p { line-height: 1.55; }

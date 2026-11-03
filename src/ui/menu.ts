@@ -475,6 +475,8 @@ export interface MenuExtras {
   team: (Sprite | null)[];
   /** The picked table's painted top. */
   tableArt: HTMLCanvasElement | null;
+  /** Against the CPU: the CPU team's picked sprites (null = random). */
+  cpuTeam?: (Sprite | null)[];
   /** The player's profile name and its style (null = no profile). */
   me?: { name: string; style: NameStyle } | null;
 }
@@ -730,6 +732,19 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
             ctx.fillText('?', px + 16, mid);
           }
           px += 38;
+        }
+      } else if (row.id === 'cpu' && !row.dim && ex.cpuTeam?.length) {
+        // Who the CPU plays as (picked in Playing as), as small heads; dashed boxes are random.
+        let px = r.x + 120;
+        for (const sp of ex.cpuTeam) {
+          if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, 16, px, r.y + 3, Math.round(sp.w * 1.4), r.h - 6);
+          else {
+            ctx.strokeStyle = on ? ink : c.uiEdge;
+            ctx.setLineDash([2, 2]);
+            ctx.strokeRect(px + 3, r.y + 4, 16, r.h - 8);
+            ctx.setLineDash([]);
+          }
+          px += 28;
         }
       } else if (row.id === 'table' && ex.tableArt) {
         const ax = r.x + 80;

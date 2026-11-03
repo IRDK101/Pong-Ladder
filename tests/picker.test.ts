@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeConfig } from '../src/config';
 import { newCharacter } from '../src/core/character';
 import { Menu } from '../src/ui/menu';
-import { loadSelection, pinnedFor, playingAsLabel } from '../src/ui/picker';
+import { cpuPinnedFor, loadSelection, pinnedFor, playingAsLabel } from '../src/ui/picker';
 import { quickRoster } from '../src/ui/prematch';
 
 const chars = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'].map((n) => newCharacter(n));
@@ -45,7 +45,22 @@ describe('home-screen picks', () => {
   });
 
   it('reads saved picks defensively', () => {
-    expect(loadSelection('garbage')).toEqual({ design: 'plain', chars: [null, null], mySide: 'A' });
-    expect(loadSelection(JSON.stringify({ design: 'deco', chars: ['x', 5], mySide: 'B' }))).toEqual({ design: 'deco', chars: ['x', null], mySide: 'B' });
+    expect(loadSelection('garbage')).toEqual({ design: 'plain', chars: [null, null], mySide: 'A', cpu: [null, null] });
+    expect(loadSelection(JSON.stringify({ design: 'deco', chars: ['x', 5], mySide: 'B' }))).toEqual({ design: 'deco', chars: ['x', null], mySide: 'B', cpu: [null, null] });
+    expect(loadSelection(JSON.stringify({ design: 'deco', chars: [], mySide: 'A', cpu: ['c1', 7] })).cpu).toEqual(['c1', null]);
+  });
+
+  it('against the CPU, its picked characters go on its team (never one of yours)', () => {
+    const cfg = makeConfig({ teamSize: 2 });
+    cfg.players.mode = 'coop';
+    const a = newCharacter('A1');
+    const b = newCharacter('B1');
+    const sel = { design: 'plain' as const, chars: [a.id, null], mySide: 'A' as const, cpu: [b.id, a.id] };
+    const mine = pinnedFor(cfg, sel, [a, b]);
+    const cpu = cpuPinnedFor(cfg, sel, [a, b], mine);
+    expect(cpu['B-left']?.name).toBe('B1');
+    expect(cpu['B-right']).toBeUndefined();
+    cfg.players.mode = 'versus';
+    expect(cpuPinnedFor(cfg, sel, [a, b])).toEqual({});
   });
 });

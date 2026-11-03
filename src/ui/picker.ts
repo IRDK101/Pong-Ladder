@@ -19,12 +19,14 @@ export interface Selection {
   /** Character ids for the player's side, left then right (null = random). */
   chars: (string | null)[];
   mySide: 'A' | 'B';
+  /** Against the CPU: character ids for the CPU team, left then right (null = random). */
+  cpu?: (string | null)[];
 }
 
 export const SELECTION_KEY = 'dartmouth-pong/selection/v1';
 
 export function defaultSelection(): Selection {
-  return { design: 'plain', chars: [null, null], mySide: 'A' };
+  return { design: 'plain', chars: [null, null], mySide: 'A', cpu: [null, null] };
 }
 
 export function loadSelection(raw: string | null): Selection {
@@ -34,6 +36,7 @@ export function loadSelection(raw: string | null): Selection {
     if (v && DESIGN_ORDER.includes(v.design as TableDesign)) s.design = v.design as TableDesign;
     if (v && Array.isArray(v.chars)) s.chars = [0, 1].map((i) => (typeof v.chars![i] === 'string' ? (v.chars![i] as string) : null));
     if (v?.mySide === 'B') s.mySide = 'B';
+    if (v && Array.isArray(v.cpu)) s.cpu = [0, 1].map((i) => (typeof v.cpu![i] === 'string' ? (v.cpu![i] as string) : null));
   } catch {
     /* defaults */
   }
@@ -115,6 +118,23 @@ export function pinnedFor(cfg: GameConfig, sel: Selection, usable: Character[]):
   return out;
 }
 
+/** Against the CPU: the characters picked for the CPU team (any character; missing ones are random). */
+export function cpuPinnedFor(cfg: GameConfig, sel: Selection, everyone: Character[], mine: Partial<Record<PositionKey, Character>> = {}): Partial<Record<PositionKey, Character>> {
+  if (cfg.players.mode !== 'coop') return {};
+  const byId = new Map(everyone.map((c) => [c.id, c]));
+  const taken = new Set(Object.values(mine).map((c) => c!.id));
+  const keys: PositionKey[] = cfg.teamSize === 1 ? ['B-left'] : ['B-left', 'B-right'];
+  const out: Partial<Record<PositionKey, Character>> = {};
+  keys.forEach((k, i) => {
+    const c = sel.cpu?.[i] ? byId.get(sel.cpu[i]!) : undefined;
+    if (c && !taken.has(c.id) && !Object.values(out).some((x) => x!.id === c.id)) {
+      out[k] = c;
+      if (cfg.teamSize === 1) out['B-right'] = c;
+    }
+  });
+  return out;
+}
+
 export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Character[]): string {
   const pins = pinnedFor(cfg, sel, usable);
   const names = mySlots(cfg).map((k) => pins[k]?.name ?? 'Random');
@@ -125,6 +145,8 @@ export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Characte
 
 export class CharacterPicker {
   private slot = 0;
+  /** Which side's spots are being picked: yours, or (against the CPU) the CPU team's. */
+  private side: 'mine' | 'cpu' = 'mine';
   private filter = '';
 
   constructor(
@@ -139,25 +161,37 @@ export class CharacterPicker {
   show(): void {
     const cfg = this.cfg();
     const a = this.account;
-    const usable = a.usable();
+    const vsCpu = cfg.players.mode === 'coop';
+    if (!vsCpu) this.side = 'mine';
+    const cpuSide = this.side === 'cpu';
+    // Your spots use your unlocked characters; the CPU can field anyone.
+    const usable = cpuSide ? a.everyone() : a.usable();
     const slots = mySlots(cfg);
     this.slot = Math.min(this.slot, slots.length - 1);
-    const byId = new Map(usable.map((c) => [c.id, c]));
+    if (!this.sel.cpu) this.sel.cpu = [null, null];
+    const list = cpuSide ? this.sel.cpu : this.sel.chars;
+    const byId = new Map(a.everyone().map((c) => [c.id, c]));
     const versus = cfg.players.mode === 'versus';
-    const slotLabel = (i: number) => (slots.length === 1 ? 'You' : cfg.players.mode === 'coop' ? (i ? 'Right · arrows' : 'Left · WASD') : i ? 'Right' : 'Left');
+    const slotLabel = (i: number) => (slots.length === 1 ? 'You' : vsCpu ? (i ? 'Right · arrows' : 'Left · WASD') : i ? 'Right' : 'Left');
+    const cpuLabel = (i: number) => (slots.length === 1 ? 'CPU' : i ? 'CPU right' : 'CPU left');
+    const slotButton = (side: 'mine' | 'cpu', i: number) => {
+      const ids = side === 'cpu' ? this.sel.cpu! : this.sel.chars;
+      const c = ids[i] ? byId.get(ids[i]!) : undefined;
+      const on = this.side === side && i === this.slot;
+      return h(
+        'button',
+        { class: `slot${on ? ' on' : ''}${side === 'cpu' ? ' cpu' : ''}`, onclick: () => ((this.side = side), (this.slot = i), this.show()) },
+        c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2) : h('span', { class: 'slot-random' }, '?'),
+        h('span', { style: 'display:flex;flex-direction:column;align-items:flex-start' }, h('span', { class: 'dim', style: 'font-size:11px' }, side === 'cpu' ? cpuLabel(i) : slotLabel(i)), h('span', { class: 'name' }, c ? c.name : 'Random')),
+      );
+    };
 
     const slotRow = h(
       'div',
       { class: 'slots' },
-      ...slots.map((_, i) => {
-        const c = this.sel.chars[i] ? byId.get(this.sel.chars[i]!) : undefined;
-        return h(
-          'button',
-          { class: `slot${i === this.slot ? ' on' : ''}`, onclick: () => ((this.slot = i), this.show()) },
-          c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2) : h('span', { class: 'slot-random' }, '?'),
-          h('span', { style: 'display:flex;flex-direction:column;align-items:flex-start' }, h('span', { class: 'dim', style: 'font-size:11px' }, slotLabel(i)), h('span', { class: 'name' }, c ? c.name : 'Random')),
-        );
-      }),
+      ...slots.map((_, i) => slotButton('mine', i)),
+      vsCpu ? h('span', { class: 'vs-mark' }, 'VS') : null,
+      ...(vsCpu ? slots.map((_, i) => slotButton('cpu', i)) : []),
       versus
         ? h(
             'div',
@@ -173,9 +207,12 @@ export class CharacterPicker {
     );
 
     const pick = (id: string | null) => {
-      const other = this.sel.chars.findIndex((x, i) => i !== this.slot && i < slots.length && x === id && id !== null);
-      if (other >= 0) this.sel.chars[other] = this.sel.chars[this.slot]; // swap instead of doubling up
-      this.sel.chars[this.slot] = id;
+      const other = list.findIndex((x, i) => i !== this.slot && i < slots.length && x === id && id !== null);
+      if (other >= 0) list[other] = list[this.slot]; // swap instead of doubling up
+      // A character can't be on both teams: picking one of yours for the CPU (or the reverse) frees it there.
+      const across = cpuSide ? this.sel.chars : this.sel.cpu!;
+      for (let i = 0; i < across.length; i++) if (id && across[i] === id) across[i] = null;
+      list[this.slot] = id;
       if (this.slot < slots.length - 1) this.slot++;
       this.save();
       this.show();
@@ -184,19 +221,19 @@ export class CharacterPicker {
     const q = this.filter.trim().toLowerCase();
     const shown = usable.filter((c) => !q || c.name.toLowerCase().includes(q));
     const level = (id: string) => characterLevel(this.cfgBase(), a.progress, id).level;
-    const current = this.sel.chars[this.slot];
+    const current = list[this.slot];
     const grid = h(
       'div',
       { class: 'pickgrid chars' },
       h('button', { class: `pickcard${current === null ? ' on' : ''}`, onclick: () => pick(null) }, h('span', { class: 'slot-random big' }, '?'), h('span', { class: 'pickname' }, 'Random'), h('span', { class: 'dim', style: 'font-size:11px' }, 'a new one each match')),
       ...shown.map((c) => {
-        const taken = this.sel.chars.findIndex((x, i) => i < slots.length && x === c.id);
+        const taken = list.findIndex((x, i) => i < slots.length && x === c.id);
         return h(
           'button',
           { class: `pickcard${current === c.id ? ' on' : ''}`, title: `${c.name}: level ${level(c.id)}`, onclick: () => pick(c.id) },
           spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2),
           nameTag(c.name, c.master, nameColorOf(c)),
-          h('span', { class: 'dim', style: 'font-size:11px' }, taken >= 0 && taken !== this.slot ? slotLabel(taken) : `Level ${level(c.id)}`),
+          h('span', { class: 'dim', style: 'font-size:11px' }, taken >= 0 && taken !== this.slot ? (cpuSide ? cpuLabel(taken) : slotLabel(taken)) : cpuSide ? `Lv ${level(c.id)}${a.canUse(c.id) ? '' : ' · locked for you'}` : `Level ${level(c.id)}`),
         );
       }),
     );
@@ -214,8 +251,14 @@ export class CharacterPicker {
       h(
         'div',
         { class: 'panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, 'Playing as'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
-        h('p', { class: 'dim' }, `Quick matches put these characters on your side; the other spots get random ones. Pick a spot above, then a character.${locked > 0 ? ` ${locked} more are locked: unlock them from loot boxes in the Collection.` : ''}`),
+        h('div', { class: 'row spread' }, h('h1', {}, vsCpu ? 'Playing as & against' : 'Playing as'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
+        h(
+          'p',
+          { class: 'dim' },
+          vsCpu
+            ? `Pick your characters, then (after VS) who the CPU plays as: any character, even ones you haven't unlocked. Random spots get a new one each match.${cpuSide ? '' : locked > 0 ? ` ${locked} more are locked for you: unlock them from loot boxes in the Collection.` : ''}`
+            : `Quick matches put these characters on your side; the other spots get random ones. Pick a spot above, then a character.${locked > 0 ? ` ${locked} more are locked: unlock them from loot boxes in the Collection.` : ''}`,
+        ),
         slotRow,
         usable.length > 8 ? search : null,
         grid,
