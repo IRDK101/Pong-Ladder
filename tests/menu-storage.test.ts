@@ -72,7 +72,7 @@ describe('pre-game menu', () => {
     const m = new Menu();
     const fast = m.config().physics.timeScale;
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
-    expect(fast).toBeCloseTo(0.88 * 0.977, 2);
+    expect(fast).toBeCloseTo(0.88 * 0.977 * 0.977, 2);
     m.focus('speed');
     m.move(0, 1);
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Pro');

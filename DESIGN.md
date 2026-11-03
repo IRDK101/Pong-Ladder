@@ -875,3 +875,13 @@ Decided with the owner: the serve cursor locks at the toss, and the clash is rea
   - **Ready:** the active player crouches as their timing rings close in.
   - **Strike:** at contact they snap into a lunge toward the ball, tilting about 6° and stretching tall.
   - **Recover:** a damped spring back that overshoots slightly behind and squashes before settling, all drawn about the feet. It takes about 0.3 game seconds, scaled with the game speed.
+
+## Camera centered, pixel-art callouts above heads, slower levels
+
+- **Camera** (`camera`: behind 2.2, height 2.1, lookAt 0.55, lookHeight 0.15, fovY 44): aimed lower and zoomed in slightly. The table now runs from 40% to 83% of the screen height (it was 49% to 90%), so the space above and below is more even. The far players' heads stay below the top status box.
+- **Hit callout, pixel style:** it sits above the hitter's head, and their name tag hides meanwhile. The word is real pixel art (`pixelText`):
+  - **Lettering:** small hard-thresholded glyphs with no anti-aliasing, a lighter top and darker bottom, a 1-pixel outline and a drop shadow, scaled up with smoothing off.
+  - **Movement:** it pops in steps (small, then past full size, then full size), rises in whole pixels and blinks out.
+  - **Effects:** a Perfect throws pixel plus-sparkles, and a whiff shakes.
+  - **Spin pair:** drawn smaller underneath in the same style.
+- **Speed:** every level about 2.3% slower again (about 4.5% under the original ladder): Relaxed 0.44, Normal 0.592, Quick 0.744, Fast 0.84 (default), Pro 0.936, Masters 1.031.

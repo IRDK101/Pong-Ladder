@@ -565,97 +565,124 @@ function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
 }
 
 /** How long (game seconds) a hit callout stays up. */
-const FEEDBACK_LIFE = 1.05;
+const FEEDBACK_LIFE = 1.1;
 
-/** The look of each timing word: colors, how big it pops, and whether it sparkles or shakes. */
-function calloutStyle(theme: Theme, word: string, q: number | null): { fill: string[]; glow: string; pop: number; sparkle: boolean; shake: boolean } {
+/** The look of each timing word: two-tone pixel colors (top, bottom), how big it pops, and whether it sparkles or shakes. */
+function calloutStyle(theme: Theme, word: string, q: number | null): { top: string; bottom: string; pop: number; sparkle: string | null; shake: boolean } {
   const c = theme.colors;
-  if (q === null) return { fill: [c.bad, '#ff9a8a'], glow: 'rgba(255, 80, 60, 0.55)', pop: 1.15, sparkle: false, shake: true };
-  if (word === 'Perfect') return { fill: ['#fff4c2', '#ffd76a', '#ffb43c'], glow: 'rgba(255, 210, 90, 0.85)', pop: 1.45, sparkle: true, shake: false };
-  if (word === 'Good') return { fill: ['#d8ffd0', c.good], glow: 'rgba(110, 230, 120, 0.6)', pop: 1.3, sparkle: false, shake: false };
-  return { fill: ['#fff0c8', '#ffb45a'], glow: 'rgba(255, 170, 70, 0.45)', pop: 1.2, sparkle: false, shake: false };
+  if (q === null) return { top: '#ff8a7a', bottom: c.bad, pop: 1.25, sparkle: null, shake: true };
+  if (word === 'Perfect') return { top: '#fff1a8', bottom: '#ffb43c', pop: 1.6, sparkle: '#ffe066', shake: false };
+  if (word === 'Good') return { top: '#c8ffb8', bottom: '#3fcf5a', pop: 1.4, sparkle: null, shake: false };
+  return { top: '#ffe2a0', bottom: '#ff9a3c', pop: 1.3, sparkle: null, shake: false };
 }
 
 /**
- * The hit callout: the timing word pops in (overshooting, then settling) with a
- * thick outline, a color gradient and a glow; Perfect throws out sparkles and
- * a Whiff shakes. The spin note ("Backspin + Topspin") sits smaller underneath.
- * It then drifts up and fades.
+ * Pixel text, the way the HUD's chunky art looks: drawn small, snapped to hard
+ * pixels (no anti-aliasing), two-tone (lighter top rows, darker bottom rows),
+ * with a 1-pixel dark outline and a drop shadow. Cached; draw it scaled up
+ * with smoothing off.
+ */
+const pixelTextCache = new Map<string, HTMLCanvasElement>();
+function pixelText(text: string, top: string, bottom: string, outline: string, px = 10): HTMLCanvasElement {
+  const key = `${text}|${top}|${bottom}|${outline}|${px}`;
+  const hit = pixelTextCache.get(key);
+  if (hit) return hit;
+  const m = document.createElement('canvas').getContext('2d')!;
+  m.font = `bold ${px}px monospace`;
+  const w = Math.ceil(m.measureText(text).width) + 4;
+  const h = px + 6;
+  // The glyphs, hard-thresholded.
+  const g = document.createElement('canvas');
+  g.width = w;
+  g.height = h;
+  const gx = g.getContext('2d')!;
+  gx.font = `bold ${px}px monospace`;
+  gx.textBaseline = 'top';
+  gx.fillStyle = '#fff';
+  gx.fillText(text, 2, 2);
+  const src = gx.getImageData(0, 0, w, h).data;
+  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 110;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h + 1;
+  const o = out.getContext('2d')!;
+  const glyphTop = 2;
+  const split = glyphTop + Math.round(px * 0.55);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      if (on(x, y)) continue;
+      // Outline: any empty pixel touching a glyph pixel; the shadow sits one row lower.
+      if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1)) {
+        o.fillStyle = outline;
+        o.fillRect(x, y, 1, 1);
+      } else if (on(x, y - 1 - 1) || on(x - 1, y - 2) || on(x + 1, y - 2)) {
+        o.fillStyle = 'rgba(0,0,0,0.55)';
+        o.fillRect(x, y, 1, 1);
+      }
+    }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (on(x, y)) {
+        o.fillStyle = y < split ? top : bottom;
+        o.fillRect(x, y, 1, 1);
+      }
+  pixelTextCache.set(key, out);
+  return out;
+}
+
+/**
+ * The hit callout, above the hitter's head: the timing word in chunky pixel
+ * letters pops in (steps up past full size, then settles), Perfect throws pixel
+ * sparkles, a whiff shakes. The spin pair ("Backspin + Topspin") sits smaller
+ * underneath. It then rises a little and blinks out.
  */
 function drawHitCallout(ctx: CanvasRenderingContext2D, theme: Theme, fb: NonNullable<Game['feedback']>, age: number, x: number, y: number, vp: Viewport, minY: number, maxY: number): void {
   const [word, ...rest] = fb.label.split(' · ');
   const note = rest.join(' · ');
   const st = calloutStyle(theme, word, fb.quality);
-  // Pop: 0 → overshoot → 1 over the first 0.22 s (an elastic ease), then hold, then fade and drift up.
-  const e = Math.min(1, age / 0.22);
-  const pop = e < 1 ? 1 + (st.pop - 1) * Math.sin(e * Math.PI) - (1 - e) * (1 - e) * 0.9 : 1;
-  const fade = age > FEEDBACK_LIFE - 0.35 ? Math.max(0, (FEEDBACK_LIFE - age) / 0.35) : 1;
-  const rise = age * 26;
-  const shake = st.shake && age < 0.3 ? Math.sin(age * 90) * (0.3 - age) * 18 : 0;
+  const dark = theme.colors.ballOutline;
+  const big = pixelText(word, st.top, st.bottom, dark, 10);
+  const small = note ? pixelText(note, '#f6efdc', '#d8ccb0', dark, 8) : null;
+  const unit = Math.max(2, Math.round(vp.h / 230)); // one art pixel, in screen pixels
+  // Pop in steps (pixel art scales in whole steps): small → past full size → full size.
+  const e = Math.min(1, age / 0.24);
+  const scale = e < 0.35 ? 0.6 : e < 0.7 ? st.pop : 1;
+  const S = Math.max(1, Math.round(unit * 1.15 * scale * 2) / 2);
+  const rise = Math.round((age * 18) / unit) * unit;
+  // The last 0.3 s it blinks out (on/off steps) instead of a smooth fade.
+  const left = FEEDBACK_LIFE - age;
+  if (left < 0.3 && Math.floor(left * 20) % 2 === 0) return;
+  const shake = st.shake && age < 0.3 ? (Math.floor(age * 40) % 2 ? 1 : -1) * unit * 2 : 0;
+  const bw = big.width * S;
+  const bh = big.height * S;
+  const sw = small ? small.width * unit : 0;
+  const half = Math.max(bw, sw) / 2 + 6;
+  const cx = Math.round(Math.max(vp.x + half, Math.min(vp.x + vp.w - half, x)) + shake);
+  const noteH = small ? small.height * unit + unit : 0;
+  // The bottom of the callout sits on the name-tag line (the hitter's tag is hidden meanwhile).
+  const cy = Math.round(Math.max(minY + bh / 2, Math.min(maxY - 20, y - noteH - bh / 2 + bh * 0.15 - rise)));
   ctx.save();
-  ctx.font = 'bold 30px monospace';
-  const ww = ctx.measureText(word).width;
-  ctx.font = theme.fonts.label;
-  const nw = note ? ctx.measureText(note).width : 0;
-  const half = Math.max(ww * st.pop, nw) / 2 + 14;
-  const tx = Math.max(vp.x + half, Math.min(vp.x + vp.w - half, x)) + shake;
-  const ty = Math.max(minY + 34, Math.min(maxY - 16, y - rise));
-  ctx.globalAlpha = fade;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // Sparkles for a Perfect: eight points flying out and twinkling.
-  if (st.sparkle && age < 0.7) {
-    const t = age / 0.7;
+  ctx.imageSmoothingEnabled = false;
+  // Pixel sparkles for a Perfect: little plus signs flying out on a grid.
+  if (st.sparkle && age < 0.6) {
+    const t = age / 0.6;
+    const g = unit * 2;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + 0.4;
-      const r = (ww / 2 + 10) * (0.6 + t * 0.9);
-      const sx = tx + Math.cos(a) * r;
-      const sy = ty + Math.sin(a) * r * 0.55;
-      const sz = (1 - t) * (i % 2 ? 5 : 8);
-      ctx.fillStyle = i % 2 ? '#fff4c2' : '#ffd76a';
-      ctx.beginPath();
-      ctx.moveTo(sx, sy - sz);
-      ctx.lineTo(sx + sz * 0.3, sy - sz * 0.3);
-      ctx.lineTo(sx + sz, sy);
-      ctx.lineTo(sx + sz * 0.3, sy + sz * 0.3);
-      ctx.lineTo(sx, sy + sz);
-      ctx.lineTo(sx - sz * 0.3, sy + sz * 0.3);
-      ctx.lineTo(sx - sz, sy);
-      ctx.lineTo(sx - sz * 0.3, sy - sz * 0.3);
-      ctx.closePath();
-      ctx.fill();
+      const r = (bw / 2 + g * 2) * (0.7 + t * 0.8);
+      const sx = Math.round((cx + Math.cos(a) * r) / g) * g;
+      const sy = Math.round((cy + Math.sin(a) * r * 0.6) / g) * g;
+      const arm = t < 0.6 ? 2 : 1;
+      ctx.fillStyle = dark;
+      ctx.fillRect(sx - g * arm - unit, sy - unit, g * (arm * 2 + 1) + unit * 2, g + unit * 2);
+      ctx.fillRect(sx - unit, sy - g * arm - unit, g + unit * 2, g * (arm * 2 + 1) + unit * 2);
+      ctx.fillStyle = i % 2 ? '#fff6cc' : st.sparkle;
+      ctx.fillRect(sx - g * arm, sy, g * (arm * 2 + 1), g);
+      ctx.fillRect(sx, sy - g * arm, g, g * (arm * 2 + 1));
     }
   }
-  // The word.
-  ctx.save();
-  ctx.translate(tx, ty);
-  ctx.scale(pop, pop);
-  ctx.font = 'bold 30px monospace';
-  ctx.lineJoin = 'round';
-  ctx.shadowColor = st.glow;
-  ctx.shadowBlur = 16;
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = theme.colors.ballOutline;
-  ctx.strokeText(word, 0, 0);
-  ctx.shadowBlur = 0;
-  const g = ctx.createLinearGradient(0, -15, 0, 15);
-  st.fill.forEach((col, i) => g.addColorStop(i / Math.max(1, st.fill.length - 1), col));
-  ctx.fillStyle = g;
-  ctx.fillText(word, 0, 0);
-  ctx.restore();
-  // The spin note, smaller, sliding in under the word.
-  if (note) {
-    ctx.font = theme.fonts.label;
-    const ne = Math.min(1, Math.max(0, (age - 0.08) / 0.2));
-    ctx.globalAlpha = fade * ne;
-    const ny = ty + 26 + (1 - ne) * 6;
-    ctx.lineWidth = 4;
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = theme.colors.ballOutline;
-    ctx.strokeText(note, tx, ny);
-    ctx.fillStyle = '#f2ead8';
-    ctx.fillText(note, tx, ny);
-  }
+  ctx.drawImage(big, Math.round(cx - bw / 2), Math.round(cy - bh / 2), bw, bh);
+  if (small && age > 0.08) ctx.drawImage(small, Math.round(cx - sw / 2), Math.round(cy + bh / 2 + unit), sw, small.height * unit);
   ctx.restore();
 }
 
@@ -674,8 +701,11 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
   const floorZ = -game.cfg.physics.tableHeight;
   const minY = vp.y + theme.hudTop + 24;
   const maxY = vp.y + vp.h - theme.hudBottom - 24;
+  const fbNow = game.feedback && game.time - game.feedback.time < FEEDBACK_LIFE ? game.feedback : null;
   for (const p of game.shownPlayers()) {
     const who = game.participant(p);
+    // The hitter's callout takes the place of their name tag for a moment.
+    if (fbNow?.player && fbNow.player.team === p.team && fbNow.player.side === p.side) continue;
     const head = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.16 });
     if (!head) continue;
     const sx = vp.x + head.x * k;
@@ -720,8 +750,9 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
   const fb = game.feedback;
   if (fb && game.time - fb.time < FEEDBACK_LIFE) {
     const p = fb.player ?? game.activePlayer(fb.team) ?? { team: fb.team, side: 'left' as const };
-    const at = project(vp.cam, { ...standSpot(game, p), z: 0.05 });
-    if (at) drawHitCallout(ctx, theme, fb, game.time - fb.time, vp.x + at.x * k, vp.y + at.y * k - 34, vp, minY, maxY);
+    // Above the hitter's head, over their name tag.
+    const at = project(vp.cam, { ...standSpot(game, p), z: floorZ + PERSON_HEIGHT + 0.16 });
+    if (at) drawHitCallout(ctx, theme, fb, game.time - fb.time, vp.x + at.x * k, vp.y + at.y * k, vp, vp.y + 64, maxY);
   }
   // Ball out of view (a sky-high lob): an arrow at the screen edge where it is.
   const ball = game.ball;

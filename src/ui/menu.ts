@@ -24,15 +24,15 @@ const set =
     cfg[key] = value;
   };
 /** Speed / difficulty levels: faster play and smaller timing windows (saves included). */
-// Slowest to fastest; Fast is the default. Every level's speed is 2.3% under the original ladder
-// (Fast was 0.88), so they keep the same steps between them.
+// Slowest to fastest; Fast is the default. Every level is about 4.5% under the original ladder
+// (Fast was 0.88; slowed twice by 2.3%), so they keep the same steps between them.
 export const LEVELS = [
-  { label: 'Relaxed', timeScale: 0.45, window: 1.1 },
-  { label: 'Normal', timeScale: 0.606, window: 1 },
-  { label: 'Quick', timeScale: 0.762, window: 1 },
-  { label: 'Fast', timeScale: 0.86, window: 0.88 },
-  { label: 'Pro', timeScale: 0.958, window: 0.76 },
-  { label: 'Masters', timeScale: 1.055, window: 0.64 },
+  { label: 'Relaxed', timeScale: 0.44, window: 1.1 },
+  { label: 'Normal', timeScale: 0.592, window: 1 },
+  { label: 'Quick', timeScale: 0.744, window: 1 },
+  { label: 'Fast', timeScale: 0.84, window: 0.88 },
+  { label: 'Pro', timeScale: 0.936, window: 0.76 },
+  { label: 'Masters', timeScale: 1.031, window: 0.64 },
 ] as const;
 export const DEFAULT_LEVEL = 'Fast';
 const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
