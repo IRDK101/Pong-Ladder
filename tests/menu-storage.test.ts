@@ -59,21 +59,28 @@ describe('pre-game menu', () => {
     m.focus('match');
     m.move(0, -1); // best of 3 (wraps backwards)
     m.focus('speed');
-    m.move(0, -1); // relaxed (wraps backwards)
+    m.move(0, -1); // Quick: left is one level slower than the default (Fast)
     m.focus('ski');
     m.activate(); // on (activate cycles an option row)
     const cfg = m.config();
     expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'choose', skiCollision: true });
     expect(m.rows().map((r) => r.label)).not.toContain('Penalty cup');
-    expect(cfg.physics.timeScale).toBeLessThan(makeConfig().physics.timeScale);
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Quick');
   });
 
-  it('game speed: normal is the default, quick is faster', () => {
+  it('game speed: Fast is the default; right is faster, left is slower', () => {
     const m = new Menu();
-    expect(m.config().physics.timeScale).toBe(makeConfig().physics.timeScale);
+    const fast = m.config().physics.timeScale;
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
+    expect(fast).toBeCloseTo(0.88 * 0.977, 2);
     m.focus('speed');
     m.move(0, 1);
-    expect(m.config().physics.timeScale).toBeGreaterThan(makeConfig().physics.timeScale);
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Pro');
+    expect(m.config().physics.timeScale).toBeGreaterThan(fast);
+    m.move(0, -1);
+    m.move(0, -1);
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Quick');
+    expect(m.config().physics.timeScale).toBeLessThan(fast);
   });
 
   it('arrows move by position: down the right column, wrapping, and across columns', () => {
@@ -205,5 +212,22 @@ describe('local storage and backups', () => {
     const store = new AppStore(kv);
     expect(store.matches.list()).toEqual([]);
     expect(store.characters.list()).toEqual([]);
+  });
+});
+
+describe('clicking a setting', () => {
+  it('the right side (▶) steps forward and the left side (◀) steps back', () => {
+    const m = new Menu();
+    const i = m.rows().findIndex((r) => r.id === 'speed');
+    m.valueZones.set('speed', { cx: 400, l: 340, r: 460 });
+    expect(m.click(i, 455)).toBeNull();
+    expect(m.rows()[i].value).toBe('Pro');
+    m.click(i, 345);
+    m.click(i, 345);
+    expect(m.rows()[i].value).toBe('Quick');
+    // The Table row: its arrows flip tables, the rest opens the picker.
+    const t = m.rows().findIndex((r) => r.id === 'table');
+    m.valueZones.set('table', { cx: 400, l: 300, r: 500 });
+    expect(m.click(t, 400)).toBe('pickTable');
   });
 });

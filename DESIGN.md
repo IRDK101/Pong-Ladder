@@ -851,3 +851,16 @@ Decided with the owner: the serve cursor locks at the toss, and the clash is rea
 - **Update number:** small and dim in the home screen's bottom-left corner: `v1.00` plus 0.01 per commit (`git rev-list --count HEAD`, filled in at build time by `vite.config.ts`), so every change moves it on with nothing to update by hand. The Pages workflow checks out the full history so its count matches.
 - **Spin callout:** when the incoming ball carries spin, a hit's callout reads "<timing> · <ball spin> + <return spin>", e.g. "Good · Backspin + Topspin", with "No spin" when the return has none. Without incoming spin it's just the return's spin, as before.
 - **Hit jolt** checked on all four players: the far team, and the near team seen from behind.
+
+## Home screen clicks and animations, Fast by default, unlock-all switch, depth guide
+
+- **Selector clicks:** clicking a setting used to step forward wherever you clicked. Now the left side of its value (with ◀) steps back and the right side (with ▶) steps forward. On the Table row the arrows flip tables and the rest opens the picker. Each draw records where every value sits (`Menu.valueZones`), and `Menu.click(i, x)` decides.
+- **Animations** (all on the canvas, eased per frame):
+  - **Highlight:** the gold selection glides between rows, with a soft glow and shine.
+  - **Hover:** a hovered row warms up, an accent bar slides in on its left and its text nudges right. The pointer becomes a hand over rows.
+  - **Press:** a press (click, tap or Enter) dips the row briefly toward its center and springs back over about 160 ms.
+  - **Value change:** a changed value slides in from the side it came from, and the pressed arrow nudges outward.
+  - **Rows:** drawn flatter, with a hairline edge and a faint top highlight.
+- **Speed:** Fast is the default (the menu's `start`). Every level is 2.3% slower than before, so the steps between them are unchanged: Relaxed 0.45, Normal 0.606, Quick 0.762, Fast 0.86, Pro 0.958, Masters 1.055. Window sizes are unchanged. The base config keeps the Normal speed for tests; players always get the menu's level.
+- **Unlock all, for now:** `UNLOCK.allForEveryone` in `data/shared.ts` (true) opens every table and character to every player. It's for while profile problems are sorted out; set it to false to go back to levels and loot boxes. XP and levels still count for approved profiles, and the loot boxes they earn wait (none can be opened meanwhile). The Collection card says so. Tests switch it off to keep checking normal unlocking, and test it on its own.
+- **Depth for the far-end shot:** in a shared view, the team aiming toward the camera (Team B, in Behind Team A) had its marker drawn under Team A's players in the foreground, right where long shots land, and that end of the table is foreshortened. Now, while the other team aims on a screen, that screen's foreground players fade (from 0.88 to 0.45 opacity). When a marker comes within 0.4 m of the end it's aimed at, for either team, that end's edge lights up in the team color (red once past it), brighter the closer it gets, with a line from the marker to the edge.

@@ -14,6 +14,8 @@ import { DESIGN_ORDER, DESIGNS } from '../render/designs';
 interface Choice {
   label: string;
   values: { label: string; apply: (cfg: GameConfig) => void }[];
+  /** The value picked at first (default 0). */
+  start?: number;
 }
 
 const set =
@@ -22,14 +24,17 @@ const set =
     cfg[key] = value;
   };
 /** Speed / difficulty levels: faster play and smaller timing windows (saves included). */
+// Slowest to fastest; Fast is the default. Every level's speed is 2.3% under the original ladder
+// (Fast was 0.88), so they keep the same steps between them.
 export const LEVELS = [
-  { label: 'Normal', timeScale: 0.62, window: 1 },
-  { label: 'Quick', timeScale: 0.78, window: 1 },
-  { label: 'Fast', timeScale: 0.88, window: 0.88 },
-  { label: 'Pro', timeScale: 0.98, window: 0.76 },
-  { label: 'Masters', timeScale: 1.08, window: 0.64 },
-  { label: 'Relaxed', timeScale: 0.46, window: 1.1 },
+  { label: 'Relaxed', timeScale: 0.45, window: 1.1 },
+  { label: 'Normal', timeScale: 0.606, window: 1 },
+  { label: 'Quick', timeScale: 0.762, window: 1 },
+  { label: 'Fast', timeScale: 0.86, window: 0.88 },
+  { label: 'Pro', timeScale: 0.958, window: 0.76 },
+  { label: 'Masters', timeScale: 1.055, window: 0.64 },
 ] as const;
+export const DEFAULT_LEVEL = 'Fast';
 const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
   cfg.physics.timeScale = timeScale;
   cfg.hitting.windowScale = window;
@@ -69,7 +74,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
   { id: 'spot', label: 'Spot', values: VENUE_ORDER.map((v) => ({ label: VENUES[v].spot, apply: set('venue', v) })) },
   { id: 'formation', label: 'Cups', values: [{ label: 'Tree · 11', apply: set('formation', 'tree') }, { label: 'Shrub · 7', apply: set('formation', 'shrub') }] },
   { id: 'match', label: 'Match', values: [{ label: 'Single game', apply: set('matchFormat', 'single') }, { label: 'Best of 3', apply: set('matchFormat', 'bestOf3') }] },
-  { id: 'speed', label: 'Speed', values: LEVELS.map((l) => ({ label: l.label, apply: speed(l.timeScale, l.window) })) },
+  { id: 'speed', label: 'Speed', values: LEVELS.map((l) => ({ label: l.label, apply: speed(l.timeScale, l.window) })), start: LEVELS.findIndex((l) => l.label === DEFAULT_LEVEL) },
   { id: 'ski', label: 'Ski collision', values: [{ label: 'Off', apply: set('skiCollision', false) }, { label: 'On', apply: set('skiCollision', true) }] },
 ];
 
@@ -168,7 +173,7 @@ const GROUPS: { title: string; ids: RowId[] }[] = [
 ];
 
 export class Menu {
-  private picks: number[] = CHOICES.map(() => 0);
+  private picks: number[] = CHOICES.map((c) => c.start ?? 0);
   /** Tables this player hasn't unlocked can't be picked. */
   tableLocked: (venue: string) => boolean = () => false;
   /** Which team the signed-in player is on in head-to-head (set in the character picker). */
@@ -280,6 +285,7 @@ export class Menu {
         this.picks[ci] = (this.picks[ci] + dx + k) % k;
         if (ci !== TABLE_ROW || !this.tableLocked(DESIGN_ORDER[this.picks[TABLE_ROW]])) break;
       }
+      this.changeAt = { id: rows[this.cursor].id, dir: Math.sign(dx), at: typeof performance !== 'undefined' ? performance.now() : 0 };
       return;
     }
     // Hop columns, to the row nearest in height.
@@ -289,9 +295,92 @@ export class Menu {
     if (other.length) this.cursor = other[0].i;
   }
 
+  // ------------------------------------------------------------ animation and pointer
+
+  /** The row under the pointer (hover effect), or null. */
+  hover: RowId | null = null;
+  private pressAt: { id: RowId; at: number } | null = null;
+  private changeAt: { id: RowId; dir: number; at: number } | null = null;
+  private hoverT = new Map<RowId, number>();
+  private slider: { x: number; y: number; w: number; h: number } | null = null;
+  private lastFrame = 0;
+  /** Where each row's value text sits (menu coordinates), from the last draw: for clicks on ◀ / ▶. */
+  valueZones = new Map<RowId, { cx: number; l: number; r: number }>();
+
+  /** Show a press on a row (pointer down, or Enter). */
+  pressed(id: RowId): void {
+    this.pressAt = { id, at: performance.now() };
+  }
+
+  /** Seconds since the last drawn frame (capped), for easing. */
+  frameDt(now: number): number {
+    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    this.lastFrame = now;
+    return dt;
+  }
+
+  /** 0..1: how hovered a row is, easing in and out. */
+  hoverAmount(id: RowId, dt: number): number {
+    const want = this.hover === id ? 1 : 0;
+    const cur = this.hoverT.get(id) ?? 0;
+    const next = cur + (want - cur) * (1 - Math.exp(-dt * 18));
+    const v = Math.abs(next - want) < 0.01 ? want : next;
+    this.hoverT.set(id, v);
+    return v;
+  }
+
+  /** 0..1: a quick dip that springs back over about 160 ms after a press. */
+  pressAmount(id: RowId, now: number): number {
+    if (!this.pressAt || this.pressAt.id !== id) return 0;
+    const e = (now - this.pressAt.at) / 160;
+    if (e >= 1) return 0;
+    return e < 0.3 ? e / 0.3 : 1 - (e - 0.3) / 0.7;
+  }
+
+  /** For a value that just changed: its direction, and 1..0 as the slide-in finishes (about 180 ms). */
+  changeAmount(id: RowId, now: number): { dir: number; e: number } | null {
+    if (!this.changeAt || this.changeAt.id !== id) return null;
+    const e = 1 - (now - this.changeAt.at) / 180;
+    return e > 0 ? { dir: this.changeAt.dir, e: e * e } : null;
+  }
+
+  /** The selection highlight, gliding toward the selected row. */
+  slide(target: { x: number; y: number; w: number; h: number }, dt: number, snap: boolean): { x: number; y: number; w: number; h: number } {
+    const s = this.slider;
+    if (!s || snap || dt === 0) return (this.slider = { ...target });
+    const k = 1 - Math.exp(-dt * 20);
+    const n = { x: s.x + (target.x - s.x) * k, y: s.y + (target.y - s.y) * k, w: s.w + (target.w - s.w) * k, h: s.h + (target.h - s.h) * k };
+    const close = Math.abs(n.x - target.x) + Math.abs(n.y - target.y) + Math.abs(n.w - target.w) + Math.abs(n.h - target.h) < 1;
+    return (this.slider = close ? { ...target } : n);
+  }
+
+  /**
+   * A click (or tap) on row `i` at menu x `mx`. On a setting, the left side of
+   * the value (with ◀) steps back and the right side (with ▶) steps forward. On
+   * the Table row the arrows flip tables and the rest opens the picker. Other
+   * rows run their action.
+   */
+  click(i: number, mx: number): MenuAction {
+    const rows = this.rows();
+    const row = rows[i];
+    if (!row) return null;
+    this.cursor = i;
+    this.pressed(row.id);
+    if (row.action) return row.action;
+    const z = this.valueZones.get(row.id);
+    if (row.id === 'table') {
+      if (z && mx <= z.l + 22) return this.move(0, -1), null;
+      if (z && mx >= z.r - 22) return this.move(0, 1), null;
+      return 'pickTable';
+    }
+    this.move(0, z && mx < z.cx ? -1 : 1);
+    return null;
+  }
+
   /** Activate the current row. Option rows cycle forward; action rows return their action. */
   activate(): MenuAction {
     const row = this.rows()[this.cursor];
+    this.pressed(row.id);
     if (row.action) return row.action;
     // The Table row opens the table picker (left/right still flips through tables).
     if (row.id === 'table') return 'pickTable';
@@ -380,6 +469,8 @@ export interface MenuExtras {
   progressNote?: string;
   /** The moderator: everything is unlocked, no loot boxes. */
   allAccess?: boolean;
+  /** Everything is unlocked for every player for now (not just the moderator). */
+  openToAll?: boolean;
   /** The picked characters' sprites (null = random). */
   team: (Sprite | null)[];
   /** The picked table's painted top. */
@@ -511,21 +602,81 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   }
 
   const rows = menu.rows();
+  const now = performance.now();
+  const dt = menu.frameDt(now);
+  const curRow = rows[menu.cursor];
+  // Rows: a flat fill with a hairline edge and a faint top highlight.
+  const rowBox = (r: { x: number; y: number; w: number; h: number }, edge: string, fill: string) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(r.x, r.y + r.h, r.w, 2);
+    ctx.fillStyle = fill;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    ctx.fillStyle = 'rgba(255, 240, 210, 0.05)';
+    ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, 1);
+  };
+  // Every row's own box first; then the gold highlight glides over to the selected row.
+  for (const row of rows) {
+    if (row.id === 'collection' || row === curRow) continue;
+    const play = row.id === 'quick' || row.id === 'draft' || row.id === 'online';
+    rowBox(RR[row.id], play ? m.accent : c.uiEdge, play ? m.rowPlay : m.row);
+  }
+  const slid = menu.slide(RR[curRow.id], dt, curRow.id === 'collection');
+  if (curRow.id !== 'collection') {
+    const pk = menu.pressAmount(curRow.id, now);
+    const sh = pk * 1.5;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 214, 110, 0.45)';
+    ctx.shadowBlur = 14 - pk * 8;
+    ctx.fillStyle = c.activeRing;
+    ctx.fillRect(slid.x + sh, slid.y + sh, slid.w - sh * 2, slid.h - sh * 2);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.fillRect(slid.x + sh, slid.y + slid.h - 3 - sh, slid.w - sh * 2, 3);
+    // A soft shine across the highlight.
+    const shine = ctx.createLinearGradient(0, slid.y, 0, slid.y + slid.h);
+    shine.addColorStop(0, 'rgba(255,255,255,0.22)');
+    shine.addColorStop(0.5, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shine;
+    ctx.fillRect(slid.x + sh, slid.y + sh, slid.w - sh * 2, slid.h / 2);
+  }
+
   rows.forEach((row, i) => {
     const r = RR[row.id];
     const on = i === menu.cursor;
     const play = row.id === 'quick' || row.id === 'draft' || row.id === 'online';
     const card = row.id === 'collection';
-    if (card) return drawCollectionCard(ctx, theme, r, on, ex);
-    if (on) {
-      // The selected row looks like the in-game "HIT · name" tag.
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
-      ctx.fillStyle = c.activeRing;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      ctx.fillRect(r.x, r.y + r.h - 3, r.w, 3);
-    } else panel(ctx, theme, r.x, r.y, r.w, r.h, play ? m.accent : c.uiEdge, play ? m.rowPlay : m.row);
+    const ht = menu.hoverAmount(row.id, dt);
+    const pk = menu.pressAmount(row.id, now);
+    ctx.save();
+    // A press dips the row slightly toward its center.
+    if (pk) {
+      const s = 1 - 0.03 * pk;
+      ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+      ctx.scale(s, s);
+      ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+    }
+    if (card) {
+      drawCollectionCard(ctx, theme, r, on || ht > 0.5, ex);
+      ctx.restore();
+      return;
+    }
+    if (ht && !on) {
+      // Hover: the row warms up, with an accent bar sliding in on its left edge.
+      ctx.fillStyle = `rgba(255, 228, 160, ${0.08 * ht})`;
+      ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      ctx.fillStyle = m.accent;
+      ctx.fillRect(r.x + 1, r.y + 1, Math.round(3 * ht), r.h - 2);
+    }
+    ctx.translate(on ? 0 : Math.round(ht * 3), 0);
+    drawRowText(row, r, on, play);
+    ctx.restore();
+  });
+  return drawNotes();
+
+  function drawRowText(row: MenuRow, r: { x: number; y: number; w: number; h: number }, on: boolean, play: boolean): void {
     const ink = on ? c.activeText : c.text;
     const mid = r.y + r.h / 2 - 1;
     ctx.textBaseline = 'middle';
@@ -547,9 +698,22 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       ctx.font = theme.fonts.bar;
       ctx.fillStyle = on ? ink : row.dim ? 'rgba(220, 210, 190, 0.35)' : c.text;
       const value = row.dim && !on ? (row.id === 'cpu' ? 'vs CPU only' : 'head-to-head only') : row.value;
+      const arrows = on && !row.picker;
       const text = on ? (row.picker ? `${value}  ▸` : row.id === 'table' ? `◀ ${value} ▶` : `◀  ${value}  ▶`) : value;
-      ctx.fillText(text, right, mid);
       const tw = ctx.measureText(text).width;
+      menu.valueZones.set(row.id, { cx: right - tw / 2, l: right - tw, r: right });
+      const ch = menu.changeAmount(row.id, now);
+      if (ch && arrows) {
+        // A changed value slides in from the side it came from; the arrow that was pressed nudges outward.
+        const aw = ctx.measureText(row.id === 'table' ? '◀ ' : '◀  ').width;
+        const vw = ctx.measureText(String(value)).width;
+        ctx.fillText(ch.dir > 0 ? '▶' : '◀', ch.dir > 0 ? right + ch.e * 3 : right - tw + ctx.measureText('◀').width - ch.e * 3, mid);
+        ctx.fillText(ch.dir > 0 ? '◀' : '▶', ch.dir > 0 ? right - tw + ctx.measureText('◀').width : right, mid);
+        ctx.save();
+        ctx.globalAlpha = 1 - 0.7 * ch.e;
+        ctx.fillText(String(value), right - tw + aw + vw + ch.dir * ch.e * 14, mid);
+        ctx.restore();
+      } else ctx.fillText(text, right, mid);
       // Portraits of the picked characters, and a preview of the picked table.
       if (row.id === 'playingAs') {
         let px = r.x + 132;
@@ -598,8 +762,9 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
         else ctx.fillText(info.hint, r.x + r.w - 14, mid);
       }
     }
-  });
+  }
 
+  function drawNotes(): void {
   if (portrait) {
     ctx.textAlign = 'left';
     ctx.font = theme.fonts.label;
@@ -633,6 +798,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.fillStyle = m.accent;
     ctx.textAlign = 'left';
     ctx.fillText(note, LX, 604);
+  }
   }
 }
 
@@ -679,13 +845,13 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   // What's waiting.
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.bar;
-  let msg = ex.progressNote ? ex.progressNote : ex.allAccess ? 'Moderator: every table and character unlocked' : ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
+  let msg = ex.openToAll ? 'Every table and character is unlocked for now' : ex.progressNote ? ex.progressNote : ex.allAccess ? 'Moderator: every table and character unlocked' : ex.boxes && !ex.nothingLeft ? `LEVEL UP!  ${ex.boxes} loot box${ex.boxes === 1 ? '' : 'es'} to open` : ex.boxes ? `${ex.boxes} box${ex.boxes === 1 ? '' : 'es'} saved for new unlocks` : `Next loot box at level ${ex.level + 1}`;
   if (ex.pending) msg += `  ·  ${ex.pending} to review`;
   ctx.fillStyle = alert || ex.pending || ex.progressNote ? m.accentWarm : c.textDim;
   ctx.fillText(msg, r.x, r.y + 92);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText(ex.progressNote ? 'Everything is playable now; approved profiles level up and unlock more.' : ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
+  ctx.fillText(ex.openToAll ? (ex.progressNote ? ex.progressNote : 'Your XP and levels still count; loot boxes wait for later.') : ex.progressNote ? 'Everything is playable now; approved profiles level up and unlock more.' : ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
   crate(ctx, theme, r.x + r.w - 54, r.y + 22, alert);
   if (alert) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.boxes));
   else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));

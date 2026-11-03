@@ -269,10 +269,13 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const nearPeople = shown.filter((p) => !behindTable.some((x) => x.p === p))
     .map((p) => ({ p, pos: standSpot(game, p) }))
     .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
-  for (const { p, pos } of nearPeople) drawPerson(f, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
+  // While the other team aims on this screen, the players in front fade so its marker (often right
+  // behind them, near this end of the table) stays readable.
+  const otherAims = (t: TeamId) => ui && showsAim(game, vp, t === 'A' ? 'B' : 'A');
+  for (const { p, pos } of nearPeople) drawPerson(f, theme, game, cam, p, pos, vp.team === p.team, isActive(p), otherAims(p.team));
 }
 
-function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, p: PlayerId, feet: Vec3, fromBehind: boolean, active: boolean): void {
+function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Camera, p: PlayerId, feet: Vec3, fromBehind: boolean, active: boolean, fade = false): void {
   const who = game.participant(p);
   const raw = (fromBehind ? who.spriteBack : null) ?? who.sprite;
   const base = project(cam, feet);
@@ -304,7 +307,7 @@ function drawPerson(b: CanvasRenderingContext2D, theme: Theme, game: Game, cam: 
   const x = Math.round(base.x - w / 2 + lean);
   const y = Math.round(head.y + (hgt - dh) + j * hgt * 0.03);
   // Your own team, seen over their shoulders, is a little see-through so the table stays readable.
-  if (fromBehind) b.globalAlpha = 0.88;
+  if (fromBehind) b.globalAlpha = fade ? 0.45 : 0.88;
   b.drawImage(bitmap(sprite), x, y, Math.round(w), Math.round(dh));
   b.globalAlpha = 1;
   if (active) {
@@ -401,6 +404,21 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   if (locked) {
     h.globalAlpha = flash ? 0.45 : 0.25;
     disc(h, cam, c, R, col, 24);
+    h.globalAlpha = 1;
+  }
+  // Depth guide: near the far end of the table (the end this shot is aimed at), that end's edge lights
+  // up in the team color, brighter the closer the marker gets, with a line from the marker to it, so
+  // how far the shot is from going long reads at a glance, even foreshortened.
+  const endX = team === 'A' ? L : 0;
+  const toEnd = (endX - t.x) * (team === 'A' ? 1 : -1); // > 0: still on the table
+  if (toEnd < 0.4 && t.y > -0.2 && t.y < W + 0.2) {
+    const k = Math.max(0, Math.min(1, 1 - toEnd / 0.4));
+    const edgeCol = toEnd < 0 ? theme.colors.bad : base;
+    h.globalAlpha = 0.35 + 0.55 * k;
+    line(h, cam, { x: endX, y: 0, z }, { x: endX, y: W, z }, dark, 5);
+    line(h, cam, { x: endX, y: 0, z }, { x: endX, y: W, z }, edgeCol, 3);
+    const ey = Math.max(0, Math.min(W, t.y));
+    line(h, cam, { x: t.x, y: ey, z }, { x: endX, y: ey, z }, edgeCol, 1);
     h.globalAlpha = 1;
   }
   ring(h, cam, c, R, dark, 4, 28);

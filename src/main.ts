@@ -196,6 +196,9 @@ if (location.hash === '#debug') {
     },
     openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
     openEditor: () => openPanel(() => profileEditor.open()),
+    menu,
+    layout: () => menuLayout(view),
+    rowRect: (id: Parameters<typeof rowRect>[0]) => rowRect(id, menuLayout(view).portrait),
     menuOnline: () => menu.onlineInfo(),
     onlineRole: () => online?.role ?? null,
     onlineLink: () => online?.link ?? null,
@@ -473,6 +476,7 @@ function menuExtras(): MenuExtras {
     progressNote: account.canProgress ? '' : account.role === 'pending' ? 'Profile waiting for approval: no XP yet' : account.role === 'unregistered' ? 'Make a profile (Your profile) to earn XP' : account.role === 'signedout' ? 'Sign in (Your profile) to earn XP' : 'Playing as a guest: games don’t earn XP',
     offline: account.mode === 'local',
     allAccess: account.owner,
+    openToAll: !account.owner && account.everythingOpen,
     team: mySlots(cfg).map((k) => {
       const c = pins[k];
       if (!c) return null;
@@ -702,6 +706,44 @@ window.addEventListener('keydown', (e) => {
   else if (screen === 'panel' || screen === 'help') toMenu();
 });
 
+/** The menu row at a point in menu coordinates, or -1. */
+function menuRowAt(mx: number, my: number, portrait: boolean): number {
+  return menu.rows().findIndex((row) => {
+    const r = rowRect(row.id, portrait);
+    return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+  });
+}
+/** Pointer position in menu coordinates. */
+function menuPoint(e: PointerEvent | MouseEvent) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = ((e.clientX - rect.left) * view.width) / rect.width;
+  const sy = ((e.clientY - rect.top) * view.height) / rect.height;
+  const L = menuLayout(view);
+  return { mx: (sx - L.ox) / L.s, my: (sy - L.oy) / L.s, portrait: L.portrait };
+}
+// Hover and press effects on the home screen.
+canvas.addEventListener('pointermove', (e) => {
+  if (screen !== 'menu') {
+    menu.hover = null;
+    canvas.style.cursor = '';
+    return;
+  }
+  const p = menuPoint(e);
+  const i = menuRowAt(p.mx, p.my, p.portrait);
+  menu.hover = i >= 0 ? menu.rows()[i].id : null;
+  canvas.style.cursor = i >= 0 ? 'pointer' : '';
+});
+canvas.addEventListener('pointerleave', () => {
+  menu.hover = null;
+  canvas.style.cursor = '';
+});
+canvas.addEventListener('pointerdown', (e) => {
+  if (screen !== 'menu') return;
+  const p = menuPoint(e);
+  const i = menuRowAt(p.mx, p.my, p.portrait);
+  if (i >= 0) menu.pressed(menu.rows()[i].id);
+});
+
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const sx = ((e.clientX - rect.left) * view.width) / rect.width;
@@ -714,13 +756,8 @@ canvas.addEventListener('click', (e) => {
     const L = menuLayout(view);
     const mx = (sx - L.ox) / L.s;
     const my = (sy - L.oy) / L.s;
-    menu.rows().forEach((row, i) => {
-      const r = rowRect(row.id, L.portrait);
-      if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-        menu.cursor = i;
-        runMenuAction(menu.activate());
-      }
-    });
+    const i = menuRowAt(mx, my, L.portrait);
+    if (i >= 0) runMenuAction(menu.click(i, mx));
   } else if (screen === 'playing' && game) {
     // Against the CPU, the human can't make the CPU's penalty choice for it.
     const pen = game.engine.peek().penalty;

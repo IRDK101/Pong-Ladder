@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { makeConfig } from '../src/config';
 import { newCharacter } from '../src/core/character';
-import { Account } from '../src/data/shared';
+import { Account, UNLOCK } from '../src/data/shared';
 import { AppStore, memoryStore } from '../src/data/storage';
 import { CpuController } from '../src/game/ai';
 import { Game, POSITIONS } from '../src/game/game';
@@ -10,6 +10,9 @@ import { quickRoster } from '../src/ui/prematch';
 import { addXp, boxesWaiting, emptyProgress, ensureStarters, markSeen, matchXp, newRewards, newRewardsFor, newXp, seedSeen, normalizeProgress, openBox, playerLevel, playerXp } from '../src/progress/unlocks';
 
 const cfg = makeConfig();
+// These tests check normal unlocking; the temporary everyone-unlocked switch is tested on its own below.
+beforeEach(() => void (UNLOCK.allForEveryone = false));
+afterEach(() => void (UNLOCK.allForEveryone = true));
 const TABLES = ['plain', 'saints', 'spirits'];
 
 describe('player progress and loot boxes', () => {
@@ -194,5 +197,21 @@ describe('profiles gate progress', () => {
     a.approvals.set('y', { status: 'approved', at: '' });
     expect(a.leaderboard().map((r) => r.card.name)).toEqual(['High', 'Low']);
     expect(a.pendingProfiles().map(([id]) => id)).toEqual(['z']);
+  });
+});
+
+describe('the temporary unlock for everyone', () => {
+  it('opens every table and character to every player, with no loot boxes meanwhile', () => {
+    UNLOCK.allForEveryone = true;
+    const store = new AppStore(memoryStore());
+    const a = new Account(store, cfg, memoryStore());
+    store.characters.setShared([newCharacter('Locked One'), newCharacter('Locked Two')]);
+    expect(store.characters.sharedList().every((c) => a.canUse(c.id))).toBe(true);
+    expect(TABLES.every((t) => a.tableUnlocked(t))).toBe(true);
+    expect(a.allUnlocked()).toBe(true);
+    expect(a.boxes()).toBe(0);
+    expect(a.openBox()).toBeNull();
+    UNLOCK.allForEveryone = false;
+    expect(a.tableUnlocked('saints')).toBe(false);
   });
 });

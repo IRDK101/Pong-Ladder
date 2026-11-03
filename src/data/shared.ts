@@ -90,6 +90,15 @@ export interface Approval {
   at: string;
 }
 
+/**
+ * Temporary: every table and character is unlocked for every player (the
+ * moderator asked for this while profile problems are sorted out). Set
+ * `allForEveryone` back to false to return to unlocking through levels and loot boxes. Nothing is
+ * lost meanwhile: XP and levels still count for approved profiles, and the loot
+ * boxes they earn are waiting when this is turned off.
+ */
+export const UNLOCK = { allForEveryone: true };
+
 export const PROFILE_NAME_MAX = 20;
 export function cleanProfileName(raw: string): string {
   return raw.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f]/g, '').replace(/\s+/g, ' ').trim().slice(0, PROFILE_NAME_MAX);
@@ -672,8 +681,13 @@ export class Account {
   }
 
   /** Can this player draft and pick a character? */
+  /** Everything is open to this player: the moderator always, everyone while UNLOCK.allForEveryone is on. */
+  get everythingOpen(): boolean {
+    return this.owner || UNLOCK.allForEveryone;
+  }
+
   canUse(id: string): boolean {
-    if (this.owner) return true; // the moderator has everything
+    if (this.everythingOpen) return true; // the moderator has everything (and, for now, so does everyone)
     if (!this.store.characters.isShared(id)) return true; // made in this browser
     if (this.progress.characters.includes(id)) return true;
     // Whoever made a character always has it: the owner made every character without a creator.
@@ -806,7 +820,7 @@ export class Account {
   }
 
   tableUnlocked(v: string): boolean {
-    return this.owner || this.progress.tables.includes(v);
+    return this.everythingOpen || this.progress.tables.includes(v);
   }
 
   /** Approved characters a box can unlock. */
@@ -833,17 +847,17 @@ export class Account {
 
   boxes(): number {
     // The moderator already has everything, so no boxes pile up for them; without an approved profile there are none.
-    return this.owner || !this.canProgress ? 0 : boxesWaiting(this.cfg, this.progress);
+    return this.everythingOpen || !this.canProgress ? 0 : boxesWaiting(this.cfg, this.progress);
   }
 
   /** Nothing left to unlock right now. */
   allUnlocked(): boolean {
-    if (this.owner) return true;
+    if (this.everythingOpen) return true;
     return this.tables().every((t) => this.progress.tables.includes(t)) && this.lootCharacters().every((c) => this.progress.characters.includes(c));
   }
 
   openBox(): LootItem | null {
-    if (this.owner || !this.canProgress) return null;
+    if (this.everythingOpen || !this.canProgress) return null;
     const item = openBox(this.cfg, this.progress, this.tables(), this.lootCharacters(), this.rng);
     if (item) {
       this.saveProgress();
