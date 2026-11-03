@@ -56,7 +56,16 @@ interface UserApi {
  * - viewonly: signed in by a view-only link (can't save online).
  * - guest: not signed in / outside claude.ai.
  */
-export type Role = 'moderator' | 'player' | 'pending' | 'unregistered' | 'viewonly' | 'guest';
+export type Role = 'moderator' | 'player' | 'pending' | 'unregistered' | 'viewonly' | 'guest' | 'signedout';
+
+/** Sign-in for the self-hosted site (null on claude.ai, where the viewer is already signed in). */
+export interface SignInApi {
+  signedIn: boolean;
+  email: string | null;
+  google(): Promise<void>;
+  emailLink(email: string): Promise<void>;
+  signOut(): Promise<void>;
+}
 
 /** A player's public profile card (profiles/<uid>): a display name they chose and their progress. */
 export interface PublicProfile {
@@ -185,6 +194,8 @@ export class Account {
   approvals = new Map<string, Approval>();
   /** Who is signed in (read from the account each visit; never stored). */
   me: { name: string; email: string | null } | null = null;
+  /** The self-hosted site's sign-in, or null on claude.ai. */
+  signin: SignInApi | null = null;
   /** Account names for other players' ids (submitters, creators), as the account service gives them. */
   names = new Map<string, string>();
   /** Characters this player deleted (so other devices drop them too). */
@@ -268,7 +279,7 @@ export class Account {
     const claude = (window as unknown as { claude?: ClaudeApi }).claude;
     if (!claude?.use) return;
     try {
-      [this.db, this.user] = (await Promise.all([claude.use('db'), claude.use('user')])) as [Db | null, UserApi | null];
+      [this.db, this.user, this.signin] = (await Promise.all([claude.use('db'), claude.use('user'), claude.use('signin').catch(() => null)])) as [Db | null, UserApi | null, SignInApi | null];
     } catch {
       return;
     }
@@ -477,6 +488,8 @@ export class Account {
   /** Moderator (the game's owner), signed-in player, or guest (offline / signed out). */
   get role(): Role {
     if (this.owner) return 'moderator';
+    // The self-hosted site: signed out until they sign in with Google or an emailed link.
+    if (this.signin && !this.uid) return 'signedout';
     // With the database but no way to save: view-only access (a public link from outside the organization).
     if (this.mode !== 'online') return this.db && !this.canWrite ? 'viewonly' : 'guest';
     if (this.approvedProfile) return 'player';

@@ -797,3 +797,27 @@ Decided with the owner: players keep making and submitting their own characters,
 - The lobby redraws only when the lobby itself changes, not on every match update, so buttons aren't replaced mid-click.
 - **Online play needs an approved profile** (or the moderator). Everyone else sees why and what to do next.
 - Who can connect at all is claude.ai's rule: members of the owner's organization and people invited by email (as Editors, with no public link, for outsiders). Public-link visitors from outside can't join the room.
+
+## Self-hosted site (GitHub Pages + Firebase)
+
+Decided with the owner: run the game on its own site, so any approved profile gets XP, unlocks, the leaderboard and online play without claude.ai invites, and only the owner can change the site. Setup steps are in SELF_HOSTING.md.
+
+- **One codebase, two hosts.** A build with `VITE_FIREBASE_CONFIG` loads `src/net/firebaseHost.ts` (a separate chunk) and installs `window.claude.use(name)` services backed by Firebase: `db`, `user`, `room` and an extra `signin`. Everything else (Account, the lobby, matches) runs unchanged. Without the config, as on claude.ai, the chunk is never loaded.
+- **Sign-in:** Google, or an emailed sign-in link. The `signedout` role offers both on the profile screen, and signed-in players get a Sign out button.
+- **Storage:** Realtime Database. Each document is `{ j: <JSON text>, s?: <status>, by }`. JSON text keeps arrays, empty lists and nulls exact, and `s` lets the rules read an approval. `update` is a transaction with a deep merge.
+- **Moderator:** decided by the rules (a verified email set when generating them). The client learns it by trying to read `modcheck`, which only the moderator can, so the email never ships in the site's code.
+- **Rules** (`database.rules.template.json`, generated with `npm run rules -- email`, checked by `scripts/rules-check.mjs` against the emulators, 30 checks):
+  - Only the moderator writes characters and approvals and reads all submissions.
+  - Players write only their own profile, submissions and `data/users/<uid>`.
+  - Only approved players (and the moderator) read or write the lobby and match rooms, each writing only their own card, at most 4 KiB.
+  - Everything else is closed.
+- **Live rooms:** `rooms/lobby/<peer>` and `rooms/m/<match>/<peer>` hold `{ by, p: <presence JSON>, t }`, removed on disconnect. The shim gives the claude.ai room's presence semantics (peers, onPeers with joined/left/updated, connected). On this host each match joins its own room (`matchRooms`), so the lobby stays light and only the two players download a match. On claude.ai matches keep sharing the lobby room.
+- **Deploy:** `.github/workflows/pages.yml` tests, builds with `--base ./`, and publishes to GitHub Pages, taking the Firebase config from the `FIREBASE_CONFIG` repository variable.
+- **Moving over:** on the moderator's account a backup now includes the whole shared collection, so importing it on the new site as the moderator uploads every character.
+
+## Online play: lobby from anywhere, who's online, rematch
+
+- Approved players join the lobby when the game loads, not just on the Online screen, and stay in it in the menus. A challenge reaches them anywhere: the home screen's Online match row shows "CHALLENGE!", and otherwise "N players online now".
+- Leaving the Online screen keeps the player in the lobby. The card returns to "in the lobby" (with their character) when a match ends.
+- **Rematch:** on an online end screen, Space/Enter asks the opponent for a rematch with the same settings (the asker hosts). If the opponent already asked, it accepts. If both ask at once, one side accepts automatically. If the opponent has left, the end screen says so and Space/Enter goes to the menu. Esc always goes to the menu.
+- Opponents' characters are remembered, since a host's card drops its character while it plays on claude.ai.

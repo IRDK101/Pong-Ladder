@@ -340,6 +340,9 @@ export class MatchLink {
     this.unsub?.();
     this.unsub = null;
     await this.room.presence({ ...MATCH_CLEAR }).catch(() => {});
+    // A match's own room (the self-hosted site) is left; the shared lobby room never is.
+    const r = this.room as { leave?: () => Promise<void>; name?: string };
+    if (r.leave && r.name && r.name !== 'lobby') await r.leave().catch(() => {});
   }
 }
 

@@ -25,6 +25,7 @@ const ROLE_INFO: Record<Role, { label: string; blurb: string }> = {
   pending: { label: 'WAITING FOR APPROVAL', blurb: 'Your profile is waiting for the moderator. Until it’s approved you can play every mode, but games don’t earn XP yet.' },
   unregistered: { label: 'NO PROFILE YET', blurb: 'You can play straight away. To earn XP, level up, unlock tables and characters, and get on the leaderboard, make a profile; the moderator approves new profiles.' },
   viewonly: { label: 'VIEW-ONLY ACCESS', blurb: 'You’re signed in, but you opened the game by a public link from outside the moderator’s claude.ai organization. claude.ai lets these visitors play but never save anything, so you can’t make a profile, earn XP or play online yet. Ask the moderator to invite your email to the game, then open it from that invite (not the public link) and make your profile.' },
+  signedout: { label: 'NOT SIGNED IN', blurb: 'You can play every offline mode straight away. Sign in with Google or an emailed link, then make a profile: once the moderator approves it you earn XP, unlock tables and characters, get on the leaderboard and can play online.' },
   guest: { label: 'GUEST', blurb: 'Not signed in to claude.ai (or the game was opened outside claude.ai). You can play every offline mode; games don’t earn XP. Sign in to claude.ai and open the game again to make a profile.' },
 };
 
@@ -74,19 +75,21 @@ export class ProfileScreen {
           'div',
           { style: 'display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px' },
           h('div', { class: 'row' }, h('span', { class: `role-badge role-${a.role}` }, role.label), a.myProfile ? h('span', { style: 'font-size:18px' }, styledName(a.myProfile.name, a.myStyle)) : a.me ? h('span', { class: 'name', style: 'font-size:18px' }, a.me.name || 'Signed in') : h('span', { class: 'name' }, 'Not signed in')),
-          a.role !== 'guest' && a.role !== 'viewonly' ? h('span', { class: 'dim' }, a.me?.email ? `Saved to ${a.me.email}` : 'Saved to your claude.ai account (the email you sign in with)') : null,
+          a.role !== 'guest' && a.role !== 'viewonly' && a.role !== 'signedout' ? h('span', { class: 'dim' }, a.me?.email ? `Saved to ${a.me.email}` : a.signin ? 'Saved to your account' : 'Saved to your claude.ai account (the email you sign in with)') : null,
           h('p', { class: 'dim', style: 'font-size:13px' }, role.blurb),
         ),
         h(
           'div',
           { style: 'display:flex;flex-direction:column;gap:8px' },
           a.myProfile && a.myApproval?.status !== 'revoked' ? h('button', { class: 'primary', onclick: () => this.go.edit() }, 'Edit profile') : null,
+          a.signin?.signedIn ? h('button', { onclick: () => void a.signin!.signOut() }, 'Sign out') : null,
           a.role === 'moderator' ? h('button', { class: a.myProfile ? '' : 'primary', onclick: () => this.go.moderator() }, a.pendingCount() + a.pendingProfiles().length ? `Moderator tools · ${a.pendingCount() + a.pendingProfiles().length} to review` : 'Moderator tools') : null,
         ),
       ),
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
       a.profileState === 'refused' ? h('p', { class: 'error' }, 'claude.ai didn’t let this visit save your profile request, so it was not sent. See above for how to get access.') : null,
-      a.role === 'moderator' ? inviteHelp() : null,
+      a.role === 'moderator' && !a.signin ? inviteHelp() : null,
+      a.role === 'signedout' ? this.signInForm() : null,
       this.profileForm(),
       h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:8px' }, h('h2', {}, 'Player level'), levelBar(lvl), h('p', { class: 'dim', style: 'font-size:12px' }, `${playerXp(a.progress)} XP in total from all your characters.`)),
       h(
@@ -114,11 +117,38 @@ export class ProfileScreen {
 
   private error = '';
   private draftName = '';
+  private signNote = '';
+
+  /** The self-hosted site: sign in with Google, or with a link sent to an email address. */
+  private signInForm(): HTMLElement {
+    const a = this.account;
+    const email = h('input', { type: 'email', placeholder: 'you@example.com', 'aria-label': 'Email address', autocomplete: 'email' }) as HTMLInputElement;
+    const fail = (e: unknown) => {
+      const c = String((e as { code?: string })?.code ?? '');
+      this.signNote = c.includes('popup') ? 'The sign-in window was blocked or closed. Allow pop-ups for this site and try again, or use an email link.' : c.includes('unauthorized-domain') ? 'This site isn’t set up for sign-in yet (the moderator needs to add its address in Firebase).' : `Sign-in didn’t work (${c || 'error'}). Try again.`;
+      this.show();
+    };
+    const sendLink = () => {
+      const v = email.value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return ((this.signNote = 'Enter your email address.'), this.show());
+      a.signin!.emailLink(v).then(() => ((this.signNote = `Sign-in link sent to ${v}. Open it on this device to sign in.`), this.show()), fail);
+    };
+    email.addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && sendLink());
+    return h(
+      'div',
+      { class: 'box', style: 'display:flex;flex-direction:column;gap:8px;border-color:var(--gold, #e6c45a)' },
+      h('h2', {}, 'Sign in'),
+      h('p', { class: 'dim', style: 'font-size:13px' }, 'Your profile and progress are saved to your email address, on any device.'),
+      h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => void a.signin!.google().catch(fail) }, 'Sign in with Google')),
+      h('div', { class: 'row' }, email, h('button', { onclick: sendLink }, 'Email me a sign-in link')),
+      this.signNote ? h('p', { class: this.signNote.startsWith('Sign-in link sent') ? 'ok' : 'error' }, this.signNote) : null,
+    );
+  }
 
   /** Make a profile (or see where it stands). */
   private profileForm(): HTMLElement | null {
     const a = this.account;
-    if (a.role === 'moderator' || a.role === 'player' || a.role === 'guest' || a.role === 'viewonly') {
+    if (a.role === 'moderator' || a.role === 'player' || a.role === 'guest' || a.role === 'viewonly' || a.role === 'signedout') {
       if ((a.role !== 'player' && a.role !== 'moderator') || !a.myProfile) return null;
       return h('div', { class: 'box row spread' }, h('span', { class: 'row' }, 'Leaderboard name: ', styledName(a.myProfile.name, a.myStyle)), h('button', { onclick: () => this.go.edit() }, 'Change name, character or style'));
     }

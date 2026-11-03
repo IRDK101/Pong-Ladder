@@ -3,7 +3,7 @@
 
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
-import { Lobby, newMatchId, packChar, unpackChar, type LobbyPeer, type MatchSettings, type RoomApi, type RoomLike } from '../net/online';
+import { Lobby, matchRoomName, newMatchId, packChar, unpackChar, type LobbyPeer, type MatchSettings, type RoomApi, type RoomLike } from '../net/online';
 import { DESIGNS } from '../render/designs';
 import { VENUES } from '../render/basement';
 import type { TableDesign, Venue } from '../config';
@@ -35,7 +35,6 @@ export class OnlineScreen {
   private room: RoomApi | null | undefined = undefined; // undefined: not asked yet
   private panel: HTMLElement | null = null;
   private note = '';
-  private starting = false;
 
   constructor(
     private overlay: Overlay,
@@ -54,25 +53,41 @@ export class OnlineScreen {
     return !!this.panel && this.overlay.isOpen() && this.overlay.root.contains(this.panel);
   }
 
-  async open(): Promise<void> {
-    this.note = '';
-    this.starting = false;
+  private async ensureRoom(): Promise<RoomApi | null> {
     if (this.room === undefined) {
-      this.render();
       const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
       this.room = claude?.use ? (((await claude.use('room').catch(() => null)) as RoomApi | null) ?? null) : null;
     }
-    if (this.deps.blocked()) return this.render();
-    if (this.room && !this.lobby) this.lobby = new Lobby(this.room, () => this.onLobby());
+    return this.room;
+  }
+
+  /** Put this player's card in the lobby (once their profile is approved), so challenges reach them from anywhere. */
+  async startBackground(): Promise<void> {
+    if (this.deps.blocked()) {
+      if (this.lobby?.me && !this.playing) this.lobby.close();
+      return;
+    }
+    if (this.lobby?.me) return;
+    const room = await this.ensureRoom();
+    if (!room || this.deps.blocked()) return;
+    if (!this.lobby) this.lobby = new Lobby(room, () => this.onLobby());
+    if (this.lobby.me) return;
     const me = this.deps.me();
     this.lastSig = '';
-    this.lobby?.open({ name: me.name, level: me.level, style: me.style, char: me.char ? packChar(me.char) : null });
+    this.lobby.open({ name: me.name, level: me.level, style: me.style, char: me.char ? packChar(me.char) : null });
+  }
+
+  async open(): Promise<void> {
+    this.note = '';
+    if (this.room === undefined) this.render();
+    await this.ensureRoom();
+    await this.startBackground();
     this.render();
   }
 
   /** The player's name, style or character changed: update their lobby card. */
   refreshMe(): void {
-    if (!this.lobby?.me || this.starting) return;
+    if (!this.lobby?.me || this.playing) return;
     const me = this.deps.me();
     const char = me.char ? packChar(me.char) : null;
     const cur = this.lobby.me;
@@ -80,21 +95,81 @@ export class OnlineScreen {
     this.lobby.update({ name: me.name, level: me.level, style: me.style, char });
   }
 
-  /** Leave the lobby (when going back to the menu). */
+  /** Back to the menu from this screen: the player stays in the lobby. */
   close(): void {
-    this.lobby?.close();
+    this.panel = null;
+  }
+
+  // ------------------------------------------------------------ for the menu and the end screen
+
+  /** Players in the lobby besides this one, and challenges waiting for this one. */
+  status(): { here: number; challenges: number; challenger: string | null } {
+    const lb = this.lobby;
+    if (!lb?.me) return { here: 0, challenges: 0, challenger: null };
+    const inc = lb.incoming();
+    return { here: lb.peers().filter((p) => !p.isMe).length, challenges: inc.length, challenger: inc[0]?.card.name ?? null };
+  }
+
+  blockedNow(): boolean {
+    return !!this.deps.blocked();
+  }
+
+  /** A match is on (between begin and matchOver). */
+  private playing = false;
+  /** Opponents' characters, remembered (a host's card drops its character while it plays). */
+  private known = new Map<string, Character>();
+
+  /** The match ended and the player left its end screen. */
+  matchOver(): void {
+    this.playing = false;
+    const lb = this.lobby;
+    if (!lb?.me) return;
+    const me = this.deps.me();
+    lb.update({ status: 'lobby', invite: null, answer: null, char: me.char ? packChar(me.char) : null });
+  }
+
+  /** Rematch from the end screen: accept their rematch if they asked, else ask them. */
+  rematch(peer: string, settings: MatchSettings): 'accepted' | 'asked' | 'gone' {
+    const lb = this.lobby;
+    const p = lb?.peers().find((x) => x.peer === peer);
+    if (!lb || !p) return 'gone';
+    const inv = lb.incoming().find((x) => x.peer === peer);
+    if (inv) {
+      void this.begin('guest', inv, inv.card.invite!.id, inv.card.invite!.settings);
+      return 'accepted';
+    }
+    if (lb.me?.invite?.to !== peer) lb.update({ invite: { to: peer, id: newMatchId(), settings }, answer: null });
+    return 'asked';
+  }
+
+  /** Where a rematch with this opponent stands, for the end screen. */
+  rematchState(peer: string): 'none' | 'asked' | 'offered' | 'gone' {
+    const lb = this.lobby;
+    if (!lb || !lb.peers().some((x) => x.peer === peer)) return 'gone';
+    if (lb.incoming().some((x) => x.peer === peer)) return 'offered';
+    return lb.me?.invite?.to === peer ? 'asked' : 'none';
   }
 
   private onLobby(): void {
-    if (!this.lobby || this.starting) return;
-    // Our challenge was answered.
-    const ans = this.lobby.answer();
+    const lb = this.lobby;
+    if (!lb) return;
+    for (const p of lb.peers()) {
+      const c = !p.isMe && unpackChar(p.card.char);
+      if (c) this.known.set(p.peer, c);
+    }
+    // Our challenge (or rematch) was answered.
+    const ans = lb.answer();
     if (ans) {
-      const inv = this.lobby.me!.invite!;
+      const inv = lb.me!.invite!;
       if (ans.ok) return void this.begin('host', ans.from, inv.id, inv.settings);
       this.note = `${ans.from.card.name} said no this time.`;
-      this.lobby.update({ invite: null });
+      lb.update({ invite: null });
     }
+    // Both asked each other at once (two rematch presses): one of the two accepts.
+    const mine = lb.me?.invite;
+    const me = lb.myPeer;
+    const crossed = mine && me ? lb.incoming().find((p) => p.peer === mine.to) : undefined;
+    if (crossed && me! < crossed.peer) return void this.begin('guest', crossed, crossed.card.invite!.id, crossed.card.invite!.settings);
     // During matches the room updates many times a second: redraw only when the lobby itself changed,
     // so buttons aren't replaced under the player's pointer.
     if (this.isShowing() && this.signature() !== this.lastSig) this.render();
@@ -109,16 +184,20 @@ export class OnlineScreen {
 
   private async begin(role: 'host' | 'guest', other: LobbyPeer, id: string, settings: MatchSettings): Promise<void> {
     const mine = this.deps.me().char;
-    const theirs = unpackChar(other.card.char);
+    const theirs = unpackChar(other.card.char) ?? this.known.get(other.peer) ?? null;
     if (!mine || !theirs) {
       this.note = 'Both players need a character to play online.';
       return this.render();
     }
-    this.starting = true;
+    this.playing = true;
     const lb = this.lobby!;
+    // On the game's own site each match has its own room (only its two players download it); on
+    // claude.ai named rooms may not be offered, so the match shares the lobby room there.
+    const own = (lb.room as { matchRooms?: boolean }).matchRooms === true;
+    const room: RoomLike = own ? await lb.room.join(matchRoomName(id)).catch(() => lb.room) : lb.room;
     // The host's card drops its character while playing, to leave room in its presence for the game state.
-    lb.update({ status: 'playing', invite: null, ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true } } : { answer: null, char: null }) });
-    this.deps.start({ role, room: lb.room, mid: id, otherPeer: other.peer, mine, theirs, settings, otherName: other.card.name });
+    lb.update({ status: 'playing', invite: null, ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true } } : { answer: null, ...(own ? {} : { char: null }) }) });
+    this.deps.start({ role, room, mid: id, otherPeer: other.peer, mine, theirs, settings, otherName: other.card.name });
   }
 
   private challenge(p: LobbyPeer): void {

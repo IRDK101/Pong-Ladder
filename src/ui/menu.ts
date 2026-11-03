@@ -162,6 +162,8 @@ export class Menu {
   accountInfo: () => { label: string; hint: string; alert: number } = () => ({ label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 });
   /** The leaderboard row's hint (e.g. your rank). */
   leaderboardHint: () => string = () => 'XP of every approved player';
+  /** The Online match row: who's in the lobby, and challenges waiting. */
+  onlineInfo: () => { hint: string; challenges: number } = () => ({ hint: '1v1 against a player on another device', challenges: 0 });
   /** Starts on Quick match, so the hit key plays straight away. */
   cursor = this.rows().findIndex((r) => r.id === 'quick');
 
@@ -557,7 +559,9 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       ctx.font = theme.fonts.label;
       ctx.fillStyle = on ? ink : c.textDim;
       ctx.textAlign = 'right';
-      if (play) ctx.fillText(row.id === 'draft' ? 'take turns drafting characters' : row.id === 'online' ? '1v1 against a player on another device' : 'your picks, straight in', r.x + r.w - 14, mid);
+      const oi = row.id === 'online' ? menu.onlineInfo() : null;
+      if (oi?.challenges) badge(ctx, theme, r.x + r.w - 80, mid + 1, oi.challenges === 1 ? 'CHALLENGE!' : `${oi.challenges} CHALLENGES`);
+      else if (play) ctx.fillText(row.id === 'draft' ? 'take turns drafting characters' : oi ? oi.hint : 'your picks, straight in', r.x + r.w - 14, mid);
       if (row.id === 'leaderboard') ctx.fillText(menu.leaderboardHint(), r.x + r.w - 14, mid);
       if (row.id === 'characters') {
         if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);

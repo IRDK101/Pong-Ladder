@@ -9,11 +9,16 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rules": "node scripts/make-rules.mjs",
+    "build:site": "tsc --noEmit && vite build --base ./ --outDir site"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0"
   }
 }

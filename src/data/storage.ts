@@ -175,6 +175,18 @@ export class CharacterCollection extends Collection<Character> {
     return this.decorate ? all.map(this.decorate) : all;
   }
 
+  /** What a backup carries: this browser's own characters, plus (for the moderator) the whole shared collection, so it can move to another site. */
+  exportList(): Character[] {
+    if (this.sharedWins) return this.localList();
+    const out = new Map<string, Character>();
+    for (const c of this.shared) out.set(c.id, c);
+    for (const c of this.stored()) {
+      const s = out.get(c.id);
+      if (!s || (c.updatedAt ?? '') >= (s.updatedAt ?? '')) out.set(c.id, c);
+    }
+    return [...out.values()];
+  }
+
   /** Save or delete without telling listeners (for copies arriving from the player's online account). */
   saveQuiet(item: Character): void {
     super.save(item);
@@ -220,7 +232,7 @@ export class AppStore {
       schemaVersion: SCHEMA_VERSION,
       exportedAt: now.toISOString(),
       matches: this.matches.list(),
-      characters: this.characters.localList(),
+      characters: this.characters.exportList(),
       profiles: this.profiles.list(),
     };
     return JSON.stringify(file, null, 2);

@@ -1,0 +1,58 @@
+{
+  "rules": {
+    "modcheck": { ".read": "MOD" },
+    "characters": {
+      ".read": true,
+      "$id": { ".write": "MOD", ".validate": "newData.child('j').isString() && newData.child('j').val().length < 200000" }
+    },
+    "profiles": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || MOD)",
+        ".validate": "newData.child('j').isString() && newData.child('j').val().length < 20000"
+      }
+    },
+    "approvals": {
+      ".read": true,
+      "$uid": {
+        ".write": "MOD",
+        ".validate": "newData.child('s').val() === 'approved' || newData.child('s').val() === 'rejected' || newData.child('s').val() === 'revoked'"
+      }
+    },
+    "submissions": {
+      ".read": "MOD",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || MOD)",
+        ".validate": "newData.child('j').isString() && newData.child('j').val().length < 400000"
+      }
+    },
+    "data": {
+      "users": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "rooms": {
+      "lobby": {
+        ".read": "APPROVED",
+        "$peer": {
+          ".write": "APPROVED && (!data.exists() || data.child('by').val() === auth.uid)",
+          ".validate": "newData.child('by').val() === auth.uid && newData.child('p').isString() && newData.child('p').val().length <= 4096"
+        }
+      },
+      "m": {
+        "$room": {
+          ".read": "APPROVED",
+          "$peer": {
+            ".write": "APPROVED && (!data.exists() || data.child('by').val() === auth.uid)",
+            ".validate": "newData.child('by').val() === auth.uid && newData.child('p').isString() && newData.child('p').val().length <= 4096"
+          }
+        }
+      }
+    },
+    "$other": { ".read": false, ".write": false }
+  }
+}

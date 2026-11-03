@@ -24,7 +24,7 @@ import { Account } from './data/shared';
 import { CollectionScreen } from './ui/collection';
 import { LeaderboardScreen, ModeratorScreen, ProfileScreen } from './ui/profile';
 import { OnlineScreen, type OnlineStart } from './ui/online';
-import { MatchLink } from './net/online';
+import { MatchLink, type MatchSettings } from './net/online';
 import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
 import { ProfileEditor } from './ui/profileEdit';
@@ -126,6 +126,11 @@ menu.leaderboardHint = () => {
   if (i >= 0) return `you're #${i + 1} of ${board.length}`;
   return board.length ? `${board.length} player${board.length === 1 ? '' : 's'} ranked by XP` : 'XP of every approved player';
 };
+menu.onlineInfo = () => {
+  if (onlineScreen.blockedNow()) return { hint: 'approved profiles only', challenges: 0 };
+  const s = onlineScreen.status();
+  return { hint: s.here ? `${s.here} player${s.here === 1 ? '' : 's'} online now` : 'nobody else online right now', challenges: s.challenges };
+};
 menu.accountInfo = () => {
   const who = account.me?.name || account.me?.email || '';
   if (account.role === 'moderator') return { label: 'Moderator profile', hint: who ? `${who} · review, edit, approve` : 'review, edit, approve', alert: account.pendingCount() + account.pendingProfiles().length };
@@ -133,12 +138,14 @@ menu.accountInfo = () => {
   if (account.role === 'pending') return { label: 'Your profile', hint: 'waiting for approval · no XP yet', alert: 0 };
   if (account.role === 'unregistered') return { label: 'Your profile', hint: 'make a profile to earn XP', alert: 0 };
   if (account.role === 'viewonly') return { label: 'Your profile', hint: 'view-only access · no XP', alert: 0 };
+  if (account.role === 'signedout') return { label: 'Your profile', hint: 'sign in to save progress', alert: 0 };
   return { label: 'Your profile', hint: 'guest · no XP', alert: 0 };
 };
 account.onChange(() => {
   adoptSelection();
   syncShowcase();
   onlineScreen.refreshMe();
+  void onlineScreen.startBackground();
   if (screen !== 'panel') return;
   if (characters.isShowingList()) characters.showList();
   else if (collection.isShowing()) collection.show();
@@ -149,7 +156,22 @@ account.onChange(() => {
   else if (moderator.isShowing()) moderator.show();
   else if (profileEditor.isShowing() && !(document.activeElement instanceof HTMLInputElement && overlay.root.contains(document.activeElement))) profileEditor.show();
 });
-void account.connect();
+/** On the game's own site (built with a Firebase config) install its sign-in, database and lobby first. */
+async function boot(): Promise<void> {
+  const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env;
+  const host = env.VITE_FIREBASE_CONFIG;
+  if (host && !(window as unknown as { claude?: unknown }).claude) {
+    try {
+      const { installFirebaseHost } = await import('./net/firebaseHost');
+      await installFirebaseHost({ firebase: JSON.parse(host), emulator: env.VITE_FIREBASE_EMULATOR === '1' });
+    } catch (e) {
+      console.error('Sign-in and online services did not start', e);
+    }
+  }
+  await account.connect();
+  onlineScreen.startBackground();
+}
+void boot();
 injectStyles(theme);
 const overlay = new Overlay();
 
@@ -174,6 +196,9 @@ if (location.hash === '#debug') {
     },
     openCollection: (tab?: 'tables' | 'characters' | 'submissions') => openPanel(() => collection.show(tab)),
     openEditor: () => openPanel(() => profileEditor.open()),
+    menuOnline: () => menu.onlineInfo(),
+    onlineRole: () => online?.role ?? null,
+    onlineLink: () => online?.link ?? null,
     art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
     sprite: composeSprite,
     parts: PART_OPTIONS,
@@ -212,7 +237,7 @@ function startMatch(cfg: GameConfig, roster: Roster): void {
 }
 
 /** The live online match, if one is on: this device hosts (Team A) or mirrors it (Team B). */
-let online: { link: MatchLink; role: 'host' | 'guest'; otherName: string; lastNet: unknown; finalDone: boolean } | null = null;
+let online: { link: MatchLink; role: 'host' | 'guest'; otherName: string; otherPeer: string; settings: MatchSettings; lastNet: unknown; finalDone: boolean; left: boolean } | null = null;
 
 function onlineConfig(s: OnlineStart['settings'], role: 'host' | 'guest'): GameConfig {
   const cfg = menu.config(baseCfg);
@@ -236,8 +261,10 @@ function startOnline(o: OnlineStart): void {
   const pa = participantFrom(host ? o.mine : o.theirs, null);
   const pb = participantFrom(host ? o.theirs : o.mine, null);
   const roster: Roster = { 'A-left': pa, 'A-right': pa, 'B-left': pb, 'B-right': pb };
+  // A rematch replaces the match that just ended.
+  if (online) void online.link.close();
   const link = new MatchLink(o.room, o.role, o.otherPeer, o.mid);
-  online = { link, role: o.role, otherName: o.otherName, lastNet: null, finalDone: false };
+  online = { link, role: o.role, otherName: o.otherName, otherPeer: o.otherPeer, settings: o.settings, lastNet: null, finalDone: false, left: false };
   if (host) {
     startMatch(cfg, roster);
     const g = game!;
@@ -265,7 +292,28 @@ function endOnline(note = ''): void {
   void online.link.close();
   online = null;
   onlineScreen.close();
+  onlineScreen.matchOver();
   if (note) menuNote = note;
+}
+
+/** The end screen of an online game: where a rematch stands. */
+function rematchLine(): string {
+  if (!online) return '';
+  if (online.left) return `${online.otherName} left.`;
+  const st = onlineScreen.rematchState(online.otherPeer);
+  return st === 'offered' ? `${online.otherName} wants a rematch!` : st === 'asked' ? `Rematch asked: waiting for ${online.otherName}…` : st === 'gone' ? `${online.otherName} left.` : '';
+}
+function rematchPrompt(): string {
+  if (!online || online.left || onlineScreen.rematchState(online.otherPeer) === 'gone') return 'Space / Enter: menu';
+  return onlineScreen.rematchState(online.otherPeer) === 'offered' ? 'Space / Enter: play again · Esc: menu' : 'Space / Enter: rematch · Esc: menu';
+}
+function rematchPressed(): void {
+  const o = online!;
+  if (o.left || onlineScreen.rematchState(o.otherPeer) === 'gone') {
+    endOnline();
+    return toMenu();
+  }
+  onlineScreen.rematch(o.otherPeer, o.settings);
 }
 
 /** One frame of an online match on the guest's device. */
@@ -379,6 +427,7 @@ const onlineScreen = new OnlineScreen(overlay, {
     if (account.role === 'pending') return 'Your profile is waiting for the moderator. Once it’s approved you can play online, earn XP and get on the leaderboard.';
     if (account.role === 'unregistered') return 'Make a profile first (menu → Your profile → Ask to join). Once the moderator approves it you can play online.';
     if (account.role === 'player') return 'Your profile is paused by the moderator.';
+    if (account.role === 'signedout') return 'Sign in (menu → Your profile) and make a profile. Once the moderator approves it you can play online, earn XP and get on the leaderboard.';
     if (account.role === 'viewonly') return 'You opened the game by a public link from outside the moderator’s claude.ai organization, so claude.ai lets you play offline only. Ask the moderator to invite your email, then open the game from that invite and make a profile.';
     return 'Sign in to claude.ai and open the game from your invite, then make a profile for the moderator to approve.';
   },
@@ -420,7 +469,7 @@ function menuExtras(): MenuExtras {
     nothingLeft: account.allUnlocked(),
     newRewards: account.newRewards(),
     pending: account.owner ? account.pendingCount() + account.pendingProfiles().length : 0,
-    progressNote: account.canProgress ? '' : account.role === 'pending' ? 'Profile waiting for approval: no XP yet' : account.role === 'unregistered' ? 'Make a profile (Your profile) to earn XP' : 'Playing as a guest: games don’t earn XP',
+    progressNote: account.canProgress ? '' : account.role === 'pending' ? 'Profile waiting for approval: no XP yet' : account.role === 'unregistered' ? 'Make a profile (Your profile) to earn XP' : account.role === 'signedout' ? 'Sign in (Your profile) to earn XP' : 'Playing as a guest: games don’t earn XP',
     offline: account.mode === 'local',
     allAccess: account.owner,
     team: mySlots(cfg).map((k) => {
@@ -560,7 +609,9 @@ function frame(dt: number): void {
 
   const g = game!;
   online?.link.read();
-  if (online?.link.gone && screen !== 'matchEnd') {
+  // On the end screen the match is over: if they leave, say so there and let the player go back when ready.
+  if (online?.link.gone && screen === 'gameEnd') online.left = true;
+  else if (online?.link.gone && screen !== 'matchEnd') {
     endOnline(online.link.seen ? `${online.otherName} left the match.` : `Couldn’t connect to ${online.otherName}${online.link.error ? ` (${online.link.error})` : ''}. Try challenging again.`);
     return toMenu(menuNote);
   }
@@ -571,11 +622,8 @@ function frame(dt: number): void {
     if (screen === 'gameEnd') {
       const st = g.engine.peek();
       const ready = performance.now() - gameOverAt > 800;
-      drawEndScreen(ctx, theme, view, st.winner === 'B' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`, [g.teamLine(st.winner ?? 'A'), g.cupsLeftLine(), xpNote], ready ? 'Press Space / Enter for the menu' : '');
-      if (ready && anyPressed(['hit'])) {
-        endOnline();
-        toMenu();
-      }
+      drawEndScreen(ctx, theme, view, st.winner === 'B' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`, [g.teamLine(st.winner ?? 'A'), g.cupsLeftLine(), xpNote, rematchLine()].filter(Boolean), ready ? rematchPrompt() : '');
+      if (ready && anyPressed(['hit'])) rematchPressed();
     }
     return;
   }
@@ -607,11 +655,15 @@ function frame(dt: number): void {
     const lines = [g.teamLine(st.winner!), g.cupsLeftLine()];
     if (g.cfg.matchFormat === 'bestOf3') lines.push(`Games: A ${g.match.wins.A + (st.winner === 'A' ? 1 : 0)} – ${g.match.wins.B + (st.winner === 'B' ? 1 : 0)} B`);
     if (xpNote) lines.push(xpNote);
-    drawEndScreen(ctx, theme, view, matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`, lines, ready ? 'Press Space / Enter' : '');
+    if (online) {
+      const r = rematchLine();
+      if (r) lines.push(r);
+    }
+    const title = online ? (st.winner === 'A' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`) : matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`;
+    drawEndScreen(ctx, theme, view, title, lines, ready ? (online ? rematchPrompt() : 'Press Space / Enter') : '');
     if (online?.role === 'host') online.link.sendState(g.netState(), performance.now());
-    if (ready && anyPressed(['hit']) && online?.role === 'host') {
-      endOnline();
-      toMenu();
+    if (ready && anyPressed(['hit']) && online) {
+      rematchPressed();
       return;
     }
     if (ready && anyPressed(['hit'])) {
@@ -639,8 +691,9 @@ window.addEventListener('keydown', (e) => {
   // Escape in a text box just leaves the box, so a half-typed name is not thrown away.
   if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
   if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') {
+    const finished = screen !== 'playing';
     endOnline();
-    toMenu('Match abandoned.');
+    toMenu(finished ? '' : 'Match abandoned.');
   } else if (screen === 'panel' && onlineScreen.isShowing()) {
     onlineScreen.close();
     toMenu();
