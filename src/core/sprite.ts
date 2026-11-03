@@ -157,8 +157,23 @@ function headRows(shape: string): [number, number][] {
   }
 }
 
-export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'front'): Sprite {
+/** Where the open eyes are on the 16×24 grid (for the catch-lights added at full size). */
+interface FaceMeta {
+  eyes: { x: number; y: number }[];
+  /** The flat colors of the main regions, so the full-size pass can texture each one. */
+  colors: { skin: string; hair: string; shirt: string; pants: string };
+  front: boolean;
+  /** Grid rows: the eyes, the chin, the top of the torso, the belt, the bottom of the legs. */
+  rows: { eye: number; chin: number; torso: number; belt: number; legBot: number };
+}
+
+/**
+ * The flat 16×24 drawing of a character from its parts (no shading or
+ * outline yet), plus where its eyes are.
+ */
+function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite; meta: FaceMeta } {
   const parts = normalizeParts(raw);
+  const meta: FaceMeta = { eyes: [], colors: { skin: '', hair: '', shirt: '', pants: '' }, front: facing === 'front', rows: { eye: 0, chin: 0, torso: 0, belt: 0, legBot: 0 } };
   const c = new Canvas();
   const P = PART_OPTIONS;
   const skin = P.skin[parts.skin];
@@ -174,6 +189,7 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   const acc = P.accessory[parts.accessory];
   const shoe = SHOES[parts.shoes];
   const front = facing === 'front';
+  meta.colors = { skin, hair, shirt, pants };
 
   // ---- Body type: torso half-width, how far everything drops (stocky is shorter), torso and leg rows.
   const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2, Athletic: 3, Petite: 2, Tall: 3 }[build];
@@ -190,6 +206,7 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
   const hy = 2 + drop;
   rows.forEach(([l, r], k) => c.rect(l, hy + k, r, hy + k, skin));
   const chin = hy + rows.length - 1;
+  meta.rows = { eye: hy + 3, chin, torso: torsoTop, belt, legBot };
   const hl = Math.min(...rows.map((r) => r[0]));
   const hr = Math.max(...rows.map((r) => r[1]));
   const neckW = build === 'Heavy' || build === 'Broad' ? [6, 9] : [7, 8];
@@ -469,6 +486,7 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
           c.set(x, eyeY, OUTLINE);
       }
       if (eyes !== 'Lashes' && eyes !== 'Big' && eyes !== 'Sleepy' && eyes !== 'Angry' && eyes !== 'Closed') c.set(x, eyeY - 1, brow);
+      if (eyes !== 'Squint' && eyes !== 'Closed' && !(eyes === 'Wink' && x > 8)) meta.eyes.push({ x, y: eyeY });
     }
     c.set(hl, eyeY + 1, shade(skin, 0.92)); // cheek shadow
     const mouth = P.mouth[parts.mouth];
@@ -933,7 +951,14 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
       break;
   }
 
-  // ---- Form shading: lit left edges, shadowed right edges of each shape.
+  return { flat: { w: SPRITE_W, h: SPRITE_H, pixels: c.pixels }, meta };
+}
+
+/** The classic 16×24 finish: one-pixel form shading and a dark outline. Used by the pixel editor. */
+function finishLow(flat: Sprite): Sprite {
+  const c = new Canvas();
+  c.pixels = flat.pixels.slice();
+  // Form shading: lit left edges, shadowed right edges of each shape.
   const shaded = new Canvas();
   shaded.pixels = c.pixels.slice();
   for (let y = 0; y < SPRITE_H; y++)
@@ -967,6 +992,150 @@ export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'fron
       }
     }
   return { w: SPRITE_W, h: SPRITE_H, pixels: out.pixels };
+}
+
+/** Full-size sprites are this many times the 16×24 drawing grid. */
+export const SPRITE_SCALE = 2;
+
+/**
+ * Pixel-art 2× upscale (EPX / Scale2x): every pixel becomes four, and where
+ * two neighbors agree the corner takes their color, so diagonals come out as
+ * smooth steps instead of blocky staircases.
+ */
+export function epx(src: Sprite): Sprite {
+  const { w, h } = src;
+  const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < w && y < h ? src.pixels[y * w + x] : '');
+  const W = w * 2;
+  const out: string[] = new Array(W * h * 2).fill('');
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = at(x, y);
+      const A = at(x, y - 1);
+      const B = at(x + 1, y);
+      const C = at(x - 1, y);
+      const D = at(x, y + 1);
+      let p1 = p,
+        p2 = p,
+        p3 = p,
+        p4 = p;
+      // Only round off where the corner neighbor is not transparent on one side and filled on the other,
+      // so the silhouette and features soften without eating single-pixel details.
+      if (C === A && C !== D && A !== B && C) p1 = A;
+      if (A === B && A !== C && B !== D && A) p2 = B;
+      if (D === C && D !== B && C !== A && D) p3 = C;
+      if (B === D && B !== A && D !== C && B) p4 = D;
+      out[2 * y * W + 2 * x] = p1;
+      out[2 * y * W + 2 * x + 1] = p2;
+      out[(2 * y + 1) * W + 2 * x] = p3;
+      out[(2 * y + 1) * W + 2 * x + 1] = p4;
+    }
+  return { w: W, h: h * 2, pixels: out };
+}
+
+/**
+ * The full-size finish for a part-built character: the flat drawing upscaled
+ * 2× (EPX), then shaded at the finer size (a two-pixel shadow on the right and
+ * bottom of each shape, a lit pixel on its left and top), catch-lights in the
+ * eyes, and a one-pixel dark outline round the silhouette.
+ */
+function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
+  const big = epx(flat);
+  const { w, h } = big;
+  const src = big.pixels;
+  const get = (x: number, y: number) => (x >= 0 && y >= 0 && x < w && y < h ? src[y * w + x] : '');
+  const px = src.slice();
+  const set = (x: number, y: number, col: string) => {
+    if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = col;
+  };
+  // ---- Detail at the finer size, region by region (identified by their flat colors).
+  const C = meta.colors;
+  const R = meta.rows;
+  const is = (x: number, y: number, col: string) => !!col && get(x, y) === col;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const col = get(x, y);
+      if (!col) continue;
+      if (col === C.hair && C.hair !== C.skin) {
+        // Hair: strands (every third column a shade darker, offset by row) and a lit band near the top.
+        const top = !is(x, y - 1, C.hair) || !is(x, y - 2, C.hair);
+        if (top && x < w / 2 + 2) set(x, y, shade(col, 1.22));
+        else if ((x + (y >> 1)) % 3 === 0) set(x, y, shade(col, 0.8));
+      } else if (col === C.pants && y > R.belt * 2 + 1) {
+        // Trousers: a center seam between the legs and a lit knee.
+        if (x === w / 2 - 1 || x === w / 2) set(x, y, shade(col, 0.78));
+        else if (y === Math.round((R.belt + R.legBot) * 1.0) && (x === w / 2 - 4 || x === w / 2 + 3)) set(x, y, shade(col, 1.18));
+      } else if (col === C.shirt && meta.front && y === R.torso * 2) {
+        // A collar line at the neckline.
+        if (Math.abs(x - (w / 2 - 0.5)) <= 3) set(x, y, shade(col, 0.72));
+      }
+    }
+  if (meta.front && C.skin) {
+    const ey = R.eye * 2;
+    // Eye whites beside each pupil (outer side), when that spot is still skin.
+    for (const e of meta.eyes) {
+      const px0 = e.x * 2;
+      const outer = e.x < 8 ? px0 - 1 : px0 + 2;
+      for (const yy of [e.y * 2, e.y * 2 + 1]) if (is(outer, yy, C.skin)) set(outer, yy, '#f3efe6');
+    }
+    // A nose: a shadow under the brow line between the eyes, and a lit tip.
+    const nx = w / 2 - 1;
+    if (is(nx, ey + 2, C.skin)) set(nx, ey + 2, shade(C.skin, 0.82));
+    if (is(nx, ey + 3, C.skin)) set(nx, ey + 3, shade(C.skin, 0.78));
+    if (is(nx + 1, ey + 3, C.skin)) set(nx + 1, ey + 3, shade(C.skin, 1.08));
+    // A soft shadow under the chin.
+    const cy = R.chin * 2 + 2;
+    for (let x = 0; x < w; x++) if (is(x, cy, shade(C.skin, 0.85))) set(x, cy, shade(C.skin, 0.7));
+  }
+  // Shading, light from the top left.
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const col = get(x, y);
+      if (!col || col === OUTLINE) continue;
+      const edge = (dx: number, dy: number) => {
+        const n = get(x + dx, y + dy);
+        return n !== col;
+      };
+      if (edge(1, 0)) set(x, y, shade(col, 0.76));
+      else if (edge(2, 0)) set(x, y, shade(col, 0.88));
+      else if (edge(0, 1) && get(x, y + 1) !== '') set(x, y, shade(col, 0.86));
+      else if (edge(-1, 0) && get(x - 1, y) !== OUTLINE) set(x, y, shade(col, 1.14));
+      else if (edge(0, -1) && get(x, y - 1) !== OUTLINE) set(x, y, shade(col, 1.08));
+    }
+  // Eyes: a bright catch-light in the top corner of each pupil, so faces read at a glance.
+  for (const e of meta.eyes) {
+    const ex = e.x * 2 + (e.x < 8 ? 1 : 0);
+    set(ex, e.y * 2, '#ffffff');
+  }
+  // Outline: every empty pixel beside the figure takes a dark shade of what it touches.
+  const out = px.slice();
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      if (get(x, y)) continue;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const n = get(x + dx, y + dy);
+        if (n) {
+          out[y * w + x] = n === OUTLINE ? OUTLINE : shade(n, 0.3);
+          break;
+        }
+      }
+    }
+  return { w, h, pixels: out };
+}
+
+/** A character from its parts at full size (32×48): what the game shows. */
+export function composeSprite(raw: SpriteParts, facing: 'front' | 'back' = 'front', itemId: string | null = null): Sprite {
+  const { flat, meta } = composeFlat(raw, facing);
+  return finishHigh(withItem(flat, itemId), meta);
+}
+
+/** A character from its parts on the 16×24 drawing grid, shaded and outlined: the pixel editor's starting point. */
+export function composeBase(raw: SpriteParts, facing: 'front' | 'back' = 'front'): Sprite {
+  return finishLow(composeFlat(raw, facing).flat);
 }
 
 /** Cosmetic sprite items (level rewards), drawn over any sprite: [x, y, color] pixels. */
@@ -1004,7 +1173,9 @@ export function withItem(base: Sprite, itemId: string | null | undefined): Sprit
 
 /** The sprite to show for a character: hand-drawn/uploaded pixels if present, else the parts; plus any equipped item. */
 export function characterSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }, itemId: string | null = null): Sprite {
-  return withItem(sprite.pixels ?? composeSprite(sprite.parts), itemId);
+  // Hand-drawn or uploaded pixels are on the 16×24 grid: scaled up the same way as part-built ones.
+  if (sprite.pixels) return epx(withItem(sprite.pixels, itemId));
+  return composeSprite(sprite.parts, 'front', itemId);
 }
 
 /**
@@ -1012,11 +1183,11 @@ export function characterSprite(sprite: { parts: SpriteParts; pixels: Sprite | n
  * a hand-drawn or uploaded sprite is mirrored with its face covered in its own darkest color.
  */
 export function characterBackSprite(sprite: { parts: SpriteParts; pixels: Sprite | null }, itemId: string | null = null): Sprite {
-  if (!sprite.pixels) return withItem(composeSprite(sprite.parts, 'back'), itemId === 'goldChain' ? null : itemId);
+  if (!sprite.pixels) return composeSprite(sprite.parts, 'back', itemId === 'goldChain' ? null : itemId);
   const p = sprite.pixels;
   const out = p.pixels.slice();
   for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) out[y * p.w + x] = p.pixels[y * p.w + (p.w - 1 - x)];
-  return withItem({ ...p, pixels: out }, itemId === 'goldChain' ? null : itemId);
+  return epx(withItem({ ...p, pixels: out }, itemId === 'goldChain' ? null : itemId));
 }
 
 /** Nearest-color quantize RGBA image data (already scaled to the sprite size) into sprite pixels. */

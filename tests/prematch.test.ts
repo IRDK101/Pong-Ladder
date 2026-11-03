@@ -10,7 +10,7 @@ describe('pre-match helpers', () => {
     c.master = true;
     const p = participantFrom(c, 'p1');
     expect(p).toMatchObject({ name: 'Ari', master: true, characterId: c.id, profileId: 'p1' });
-    expect(p.sprite!.pixels).toHaveLength(16 * 24);
+    expect(p.sprite!.pixels).toHaveLength(32 * 48);
     c.stats.power = 10;
     expect(p.stats.power).toBe(5);
   });

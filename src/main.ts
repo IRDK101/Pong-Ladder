@@ -2,7 +2,7 @@
 
 import { makeConfig, type GameConfig, type TableDesign } from './config';
 import { tableArt } from './render/basement3d';
-import { composeSprite, PART_OPTIONS } from './core/sprite';
+import { composeBase, composeSprite, PART_OPTIONS, randomParts } from './core/sprite';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
 import { Game, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
@@ -28,7 +28,7 @@ import { MatchLink, type MatchSettings } from './net/online';
 import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
 import { ProfileEditor } from './ui/profileEdit';
-import { CharacterPicker, cpuPinnedFor, loadSelection, mySlots, pinnedFor, playingAsLabel, SELECTION_KEY, TablePicker } from './ui/picker';
+import { CharacterPicker, loadSelection, mySlots, otherPinnedFor, otherSlots, pinnedFor, playersLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
 
@@ -84,6 +84,7 @@ function browserStore(): KeyValueStore {
 const kv = browserStore();
 const store = new AppStore(kv);
 const menu = new Menu();
+menu.entered();
 // The player's account: level, loot boxes, unlocks, and the shared character collection.
 const account = new Account(store, baseCfg, kv);
 menu.tableLocked = (v) => !account.tableUnlocked(v);
@@ -120,7 +121,7 @@ function adoptSelection(): void {
 }
 menu.restoreDesign(selection.design);
 menu.mySide = selection.mySide;
-menu.playingAs = () => playingAsLabel(menu.config(baseCfg), selection, account.usable());
+menu.playingAs = () => playersLabel(menu.config(baseCfg));
 menu.leaderboardHint = () => {
   const board = account.leaderboard();
   const i = account.uid ? board.findIndex((r) => r.uid === account.uid) : -1;
@@ -205,6 +206,7 @@ if (location.hash === '#debug') {
     onlineLink: () => online?.link ?? null,
     art: (d: TableDesign) => tableArt(theme, d).toDataURL(),
     sprite: composeSprite,
+    spriteKit: { composeSprite, composeBase, randomParts },
     parts: PART_OPTIONS,
     run: (a: MenuAction) => runMenuAction(a),
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
@@ -214,6 +216,7 @@ if (location.hash === '#debug') {
 function toMenu(note = ''): void {
   overlay.hide();
   menuNote = note;
+  if (screen !== 'menu') menu.entered();
   screen = 'menu';
   canvas.focus();
 }
@@ -487,17 +490,18 @@ function menuExtras(): MenuExtras {
       return sp;
     }),
     tableArt: tableArt(theme, cfg.design),
-    cpuTeam:
-      cfg.players.mode === 'coop'
-        ? (cfg.teamSize === 1 ? (['B-left'] as const) : (['B-left', 'B-right'] as const)).map((k) => {
-            const c = cpuPinnedFor(cfg, selection, account.everyone(), pins)[k];
-            if (!c) return null;
-            const key = `${c.id}:${c.updatedAt}:${c.cosmetics.spriteItem ?? ''}`;
-            let sp = menuSprites.get(key);
-            if (!sp) menuSprites.set(key, (sp = characterSprite(c.sprite, c.cosmetics.spriteItem ?? null)));
-            return sp;
-          })
-        : [],
+    otherTeam: (() => {
+      const other = otherPinnedFor(cfg, selection, cfg.players.mode === 'coop' ? account.everyone() : account.usable(), pins);
+      return otherSlots(cfg).map((k) => {
+        const c = other[k];
+        if (!c) return null;
+        const key = `${c.id}:${c.updatedAt}:${c.cosmetics.spriteItem ?? ''}`;
+        let sp = menuSprites.get(key);
+        if (!sp) menuSprites.set(key, (sp = characterSprite(c.sprite, c.cosmetics.spriteItem ?? null)));
+        return sp;
+      });
+    })(),
+    myTeamId: cfg.players.mode === 'coop' ? 'A' : (cfg.players.mySide ?? 'A'),
     me: account.myProfile ? { name: account.myProfile.name, style: account.myStyle } : null,
   };
 }
@@ -506,8 +510,8 @@ function menuExtras(): MenuExtras {
 function quickFor(cfg: GameConfig): Roster {
   const mine = account.usable();
   const pins = pinnedFor(cfg, selection, mine);
-  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize, Math.random, { ...pins, ...cpuPinnedFor(cfg, selection, account.everyone(), pins) });
-  return quickRoster(mine, cfg.teamSize, Math.random, pins);
+  if (cfg.players.mode === 'coop') return quickRoster({ A: mine, B: account.everyone() }, cfg.teamSize, Math.random, { ...pins, ...otherPinnedFor(cfg, selection, account.everyone(), pins) });
+  return quickRoster(mine, cfg.teamSize, Math.random, { ...pins, ...otherPinnedFor(cfg, selection, mine, pins) });
 }
 
 /** How to play, as a scrollable screen like the others (readable on any size). */

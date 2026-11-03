@@ -24,8 +24,13 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
 
 const spriteCache = new WeakMap<Sprite, Map<number, HTMLCanvasElement>>();
 
-/** A canvas showing a sprite at an integer scale (cached per sprite object). */
-export function spriteCanvas(sprite: Sprite, scale: number): HTMLCanvasElement {
+/**
+ * A canvas showing a sprite (cached per sprite object). `scale` is in units of
+ * the 16-pixel drawing grid, so a full-size 32-pixel sprite at scale 2 is drawn
+ * pixel for pixel, the same size a 16-pixel one was.
+ */
+export function spriteCanvas(sprite: Sprite, gridScale: number): HTMLCanvasElement {
+  const scale = Math.max(1, Math.round((gridScale * 16) / Math.max(1, sprite.w)));
   let byScale = spriteCache.get(sprite);
   if (!byScale) spriteCache.set(sprite, (byScale = new Map()));
   const hit = byScale.get(scale);
@@ -104,6 +109,51 @@ export function injectStyles(theme: Theme): void {
   #ui button.danger { border-color: ${c.bad}; color: ${c.bad}; }
   #ui button:disabled { opacity: 0.4; cursor: default; }
   #ui button.on { background: ${c.activeRing}; color: ${c.activeText}; border-color: ${c.activeRing}; font-weight: bold; }
+  /* Motion: buttons lift on hover and press in, panels and their contents slide in. */
+  #ui button { transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, background-color 0.12s, border-color 0.12s; }
+  #ui button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 3px 0 rgba(0,0,0,0.45); }
+  #ui button:active:not(:disabled) { transform: translateY(1px) scale(0.97); box-shadow: 0 0 0 rgba(0,0,0,0); transition-duration: 0.05s; }
+  #ui button.small { padding: 3px 8px; font-size: 12px; }
+  #ui .panel.fresh > * { animation: ui-in 0.28s cubic-bezier(.2,.9,.3,1.2) both; }
+  #ui .panel.fresh > *:nth-child(2) { animation-delay: 0.03s; }
+  #ui .panel.fresh > *:nth-child(3) { animation-delay: 0.06s; }
+  #ui .panel.fresh > *:nth-child(4) { animation-delay: 0.09s; }
+  #ui .panel.fresh > *:nth-child(5) { animation-delay: 0.12s; }
+  #ui .panel.fresh > *:nth-child(n+6) { animation-delay: 0.15s; }
+  @keyframes ui-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  #ui .panel.fresh .pickgrid > button { animation: card-in 0.32s cubic-bezier(.2,.9,.3,1.25) both; animation-delay: calc(var(--i, 0) * 18ms); }
+  @keyframes card-in { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+  #ui .pickcard.on { animation: picked 0.45s ease-out; }
+  @keyframes picked { 0% { box-shadow: 0 0 0 2px ${c.gold}, 0 0 0 0 rgba(255, 214, 110, 0.7); } 100% { box-shadow: 0 0 0 2px ${c.gold}, 0 0 0 12px rgba(255, 214, 110, 0); } }
+  #ui .pickcard.taken { opacity: 0.6; }
+  /* Players: the lineup at the table. */
+  #ui .lineup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
+  #ui .team-col { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 2px solid ${c.uiEdge}; background: rgba(10, 9, 8, 0.55); position: relative; }
+  #ui .team-col.teamA { border-color: ${c.teamA}; box-shadow: inset 4px 0 0 ${c.teamA}; }
+  #ui .team-col.teamB { border-color: ${c.teamB}; box-shadow: inset -4px 0 0 ${c.teamB}; }
+  #ui .team-col.mine { background: linear-gradient(180deg, rgba(230, 196, 90, 0.12), rgba(10, 9, 8, 0.55)); }
+  #ui .team-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; font-size: 13px; }
+  #ui .team-col.teamA .team-head > span { color: ${c.teamA}; }
+  #ui .team-col.teamB .team-head > span { color: ${c.teamB}; }
+  #ui .team-spots { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  #ui .spot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 10px; background: ${c.button}; position: relative; overflow: hidden; }
+  #ui .panel.fresh .spot { animation: card-in 0.34s cubic-bezier(.2,.9,.3,1.25) both; animation-delay: calc(var(--i, 0) * 45ms); }
+  #ui .spot.on .spot-art canvas { animation: hop 0.35s cubic-bezier(.2,.9,.3,1.4); }
+  @keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
+  #ui .spot .spot-art { display: grid; place-items: end center; height: 112px; }
+  #ui .spot .spot-art canvas { image-rendering: pixelated; transition: transform 0.18s cubic-bezier(.2,.9,.3,1.4); }
+  #ui .spot:hover .spot-art canvas { transform: translateY(-4px) scale(1.04); }
+  #ui .spot .spot-role { font-size: 11px; color: ${c.textDim}; letter-spacing: 0.04em; }
+  #ui .spot .spot-name { font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #ui .spot.on { border-color: ${c.gold}; background: #4a3f24; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
+  #ui .spot.on .spot-role { color: ${c.gold}; }
+  #ui .team-head { min-height: 26px; }
+  #ui .spot.on::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 240, 200, 0.22) 50%, transparent 70%); background-size: 250% 100%; animation: shine 1.8s linear infinite; pointer-events: none; }
+  @keyframes shine { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+  #ui .vs-badge { align-self: center; font-weight: bold; font-size: 22px; color: ${c.gold}; text-shadow: 2px 2px 0 #000; animation: vs-pulse 2.4s ease-in-out infinite; }
+  @keyframes vs-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+  @media (max-width: 640px) { #ui .lineup { grid-template-columns: 1fr; } #ui .vs-badge { justify-self: center; } }
+  @media (prefers-reduced-motion: reduce) { #ui *, #ui *::after { animation: none !important; transition: none !important; } }
   #ui :focus-visible { outline: 2px solid ${c.activeRing}; outline-offset: 2px; }
   #ui textarea { width: 100%; min-height: 220px; font-size: 12px; }
   #ui input[type=range] { width: 100%; accent-color: ${c.gold}; }
@@ -232,6 +282,10 @@ export class Overlay {
 
   /** Show a screen. `keepScroll` re-renders the same screen in place (no jump back to the top). */
   show(panel: HTMLElement, keepScroll = false): void {
+    // Entrance animations play when a different screen opens, not on every refresh of the same one.
+    const title = panel.querySelector('h1')?.textContent ?? '';
+    if (this.root.hidden || title !== this.lastTitle) panel.classList.add('fresh');
+    this.lastTitle = title;
     const y = this.root.scrollTop;
     const focusId = keepScroll ? (document.activeElement as HTMLElement | null)?.id : undefined;
     this.root.replaceChildren(panel);
@@ -244,7 +298,10 @@ export class Overlay {
     return !this.root.hidden;
   }
 
+  private lastTitle = '';
+
   hide(): void {
+    this.lastTitle = '';
     this.root.hidden = true;
     this.root.replaceChildren();
   }

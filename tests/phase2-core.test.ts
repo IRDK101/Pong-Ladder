@@ -3,7 +3,7 @@ import { newCharacter, validateCharacter } from '../src/core/character';
 import { available, firstPicker, isDone, newDraft, onTheClock, pick, snakeOrder, teamPicks, type Draft } from '../src/core/draft';
 import { BallPhysics, NO_EFFECTS, type PhysicsEvent } from '../src/core/physics';
 import { RulesEngine } from '../src/core/rules';
-import { composeSprite, normalizeParts, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba } from '../src/core/sprite';
+import { composeBase, composeSprite, normalizeParts, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba } from '../src/core/sprite';
 import { effectiveStats, effect, NEUTRAL_STATS, STAT_KEYS, statEffect, type Stats } from '../src/core/stats';
 import { getStyle, registerStyle, STYLES } from '../src/core/styles';
 import { solveArc, solveServe } from '../src/core/trajectory';
@@ -220,12 +220,14 @@ describe('characters', () => {
 });
 
 describe('sprites', () => {
-  it('composes a 16x24 sprite deterministically from parts', () => {
+  it('composes a full-size (2x the 16x24 grid) sprite deterministically from parts', () => {
     const parts = { skin: 2, hairStyle: 3, hairColor: 1, shirtStyle: 2, shirtColor: 0, pantsColor: 1, build: 2, accessory: 1 };
     const a = composeSprite(parts);
-    expect(a.w).toBe(SPRITE_W);
-    expect(a.h).toBe(SPRITE_H);
-    expect(a.pixels).toHaveLength(SPRITE_W * SPRITE_H);
+    expect(a.w).toBe(SPRITE_W * 2);
+    expect(a.h).toBe(SPRITE_H * 2);
+    expect(a.pixels).toHaveLength(SPRITE_W * SPRITE_H * 4);
+    // The pixel editor still starts from the 16x24 grid.
+    expect(composeBase(parts).pixels).toHaveLength(SPRITE_W * SPRITE_H);
     expect(composeSprite(parts)).toEqual(a);
     expect(a.pixels.every((p) => p === '' || /^#[0-9a-f]{6}$/.test(p))).toBe(true);
     expect(a.pixels.includes(PART_OPTIONS.skin[2])).toBe(true);
@@ -258,7 +260,7 @@ describe('sprites', () => {
     for (let k = 0; k < 50; k++) {
       const p = randomParts(rng);
       expect(normalizeParts(p)).toEqual(p);
-      expect(composeSprite(p).pixels).toHaveLength(SPRITE_W * SPRITE_H);
+      expect(composeSprite(p).pixels).toHaveLength(SPRITE_W * SPRITE_H * 4);
     }
   });
 

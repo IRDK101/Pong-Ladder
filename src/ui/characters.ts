@@ -1,7 +1,7 @@
 // Character list and character creator/editor (HTML screens).
 
 import { MAX_HIT_STYLES, MIN_HIT_STYLES, NAME_MAX, newCharacter, validateCharacter, type Character, type Sprite } from '../core/character';
-import { characterBackSprite, characterSprite, COLOR_PARTS, composeSprite, normalizeParts, PART_GROUPS, PART_LABELS, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba, type PartKey } from '../core/sprite';
+import { characterBackSprite, characterSprite, COLOR_PARTS, composeBase, composeSprite, normalizeParts, PART_GROUPS, PART_LABELS, PART_OPTIONS, randomParts, SPRITE_H, SPRITE_W, spriteFromRgba, type PartKey } from '../core/sprite';
 import { STAT_INFO, STAT_KEYS, STAT_MAX, STAT_MIN, type Stats } from '../core/stats';
 import { getStyle, stylesOfKind } from '../core/styles';
 import type { GameConfig } from '../config';
@@ -605,7 +605,7 @@ class CharacterEditor {
   private drawPanel(): HTMLElement {
     const sprite = this.c.sprite;
     // Start from the current look; it only becomes a custom drawing once you paint.
-    const px: Sprite = sprite.pixels ?? composeSprite(sprite.parts);
+    const px: Sprite = sprite.pixels ?? composeBase(sprite.parts);
     const cell = 14;
     const grid = h('canvas', { class: 'pixelgrid', width: SPRITE_W * cell, height: SPRITE_H * cell });
     const ctx = grid.getContext('2d')!;
@@ -670,7 +670,7 @@ class CharacterEditor {
       h(
         'div',
         { class: 'row' },
-        h('button', { onclick: () => ((sprite.pixels = composeSprite(sprite.parts)), this.render()) }, 'Reset to parts drawing'),
+        h('button', { onclick: () => ((sprite.pixels = composeBase(sprite.parts)), this.render()) }, 'Reset to parts drawing'),
         h('button', { onclick: () => ((sprite.pixels = null), (this.mode = 'parts'), this.render()) }, 'Discard drawing'),
       ),
     );

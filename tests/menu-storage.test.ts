@@ -59,27 +59,27 @@ describe('pre-game menu', () => {
     m.focus('match');
     m.move(0, -1); // best of 3 (wraps backwards)
     m.focus('speed');
-    m.move(0, -1); // Quick: left is one level slower than the default (Fast)
+    m.move(0, -1); // Slow: left is one level slower than the default (Fast)
     m.focus('ski');
     m.activate(); // on (activate cycles an option row)
     const cfg = m.config();
     expect(cfg).toMatchObject({ formation: 'shrub', matchFormat: 'bestOf3', penaltyCupSelection: 'choose', skiCollision: true });
     expect(m.rows().map((r) => r.label)).not.toContain('Penalty cup');
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Quick');
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Slow');
   });
 
   it('game speed: Fast is the default; right is faster, left is slower', () => {
     const m = new Menu();
     const fast = m.config().physics.timeScale;
     expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Fast');
-    expect(fast).toBeCloseTo(0.88 * 0.977 * 0.977, 2);
+    expect(fast).toBeCloseTo(0.88 * 0.977 ** 3, 2);
     m.focus('speed');
     m.move(0, 1);
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Pro');
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Extreme');
     expect(m.config().physics.timeScale).toBeGreaterThan(fast);
     m.move(0, -1);
     m.move(0, -1);
-    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Quick');
+    expect(m.rows().find((r) => r.id === 'speed')?.value).toBe('Slow');
     expect(m.config().physics.timeScale).toBeLessThan(fast);
   });
 
@@ -221,10 +221,10 @@ describe('clicking a setting', () => {
     const i = m.rows().findIndex((r) => r.id === 'speed');
     m.valueZones.set('speed', { cx: 400, l: 340, r: 460 });
     expect(m.click(i, 455)).toBeNull();
-    expect(m.rows()[i].value).toBe('Pro');
+    expect(m.rows()[i].value).toBe('Extreme');
     m.click(i, 345);
     m.click(i, 345);
-    expect(m.rows()[i].value).toBe('Quick');
+    expect(m.rows()[i].value).toBe('Slow');
     // The Table row: its arrows flip tables, the rest opens the picker.
     const t = m.rows().findIndex((r) => r.id === 'table');
     m.valueZones.set('table', { cx: 400, l: 300, r: 500 });

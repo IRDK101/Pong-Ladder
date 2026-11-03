@@ -5,7 +5,7 @@ import { careerRates, deriveCareers, emptyCareer } from '../src/progress/careers
 import { computeRatings, expectedScore } from '../src/progress/elo';
 import { levelFor, xpFor, xpToReach } from '../src/progress/levels';
 import { isUnlocked, newRewards, REWARDS, unlockedAt } from '../src/progress/rewards';
-import { characterSprite, composeSprite, SPRITE_ITEMS, withItem } from '../src/core/sprite';
+import { characterSprite, composeBase, SPRITE_ITEMS, withItem } from '../src/core/sprite';
 import { DEFAULT_PARTS } from '../src/core/character';
 import { summarizeMatch } from '../src/progress/summary';
 import { AL, AR, BL, BR, LOW, Script } from './helpers';
@@ -161,12 +161,12 @@ describe('levels and rewards', () => {
   });
 
   it('sprite items draw over the sprite without changing the base', () => {
-    const base = composeSprite(DEFAULT_PARTS);
+    const base = composeBase(DEFAULT_PARTS);
     const capped = withItem(base, 'crown');
     expect(capped).not.toEqual(base);
     expect(capped.pixels[1 * 16 + 7]).toBe(SPRITE_ITEMS.crown.filter(([x, y]) => x === 7 && y === 1).pop()![2]); // the jewel, painted last
     expect(withItem(base, null)).toBe(base);
-    expect(characterSprite({ parts: DEFAULT_PARTS, pixels: null }, 'goldChain').pixels).not.toEqual(base.pixels);
+    expect(characterSprite({ parts: DEFAULT_PARTS, pixels: null }, 'goldChain').pixels).not.toEqual(characterSprite({ parts: DEFAULT_PARTS, pixels: null }).pixels);
   });
 });
 

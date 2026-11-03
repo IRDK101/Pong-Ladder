@@ -24,15 +24,14 @@ const set =
     cfg[key] = value;
   };
 /** Speed / difficulty levels: faster play and smaller timing windows (saves included). */
-// Slowest to fastest; Fast is the default. Every level is about 4.5% under the original ladder
-// (Fast was 0.88; slowed twice by 2.3%), so they keep the same steps between them.
+// Slowest to fastest; Fast is the default. Five levels, each about 6.7% under the original ladder
+// (Fast was 0.88; slowed three times by 2.3%), keeping the same steps between them.
 export const LEVELS = [
-  { label: 'Relaxed', timeScale: 0.44, window: 1.1 },
-  { label: 'Normal', timeScale: 0.592, window: 1 },
-  { label: 'Quick', timeScale: 0.744, window: 1 },
-  { label: 'Fast', timeScale: 0.84, window: 0.88 },
-  { label: 'Pro', timeScale: 0.936, window: 0.76 },
-  { label: 'Masters', timeScale: 1.031, window: 0.64 },
+  { label: 'Relaxed', timeScale: 0.43, window: 1.1 },
+  { label: 'Slow', timeScale: 0.578, window: 1 },
+  { label: 'Fast', timeScale: 0.821, window: 0.88 },
+  { label: 'Extreme', timeScale: 0.914, window: 0.76 },
+  { label: 'Masters', timeScale: 1.007, window: 0.64 },
 ] as const;
 export const DEFAULT_LEVEL = 'Fast';
 const speed = (timeScale: number, window: number) => (cfg: GameConfig) => {
@@ -165,6 +164,11 @@ export function rowRect(id: RowId, portrait = false) {
 }
 
 /** The panels around groups of rows, with their headings. */
+/** Which home-screen group a row is in (its index in GROUPS), or -1 (the Collection card). */
+function groupOf(id: RowId): number {
+  return GROUPS.findIndex((g) => g.ids.includes(id));
+}
+
 const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
   { title: 'HOUSE RULES', ids: ['formation', 'match', 'speed', 'ski', 'view'] },
@@ -310,6 +314,28 @@ export class Menu {
   /** Show a press on a row (pointer down, or Enter). */
   pressed(id: RowId): void {
     this.pressAt = { id, at: performance.now() };
+  }
+
+  private enterAt = 0;
+  /** The home screen just came up: its panels and rows slide in again. */
+  entered(): void {
+    this.enterAt = typeof performance !== 'undefined' ? performance.now() : 0;
+  }
+
+  /** 0..1: how far a panel (or row) with this delay (ms) has slid in. */
+  enterAmount(now: number, delay: number): number {
+    if (!this.enterAt) return 1;
+    const e = (now - this.enterAt - delay) / 320;
+    if (e <= 0) return 0;
+    if (e >= 1) return 1;
+    return 1 - Math.pow(1 - e, 3);
+  }
+
+  /** 0..1 for about 380 ms after a press: a ripple spreading out from the row. */
+  rippleAmount(id: RowId, now: number): number {
+    if (!this.pressAt || this.pressAt.id !== id) return 0;
+    const e = (now - this.pressAt.at) / 380;
+    return e > 0 && e < 1 ? e : 0;
   }
 
   /** Seconds since the last drawn frame (capped), for easing. */
@@ -476,7 +502,9 @@ export interface MenuExtras {
   /** The picked table's painted top. */
   tableArt: HTMLCanvasElement | null;
   /** Against the CPU: the CPU team's picked sprites (null = random). */
-  cpuTeam?: (Sprite | null)[];
+  otherTeam?: (Sprite | null)[];
+  /** Which team the player is on (the Players row shows Team A, then Team B). */
+  myTeamId?: 'A' | 'B';
   /** The player's profile name and its style (null = no profile). */
   me?: { name: string; style: NameStyle } | null;
 }
@@ -577,7 +605,18 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   // Logo and subtitle.
   ctx.imageSmoothingEnabled = false;
   const lg = logo(theme);
-  ctx.drawImage(lg, X0 - 4, 34, lg.width * 4, lg.height * 4);
+  const nowT = performance.now();
+  const le = menu.enterAmount(nowT, 0);
+  ctx.save();
+  ctx.globalAlpha = le;
+  ctx.drawImage(lg, X0 - 4, 34 - (1 - le) * 20, lg.width * 4, lg.height * 4);
+  ctx.restore();
+  // Every few seconds a band of light sweeps across the logo.
+  const sweep = (nowT % 5200) / 900;
+  if (sweep < 1 && le >= 1) {
+    const sc = logoShine(lg, sweep);
+    ctx.drawImage(sc, X0 - 4, 34, lg.width * 4, lg.height * 4);
+  }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.font = theme.fonts.label;
@@ -593,15 +632,37 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     ctx.fillText(text, x, y);
   };
   // Panels: the same dark, 2px-bordered boxes as the in-game HUD, fitted around each group of rows.
-  for (const g of GROUPS) {
+  GROUPS.forEach((g, gi) => {
     const rs = g.ids.map((id) => RR[id]);
     const x0 = Math.min(...rs.map((r) => r.x));
     const y0 = Math.min(...rs.map((r) => r.y));
     const x1 = Math.max(...rs.map((r) => r.x + r.w));
     const y1 = Math.max(...rs.map((r) => r.y + r.h));
+    const e = menu.enterAmount(nowT, 60 + gi * 70);
+    if (e <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = e;
+    ctx.translate(0, (1 - e) * 18);
     panel(ctx, theme, x0 - 14, y0 - 28, x1 - x0 + 28, y1 - y0 + 42, c.uiEdge, m.panel);
+    // A thin accent line across the top of each panel, drawn in as it arrives.
+    ctx.fillStyle = m.accent;
+    ctx.fillRect(x0 - 12, y0 - 26, (x1 - x0 + 24) * e, 2);
     heading(g.title, x0, y0 - 14);
-  }
+    ctx.restore();
+  });
+  /** A row's entrance (after its panel), as alpha and a slide. */
+  const rowIn = (id: RowId) => {
+    const gi = groupOf(id);
+    const k = gi < 0 ? 0 : GROUPS[gi].ids.indexOf(id);
+    return menu.enterAmount(nowT, gi < 0 ? 40 : 110 + gi * 70 + k * 28);
+  };
+  const enterRow = (id: RowId): boolean => {
+    const e = rowIn(id);
+    if (e <= 0) return false;
+    ctx.globalAlpha = e;
+    ctx.translate((1 - e) * -14, 0);
+    return true;
+  };
 
   const rows = menu.rows();
   const now = performance.now();
@@ -623,15 +684,20 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   for (const row of rows) {
     if (row.id === 'collection' || row === curRow) continue;
     const play = row.id === 'quick' || row.id === 'draft' || row.id === 'online';
-    rowBox(RR[row.id], play ? m.accent : c.uiEdge, play ? m.rowPlay : m.row);
+    ctx.save();
+    if (enterRow(row.id)) rowBox(RR[row.id], play ? m.accent : c.uiEdge, play ? m.rowPlay : m.row);
+    ctx.restore();
   }
   const slid = menu.slide(RR[curRow.id], dt, curRow.id === 'collection');
-  if (curRow.id !== 'collection') {
+  if (curRow.id !== 'collection' && rowIn(curRow.id) > 0) {
     const pk = menu.pressAmount(curRow.id, now);
     const sh = pk * 1.5;
     ctx.save();
-    ctx.shadowColor = 'rgba(255, 214, 110, 0.45)';
-    ctx.shadowBlur = 14 - pk * 8;
+    enterRow(curRow.id);
+    ctx.save();
+    // The highlight breathes gently.
+    ctx.shadowColor = 'rgba(255, 214, 110, 0.5)';
+    ctx.shadowBlur = 12 + 6 * Math.sin(now / 380) - pk * 8;
     ctx.fillStyle = c.activeRing;
     ctx.fillRect(slid.x + sh, slid.y + sh, slid.w - sh * 2, slid.h - sh * 2);
     ctx.restore();
@@ -643,6 +709,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     shine.addColorStop(0.5, 'rgba(255,255,255,0)');
     ctx.fillStyle = shine;
     ctx.fillRect(slid.x + sh, slid.y + sh, slid.w - sh * 2, slid.h / 2);
+    ctx.restore();
   }
 
   rows.forEach((row, i) => {
@@ -653,6 +720,21 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
     const ht = menu.hoverAmount(row.id, dt);
     const pk = menu.pressAmount(row.id, now);
     ctx.save();
+    if (!enterRow(row.id)) {
+      ctx.restore();
+      return;
+    }
+    // A press sends a ripple out from the row.
+    const rp = menu.rippleAmount(row.id, now);
+    if (rp) {
+      const g = 2 + rp * 12;
+      ctx.save();
+      ctx.globalAlpha *= (1 - rp) * 0.9;
+      ctx.strokeStyle = m.accentWarm;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(r.x - g, r.y - g, r.w + g * 2, r.h + g * 2);
+      ctx.restore();
+    }
     // A press dips the row slightly toward its center.
     if (pk) {
       const s = 1 - 0.03 * pk;
@@ -718,34 +800,39 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       } else ctx.fillText(text, right, mid);
       // Portraits of the picked characters, and a preview of the picked table.
       if (row.id === 'playingAs') {
-        let px = r.x + 132;
-        for (const sp of ex.team) {
-          if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, 18, px, r.y + 5, sp.w * 2, 36);
-          else {
-            ctx.strokeStyle = on ? ink : c.uiEdge;
-            ctx.setLineDash([3, 3]);
-            ctx.strokeRect(px + 4, r.y + 6, 24, 34);
-            ctx.setLineDash([]);
-            ctx.font = theme.fonts.bar;
-            ctx.textAlign = 'center';
+        // The whole lineup as heads: Team A, "vs", Team B (yours outlined in gold). Dashed boxes are random.
+        const mineFirst = (ex.myTeamId ?? 'A') === 'A';
+        const teams = mineFirst ? [ex.team, ex.otherTeam ?? []] : [ex.otherTeam ?? [], ex.team];
+        let px = r.x + 100;
+        teams.forEach((sprites, ti) => {
+          const isMine = (ti === 0) === mineFirst;
+          const x0 = px;
+          for (const sp of sprites) {
+            if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, Math.round(sp.h * 0.75), px, r.y + 5, 28, 36);
+            else {
+              ctx.strokeStyle = on ? ink : c.uiEdge;
+              ctx.setLineDash([3, 3]);
+              ctx.strokeRect(px + 3, r.y + 7, 22, 32);
+              ctx.setLineDash([]);
+              ctx.font = theme.fonts.label;
+              ctx.textAlign = 'center';
+              ctx.fillStyle = on ? ink : m.accent;
+              ctx.fillText('?', px + 14, mid);
+            }
+            px += 31;
+          }
+          if (isMine && sprites.length) {
             ctx.fillStyle = on ? ink : m.accent;
-            ctx.fillText('?', px + 16, mid);
+            ctx.fillRect(x0, r.y + r.h - 5, px - x0 - 3, 2);
           }
-          px += 38;
-        }
-      } else if (row.id === 'cpu' && !row.dim && ex.cpuTeam?.length) {
-        // Who the CPU plays as (picked in Players), as small heads; dashed boxes are random.
-        let px = r.x + 120;
-        for (const sp of ex.cpuTeam) {
-          if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, 16, px, r.y + 3, Math.round(sp.w * 1.4), r.h - 6);
-          else {
-            ctx.strokeStyle = on ? ink : c.uiEdge;
-            ctx.setLineDash([2, 2]);
-            ctx.strokeRect(px + 3, r.y + 4, 16, r.h - 8);
-            ctx.setLineDash([]);
+          if (ti === 0) {
+            ctx.font = theme.fonts.label;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = on ? ink : c.textDim;
+            ctx.fillText('vs', px + 9, mid);
+            px += 20;
           }
-          px += 28;
-        }
+        });
       } else if (row.id === 'table' && ex.tableArt) {
         const ax = r.x + 80;
         const aw = Math.min(76, r.w - tw - 110);
@@ -872,6 +959,37 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));
 }
 
+/** The logo with a diagonal band of light at `t` (0..1) of the way across, cached by step. */
+const shineCache = new Map<number, HTMLCanvasElement>();
+function logoShine(lg: HTMLCanvasElement, t: number): HTMLCanvasElement {
+  const step = Math.round(t * 30);
+  const hit = shineCache.get(step);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = lg.width;
+  c.height = lg.height;
+  const x = c.getContext('2d')!;
+  x.drawImage(lg, 0, 0);
+  x.globalCompositeOperation = 'source-atop';
+  const cx = -lg.height + (lg.width + lg.height * 2) * (step / 30);
+  const g = x.createLinearGradient(cx - 6, 0, cx + 6, lg.height);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.75)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, c.width, c.height);
+  // Only the band itself: clear the logo underneath so this draws on top of the real one.
+  x.globalCompositeOperation = 'destination-in';
+  const mask = x.createLinearGradient(cx - 6, 0, cx + 6, lg.height);
+  mask.addColorStop(0, 'rgba(0,0,0,0)');
+  mask.addColorStop(0.5, 'rgba(0,0,0,1)');
+  mask.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = mask;
+  x.fillRect(0, 0, c.width, c.height);
+  shineCache.set(step, c);
+  return c;
+}
+
 /** Game / match over: a centered panel in the menu style, scaled like the menu. */
 export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, title: string, lines: string[], prompt: string): void {
   const c = theme.colors;
@@ -911,7 +1029,7 @@ export const HELP: [string, string][] = [
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
-  ['Speed', 'The Speed setting goes Relaxed, Normal, Quick, Fast, Pro and Masters: each step plays faster with smaller timing windows (saves included).'],
+  ['Speed', 'The Speed setting goes Relaxed, Slow, Fast, Extreme and Masters: each step plays faster with smaller timing windows (saves included).'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],

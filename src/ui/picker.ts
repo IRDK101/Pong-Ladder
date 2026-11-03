@@ -118,21 +118,35 @@ export function pinnedFor(cfg: GameConfig, sel: Selection, usable: Character[]):
   return out;
 }
 
-/** Against the CPU: the characters picked for the CPU team (any character; missing ones are random). */
-export function cpuPinnedFor(cfg: GameConfig, sel: Selection, everyone: Character[], mine: Partial<Record<PositionKey, Character>> = {}): Partial<Record<PositionKey, Character>> {
-  if (cfg.players.mode !== 'coop') return {};
-  const byId = new Map(everyone.map((c) => [c.id, c]));
+/** The positions of the team the player is not on (the CPU, or the other humans on a shared keyboard). */
+export function otherSlots(cfg: GameConfig): PositionKey[] {
+  const mine = cfg.players.mode === 'coop' ? 'A' : (cfg.players.mySide ?? 'A');
+  const t = mine === 'A' ? 'B' : 'A';
+  return cfg.teamSize === 1 ? [`${t}-left` as PositionKey] : [`${t}-left` as PositionKey, `${t}-right` as PositionKey];
+}
+
+/**
+ * The characters picked for the other team (`sel.cpu`): against the CPU any
+ * character may be picked, head-to-head the same unlocked ones as yours. A
+ * character already on your side is skipped; missing ones are random.
+ */
+export function otherPinnedFor(cfg: GameConfig, sel: Selection, pool: Character[], mine: Partial<Record<PositionKey, Character>> = {}): Partial<Record<PositionKey, Character>> {
+  const byId = new Map(pool.map((c) => [c.id, c]));
   const taken = new Set(Object.values(mine).map((c) => c!.id));
-  const keys: PositionKey[] = cfg.teamSize === 1 ? ['B-left'] : ['B-left', 'B-right'];
   const out: Partial<Record<PositionKey, Character>> = {};
-  keys.forEach((k, i) => {
+  otherSlots(cfg).forEach((k, i) => {
     const c = sel.cpu?.[i] ? byId.get(sel.cpu[i]!) : undefined;
     if (c && !taken.has(c.id) && !Object.values(out).some((x) => x!.id === c.id)) {
       out[k] = c;
-      if (cfg.teamSize === 1) out['B-right'] = c;
+      if (cfg.teamSize === 1) out[k.replace('left', 'right') as PositionKey] = c;
     }
   });
   return out;
+}
+
+/** Against the CPU: the CPU team's picks (kept for callers that only mean the CPU). */
+export function cpuPinnedFor(cfg: GameConfig, sel: Selection, everyone: Character[], mine: Partial<Record<PositionKey, Character>> = {}): Partial<Record<PositionKey, Character>> {
+  return cfg.players.mode === 'coop' ? otherPinnedFor(cfg, sel, everyone, mine) : {};
 }
 
 export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Character[]): string {
@@ -143,9 +157,21 @@ export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Characte
   return cfg.players.mode === 'versus' ? `${s} (${cfg.players.mySide ?? 'A'})` : s;
 }
 
+/** The Players row's value: which team is yours. */
+export function playersLabel(cfg: GameConfig): string {
+  return cfg.players.mode === 'coop' ? 'You vs CPU' : `You: Team ${cfg.players.mySide ?? 'A'}`;
+}
+
+/**
+ * Players: a lineup of every spot at the table (Team A and Team B; both
+ * players of each in 2v2). Pick a spot, then a character for it. Your team uses
+ * your unlocked characters; the CPU can field anyone. Head-to-head, you also
+ * choose which team is yours (it earns your XP); switching keeps every pick on
+ * its side of the table.
+ */
 export class CharacterPicker {
   private slot = 0;
-  /** Which side's spots are being picked: yours, or (against the CPU) the CPU team's. */
+  /** Which team's spots are being picked: yours, or the other one (the CPU, or the other humans). */
   private side: 'mine' | 'cpu' = 'mine';
   private filter = '';
 
@@ -162,58 +188,58 @@ export class CharacterPicker {
     const cfg = this.cfg();
     const a = this.account;
     const vsCpu = cfg.players.mode === 'coop';
-    if (!vsCpu) this.side = 'mine';
+    const versus = cfg.players.mode === 'versus';
+    const myTeam: 'A' | 'B' = vsCpu ? 'A' : (cfg.players.mySide ?? 'A');
+    if (!this.sel.cpu) this.sel.cpu = [null, null];
     const cpuSide = this.side === 'cpu';
-    // Your spots use your unlocked characters; the CPU can field anyone.
-    const usable = cpuSide ? a.everyone() : a.usable();
+    // Your spots use your unlocked characters; the CPU can field anyone; other humans share your unlocks.
+    const poolFor = (side: 'mine' | 'cpu') => (side === 'cpu' && vsCpu ? a.everyone() : a.usable());
+    const usable = poolFor(this.side);
     const slots = mySlots(cfg);
     this.slot = Math.min(this.slot, slots.length - 1);
-    if (!this.sel.cpu) this.sel.cpu = [null, null];
     const list = cpuSide ? this.sel.cpu : this.sel.chars;
     const byId = new Map(a.everyone().map((c) => [c.id, c]));
-    const versus = cfg.players.mode === 'versus';
-    const slotLabel = (i: number) => (slots.length === 1 ? 'You' : vsCpu ? (i ? 'Right · arrows' : 'Left · WASD') : i ? 'Right' : 'Left');
-    const cpuLabel = (i: number) => (slots.length === 1 ? 'CPU' : i ? 'CPU right' : 'CPU left');
-    const slotButton = (side: 'mine' | 'cpu', i: number) => {
+    const solo = slots.length === 1;
+    const roleOf = (side: 'mine' | 'cpu', i: number) => {
+      if (side === 'cpu') return vsCpu ? (solo ? 'CPU' : i ? 'CPU · right' : 'CPU · left') : solo ? 'Opponent' : i ? 'Right' : 'Left';
+      if (solo) return 'You';
+      return vsCpu ? (i ? 'You · right · arrows' : 'You · left · WASD') : i ? 'You · right' : 'You · left';
+    };
+    const card = (side: 'mine' | 'cpu', i: number, k: number) => {
       const ids = side === 'cpu' ? this.sel.cpu! : this.sel.chars;
       const c = ids[i] ? byId.get(ids[i]!) : undefined;
       const on = this.side === side && i === this.slot;
-      return h(
+      const b = h(
         'button',
-        { class: `slot${on ? ' on' : ''}${side === 'cpu' ? ' cpu' : ''}`, onclick: () => ((this.side = side), (this.slot = i), this.show()) },
-        c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2) : h('span', { class: 'slot-random' }, '?'),
-        h('span', { style: 'display:flex;flex-direction:column;align-items:flex-start' }, h('span', { class: 'dim', style: 'font-size:11px' }, side === 'cpu' ? cpuLabel(i) : slotLabel(i)), h('span', { class: 'name' }, c ? c.name : 'Random')),
+        { class: `spot${on ? ' on' : ''}`, style: `--i:${k}`, onclick: () => ((this.side = side), (this.slot = i), this.show()) },
+        h('span', { class: 'spot-art' }, c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 3) : h('span', { class: 'slot-random big' }, '?')),
+        h('span', { class: 'spot-role' }, roleOf(side, i)),
+        h('span', { class: 'spot-name' }, c ? c.name : 'Random'),
+      );
+      return b;
+    };
+    const teamCol = (team: 'A' | 'B', k0: number) => {
+      const side: 'mine' | 'cpu' = team === myTeam ? 'mine' : 'cpu';
+      const title = side === 'mine' ? `Team ${team} · you` : vsCpu ? `Team ${team} · CPU` : `Team ${team}`;
+      return h(
+        'div',
+        { class: `team-col team${team}${side === 'mine' ? ' mine' : ''}` },
+        h('div', { class: 'team-head' }, h('span', {}, title), versus && side !== 'mine' ? h('button', { class: 'small', onclick: () => this.swapTeams() }, 'Make this my team') : null),
+        h('div', { class: 'team-spots' }, ...slots.map((_, i) => card(side, i, k0 + i))),
       );
     };
-
-    const slotRow = h(
-      'div',
-      { class: 'slots' },
-      ...slots.map((_, i) => slotButton('mine', i)),
-      vsCpu ? h('span', { class: 'vs-mark' }, 'VS') : null,
-      ...(vsCpu ? slots.map((_, i) => slotButton('cpu', i)) : []),
-      versus
-        ? h(
-            'div',
-            { class: 'side-toggle' },
-            h('span', { class: 'dim', style: 'font-size:12px' }, 'Your team (earns your XP)'),
-            h(
-              'div',
-              { class: 'tabs' },
-              ...(['A', 'B'] as const).map((t) => h('button', { class: (cfg.players.mySide ?? 'A') === t ? 'on' : '', onclick: () => ((this.sel.mySide = t), this.save(), this.show()) }, `Team ${t}`)),
-            ),
-          )
-        : null,
-    );
+    const lineup = h('div', { class: 'lineup' }, teamCol('A', 0), h('div', { class: 'vs-badge' }, 'VS'), teamCol('B', slots.length));
 
     const pick = (id: string | null) => {
       const other = list.findIndex((x, i) => i !== this.slot && i < slots.length && x === id && id !== null);
       if (other >= 0) list[other] = list[this.slot]; // swap instead of doubling up
-      // A character can't be on both teams: picking one of yours for the CPU (or the reverse) frees it there.
+      // A character can't be on both teams: picking one for one side frees it on the other.
       const across = cpuSide ? this.sel.chars : this.sel.cpu!;
       for (let i = 0; i < across.length; i++) if (id && across[i] === id) across[i] = null;
       list[this.slot] = id;
+      // Move on to the next empty-feeling spot: the rest of this team, then the other team.
       if (this.slot < slots.length - 1) this.slot++;
+      else if (this.side === 'mine') ((this.side = 'cpu'), (this.slot = 0));
       this.save();
       this.show();
     };
@@ -222,18 +248,25 @@ export class CharacterPicker {
     const shown = usable.filter((c) => !q || c.name.toLowerCase().includes(q));
     const level = (id: string) => characterLevel(this.cfgBase(), a.progress, id).level;
     const current = list[this.slot];
+    const where = (id: string): string | null => {
+      for (const [side, ids] of [['mine', this.sel.chars], ['cpu', this.sel.cpu!]] as const) {
+        const i = ids.findIndex((x, j) => j < slots.length && x === id);
+        if (i >= 0 && !(side === this.side && i === this.slot)) return roleOf(side, i);
+      }
+      return null;
+    };
     const grid = h(
       'div',
       { class: 'pickgrid chars' },
-      h('button', { class: `pickcard${current === null ? ' on' : ''}`, onclick: () => pick(null) }, h('span', { class: 'slot-random big' }, '?'), h('span', { class: 'pickname' }, 'Random'), h('span', { class: 'dim', style: 'font-size:11px' }, 'a new one each match')),
-      ...shown.map((c) => {
-        const taken = list.findIndex((x, i) => i < slots.length && x === c.id);
+      h('button', { class: `pickcard${current === null ? ' on' : ''}`, style: '--i:0', onclick: () => pick(null) }, h('span', { class: 'slot-random big' }, '?'), h('span', { class: 'pickname' }, 'Random'), h('span', { class: 'dim', style: 'font-size:11px' }, 'a new one each match')),
+      ...shown.map((c, n) => {
+        const at = where(c.id);
         return h(
           'button',
-          { class: `pickcard${current === c.id ? ' on' : ''}`, title: `${c.name}: level ${level(c.id)}`, onclick: () => pick(c.id) },
+          { class: `pickcard${current === c.id ? ' on' : ''}${at ? ' taken' : ''}`, style: `--i:${Math.min(n + 1, 24)}`, title: `${c.name}: level ${level(c.id)}`, onclick: () => pick(c.id) },
           spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2),
           nameTag(c.name, c.master, nameColorOf(c)),
-          h('span', { class: 'dim', style: 'font-size:11px' }, taken >= 0 && taken !== this.slot ? (cpuSide ? cpuLabel(taken) : slotLabel(taken)) : cpuSide ? `Lv ${level(c.id)}${a.canUse(c.id) ? '' : ' · locked for you'}` : `Level ${level(c.id)}`),
+          h('span', { class: 'dim', style: 'font-size:11px' }, at ?? (cpuSide && vsCpu && !a.canUse(c.id) ? `Lv ${level(c.id)} · locked for you` : `Level ${level(c.id)}`)),
         );
       }),
     );
@@ -246,27 +279,39 @@ export class CharacterPicker {
       s?.focus();
       s?.setSelectionRange(s.value.length, s.value.length);
     });
-    const locked = this.account.everyone().length - usable.length;
+    const locked = this.account.everyone().length - this.account.usable().length;
+    const pickingFor = `${roleOf(this.side, this.slot)} · Team ${this.side === 'mine' ? myTeam : myTeam === 'A' ? 'B' : 'A'}`;
     this.overlay.show(
       h(
         'div',
-        { class: 'panel' },
+        { class: 'panel players-panel' },
         h('div', { class: 'row spread' }, h('h1', {}, 'Players'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
         h(
           'p',
           { class: 'dim' },
           vsCpu
-            ? `Pick your characters, then (after VS) who the CPU plays as: any character, even ones you haven't unlocked. Random spots get a new one each match.${cpuSide ? '' : locked > 0 ? ` ${locked} more are locked for you: unlock them from loot boxes in the Collection.` : ''}`
-            : `Quick matches put these characters on your side; the other spots get random ones. Pick a spot above, then a character.${locked > 0 ? ` ${locked} more are locked: unlock them from loot boxes in the Collection.` : ''}`,
+            ? 'Pick a spot, then who plays it. The CPU can play as anyone, even characters you haven’t unlocked. Random spots get a new character each match.'
+            : `Pick a spot, then who plays it. Your team earns your XP; the other team is for whoever shares the keyboard. Random spots get a new character each match.${locked > 0 ? ` ${locked} characters are still locked: unlock them in the Collection.` : ''}`,
         ),
-        slotRow,
-        usable.length > 8 ? search : null,
+        lineup,
+        h('div', { class: 'row spread' }, h('h2', {}, `Choosing: ${pickingFor}`), usable.length > 8 ? search : null),
         grid,
       ),
       true,
     );
     // Keyboard players land on the current pick, ready for arrows + Enter.
     if (!q) (grid.querySelector('button.on') as HTMLButtonElement | null)?.focus({ preventScroll: true });
+  }
+
+  /** Head-to-head: make the other team yours. Every pick stays on its side of the table. */
+  private swapTeams(): void {
+    const mine = this.sel.chars;
+    this.sel.chars = this.sel.cpu ?? [null, null];
+    this.sel.cpu = mine;
+    this.sel.mySide = this.sel.mySide === 'A' ? 'B' : 'A';
+    this.side = this.side === 'mine' ? 'cpu' : 'mine';
+    this.save();
+    this.show();
   }
 
   private cfgBase(): GameConfig {

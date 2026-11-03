@@ -891,3 +891,24 @@ Decided with the owner: the serve cursor locks at the toss, and the clash is rea
 - **Trash cans:** every table rests on two trash cans, one under the middle of each team's half (at a quarter and three quarters of the length), instead of one big can in the center. Each is a ribbed metal can (`trashCan` in `render/prims.ts`): slightly wider at the top, with alternating ribs, two pressed bands, a rolled rim, a darker foot, side handles and a floor shadow. The far can is drawn first. With the current camera the near can on the table being played peeks out under its near edge, so the table visibly stands on something.
 - **"Players":** the home screen's "Playing as" row is now "Players", and its picker is titled the same. It picks your characters and, against the CPU, the CPU's. How to Play has a Players entry.
 - **Trash cans, fixed:** they're black plastic now (`theme.table.can*`). Their bands, rim line and foot are drawn only on the half facing the camera. As full circles, their back halves showed through the front and made the cans look like bowls.
+
+## Full Players lineup, livelier menus, five speeds, bigger sprites
+
+Decided with the owner: bigger sprites, and Fast stays the default.
+
+- **Players** (`CharacterPicker`): a lineup of every spot at the table, Team A vs Team B, both players of each in 2v2. Each spot is a card with the character's sprite, its role ("You · left · WASD", "CPU · right", "Opponent"...) and name. Pick a spot, then a character. Picking moves on to the next spot, then to the other team.
+  - Your team uses your unlocked characters. The CPU can field anyone. Head-to-head, the other team (whoever shares the keyboard) uses the same unlocked ones.
+  - "Make this my team" switches which team earns your XP, and every pick stays on its side of the table (`swapTeams` swaps `chars` and `cpu`).
+  - `sel.cpu` now means "the other team" in both modes (`otherPinnedFor`, `otherSlots`), and quick matches pin it in head-to-head too.
+  - The home screen's Players row shows the whole lineup as heads (Team A, "vs", Team B, with yours underlined) and "You: Team A" or "You vs CPU". The CPU level row no longer shows heads.
+- **Menu motion:**
+  - **HTML screens:** buttons lift on hover and press in. A screen's contents slide in one after another when it opens (only when a different screen opens, not on every refresh: `Overlay.show` marks the panel `fresh`). Character cards pop in staggered, a newly picked card pulses, and the selected spot has a moving shine and a hop. The VS badge pulses.
+  - **Home screen:** on arrival the logo drops in and each panel, then each of its rows, slides in in turn (`Menu.entered`, `enterAmount`), with an accent line drawing across the top of each panel. The selected row's glow breathes, a press sends a ripple out from the row, and a band of light sweeps across the logo every few seconds.
+  - Everything respects reduced motion.
+- **Five speeds:** Relaxed 0.43, Slow 0.578, Fast 0.821 (default), Extreme 0.914, Masters 1.007. Each is another 2.3% slower, about 6.7% under the original ladder. Window scales are 1.1, 1, 0.88, 0.76, 0.64. Quick is gone, Normal is now Slow and Pro is now Extreme.
+- **Bigger sprites:** characters are drawn at 32×48, twice the 16×24 drawing grid, which the pixel editor and sprite items still use (`composeBase`). `composeSprite`:
+  1. upscales the flat drawing with EPX, rounding stair-steps into smooth diagonals;
+  2. adds detail at the finer size: hair strands and a lit top band, eye whites beside the pupils plus catch-lights, a nose, a chin shadow, a collar line, a trouser seam and knee lights;
+  3. shades every shape (a two-pixel shadow right and below, lit left and top) and outlines it in one fine pixel.
+
+  Hand-drawn characters are upscaled the same way. UI sprite scales are in 16-pixel-grid units, so screens keep their sizes, and the 3D view adds one more smoothing pass.

@@ -88,10 +88,10 @@ function scale2x(s: Sprite): Sprite {
 }
 
 const smoothed = new WeakMap<Sprite, Sprite>();
-/** People are drawn from a 4x Scale2x copy of their sprite, so big close-up figures stay clean. */
+/** People are drawn from a 64-pixel-wide Scale2x copy of their sprite, so big close-up figures stay clean. */
 function smooth(s: Sprite): Sprite {
   let t = smoothed.get(s);
-  if (!t) smoothed.set(s, (t = scale2x(scale2x(s))));
+  if (!t) smoothed.set(s, (t = s.w >= 32 ? scale2x(s) : scale2x(scale2x(s))));
   return t;
 }
 
