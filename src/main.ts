@@ -654,7 +654,6 @@ function frame(dt: number): void {
     guestFrame(g, dt);
     renderGame3D(ctx, theme, view, g, 'behindB');
     renderHud(ctx, theme, view, g);
-    if (paused && screen === 'playing') drawLeaveCard();
     if (screen === 'gameEnd') {
       const st = g.engine.peek();
       const ready = performance.now() - gameOverAt > 800;
@@ -664,11 +663,9 @@ function frame(dt: number): void {
     return;
   }
   if (screen === 'playing' && paused && !online) {
-    // Paused: the scene holds still under the pause card.
+    // Paused: the scene holds still under the pause card (an HTML panel, see showPause).
     renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
     renderHud(ctx, theme, view, g);
-    drawEndScreen(ctx, theme, view, 'PAUSED', ['Space / Enter: resume', 'R: restart this match', 'Esc: quit to the menu'], '');
-    if (anyPressed(['hit'])) paused = false;
     return;
   }
   if (screen === 'playing') {
@@ -690,7 +687,6 @@ function frame(dt: number): void {
 
   renderGame3D(ctx, theme, view, g, layoutFor(g.cfg));
   renderHud(ctx, theme, view, g);
-  if (paused && online && screen === 'playing') drawLeaveCard();
 
   // Short pause so the final call is readable before the overlay accepts input.
   const ready = performance.now() - gameOverAt > 800;
@@ -731,13 +727,43 @@ function frame(dt: number): void {
   }
 }
 
-/** Online, Escape asks before leaving (the match can't pause for the other player). */
-function drawLeaveCard(): void {
-  drawEndScreen(ctx, theme, view, 'LEAVE THE MATCH?', ['Esc again: leave', 'Any other key: keep playing (the match is still going)'], '');
+/**
+ * The pause card: real buttons, so a click (or Space / Enter on the focused
+ * button) always works, even if the page around the game took the keyboard.
+ * A local match stops while it's up. Online the match can't stop for the
+ * other player, so it asks before leaving and the match runs on underneath.
+ */
+function showPause(): void {
+  if (screen !== 'playing') return;
+  paused = true;
+  const resume = () => {
+    paused = false;
+    overlay.hide();
+    canvas.focus();
+  };
+  const quit = () => {
+    paused = false;
+    endOnline();
+    toMenu('Match abandoned.');
+  };
+  const buttons = online
+    ? [h('button', { class: 'primary', onclick: resume }, 'Keep playing'), h('button', { class: 'danger', onclick: quit }, 'Leave the match')]
+    : [
+        h('button', { class: 'primary', onclick: resume }, 'Resume'),
+        h('button', { onclick: () => lastMatch && startMatch(structuredClone(lastMatch.cfg), lastMatch.roster) }, 'Restart this match'),
+        h('button', { class: 'danger', onclick: quit }, 'Quit to the menu'),
+      ];
+  overlay.show(
+    h(
+      'div',
+      { class: 'panel pause-card' },
+      h('h1', {}, online ? 'Leave the match?' : 'Paused'),
+      h('p', { class: 'dim' }, online ? 'The match is still going for the other player.' : 'Space / Enter: resume · R: restart · Esc: quit to the menu'),
+      h('div', { class: 'row', style: 'justify-content:center' }, ...buttons),
+    ),
+  );
+  (overlay.root.querySelector('button.primary') as HTMLButtonElement | null)?.focus();
 }
-window.addEventListener('keydown', (e) => {
-  if (paused && online && e.code !== 'Escape') paused = false;
-});
 
 // R: restart a paused local match, or rematch after one ends.
 window.addEventListener('keydown', (e) => {
@@ -746,16 +772,19 @@ window.addEventListener('keydown', (e) => {
 });
 // Leaving the window mid-match pauses a local game.
 window.addEventListener('blur', () => {
-  if (screen === 'playing' && !online) paused = true;
+  if (screen === 'playing' && !online && !paused) showPause();
 });
 
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
   // Escape in a text box just leaves the box, so a half-typed name is not thrown away.
   if (isTyping(e.target)) return void (e.target as HTMLElement).blur();
+  // The game uses Escape itself: keep the page around it (such as the artifact viewer) from acting on it too.
+  e.preventDefault();
+  e.stopPropagation();
   // Mid-match, the first Escape pauses (online: asks first, the match keeps going); the second quits.
   if (screen === 'playing' && !paused) {
-    paused = true;
+    showPause();
     return;
   }
   if (screen === 'playing' || screen === 'gameEnd' || screen === 'matchEnd') {
