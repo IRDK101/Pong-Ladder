@@ -236,6 +236,59 @@ export function cylinder(h: CanvasRenderingContext2D, cam: Camera, c: Vec3, r: n
   if (rings) for (const z of [z0 + (z1 - z0) * 0.3, z0 + (z1 - z0) * 0.62]) ring(h, cam, { x: c.x, y: c.y, z }, r + 0.004, colors.dark, 1, n);
 }
 
+/**
+ * A ribbed metal trash can: slightly wider at the top, with vertical ribs, two
+ * pressed bands, a rolled rim and a handle on each side.
+ */
+export function trashCan(h: CanvasRenderingContext2D, cam: Camera, c: Vec3, r: number, z0: number, z1: number, colors: { light: string; mid: string; dark: string }): void {
+  const n = 28;
+  const rb = r * 0.86; // narrower at the bottom
+  const rAt = (z: number) => rb + (r - rb) * ((z - z0) / (z1 - z0));
+  const lip = Math.min(0.05, (z1 - z0) * 0.08);
+  const body = z1 - lip;
+  const at = (a: number, z: number, rr = rAt(z)) => ({ x: c.x + Math.cos(a) * rr, y: c.y + Math.sin(a) * rr, z });
+  const faces = (a0: number, a1: number) => {
+    const am = (a0 + a1) / 2;
+    return (cam.eye.x - (c.x + Math.cos(am) * r)) * Math.cos(am) + (cam.eye.y - (c.y + Math.sin(am) * r)) * Math.sin(am) > 0;
+  };
+  const shade = (am: number, rib: boolean) => {
+    const lit = 0.5 + 0.5 * Math.cos(am - 2.4);
+    const base = lit > 0.72 ? colors.light : lit > 0.32 ? colors.mid : colors.dark;
+    return rib ? shadeHex(base, 1.12) : shadeHex(base, 0.9);
+  };
+  // Shadow ring on the floor.
+  disc(h, cam, { x: c.x, y: c.y, z: z0 + 0.001 }, rb * 1.08, 'rgba(0,0,0,0.35)', 20);
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    const a1 = ((i + 1) / n) * Math.PI * 2;
+    if (!faces(a0, a1)) continue;
+    const am = (a0 + a1) / 2;
+    poly(h, cam, [at(a0, z0), at(a1, z0), at(a1, body), at(a0, body)], shade(am, i % 2 === 0));
+    // The rolled rim: a short, slightly wider band at the top.
+    poly(h, cam, [at(a0, body, r * 1.05), at(a1, body, r * 1.05), at(a1, z1, r * 1.05), at(a0, z1, r * 1.05)], shadeHex(shade(am, true), 1.08));
+  }
+  // Pressed bands, a dark line under the rim, and a darker foot.
+  for (const f of [0.22, 0.62]) {
+    const z = z0 + (body - z0) * f;
+    ring(h, cam, { x: c.x, y: c.y, z }, rAt(z) + 0.004, colors.dark, 3, n);
+    ring(h, cam, { x: c.x, y: c.y, z: z + 0.012 }, rAt(z) + 0.004, shadeHex(colors.light, 1.1), 1, n);
+  }
+  ring(h, cam, { x: c.x, y: c.y, z: body }, r * 1.02, colors.dark, 2, n);
+  ring(h, cam, { x: c.x, y: c.y, z: z0 + 0.02 }, rb + 0.004, colors.dark, 2, n);
+  // Handles on the left and right of the can, as seen from its table's long sides.
+  for (const a of [Math.PI / 2, -Math.PI / 2]) {
+    if (!faces(a - 0.2, a + 0.2)) continue;
+    const z = z0 + (body - z0) * 0.8;
+    const rr = rAt(z) + 0.02;
+    const p0 = at(a - 0.28, z, rr);
+    const p1 = at(a + 0.28, z, rr);
+    const lift = { x: 0, y: 0, z: 0.05 };
+    line(h, cam, p0, { x: p0.x + lift.x, y: p0.y + lift.y, z: p0.z + lift.z }, colors.dark, 3);
+    line(h, cam, p1, { x: p1.x, y: p1.y, z: p1.z + lift.z }, colors.dark, 3);
+    line(h, cam, { ...p0, z: p0.z + lift.z }, { ...p1, z: p1.z + lift.z }, colors.dark, 3);
+  }
+}
+
 /** Whether a flat face (center `at`, outward normal `n`) faces the camera. */
 export function facing(cam: Camera, at: Vec3, n: Vec3): boolean {
   return (cam.eye.x - at.x) * n.x + (cam.eye.y - at.y) * n.y + (cam.eye.z - at.z) * n.z > 0;

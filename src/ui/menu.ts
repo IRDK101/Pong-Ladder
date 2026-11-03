@@ -178,7 +178,7 @@ export class Menu {
   tableLocked: (venue: string) => boolean = () => false;
   /** Which team the signed-in player is on in head-to-head (set in the character picker). */
   mySide: 'A' | 'B' = 'A';
-  /** The "Playing as" row's value: the characters picked for the player's side. */
+  /** The "Players" row's value: the characters picked for the player's side. */
   playingAs: () => string = () => 'Random';
   /** The profile row: its label, a hint, and how many things wait there (moderator reviews). */
   accountInfo: () => { label: string; hint: string; alert: number } = () => ({ label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 });
@@ -232,7 +232,7 @@ export class Menu {
     return [
       opt('players'),
       { ...opt('cpu'), dim: mode !== 'coop' },
-      { id: 'playingAs', label: 'Playing as', value: this.playingAs(), action: 'pickCharacters', picker: true },
+      { id: 'playingAs', label: 'Players', value: this.playingAs(), action: 'pickCharacters', picker: true },
       opt('table'),
       opt('spot'),
       opt('formation'),
@@ -734,7 +734,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
           px += 38;
         }
       } else if (row.id === 'cpu' && !row.dim && ex.cpuTeam?.length) {
-        // Who the CPU plays as (picked in Playing as), as small heads; dashed boxes are random.
+        // Who the CPU plays as (picked in Players), as small heads; dashed boxes are random.
         let px = r.x + 120;
         for (const sp of ex.cpuTeam) {
           if (sp) ctx.drawImage(spriteCanvas(sp), 0, 0, sp.w, 16, px, r.y + 3, Math.round(sp.w * 1.4), r.h - 6);
@@ -914,7 +914,8 @@ export const HELP: [string, string][] = [
   ['Speed', 'The Speed setting goes Relaxed, Normal, Quick, Fast, Pro and Masters: each step plays faster with smaller timing windows (saves included).'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
-  ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Playing as sets your team, which earns the XP.'],
+  ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],
+  ['Players', 'The Players row picks your characters, and against the CPU also who the CPU plays as (any character, even locked ones). Spots left on Random get a new character each match.'],
 ];
 
 /** Split text into lines no wider than maxWidth with the current font. */

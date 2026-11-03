@@ -225,7 +225,7 @@ export class ProfileEditor {
       'div',
       { class: 'box', style: 'display:flex;flex-direction:column;gap:8px' },
       h('div', { class: 'row spread' }, h('h2', {}, 'Playing as'), h('span', { class: 'dim', style: 'font-size:12px' }, main ? main.name : 'Random')),
-      h('p', { class: 'dim', style: 'font-size:12px' }, 'Your character in quick and online matches, shown next to your name. (In 2v2 this is your first spot; the home screen’s Playing as row sets both.)'),
+      h('p', { class: 'dim', style: 'font-size:12px' }, 'Your character in quick and online matches, shown next to your name. (In 2v2 this is your first spot; the home screen’s Players row sets both.)'),
       search,
       grid,
     );

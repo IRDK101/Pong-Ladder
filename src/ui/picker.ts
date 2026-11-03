@@ -251,7 +251,7 @@ export class CharacterPicker {
       h(
         'div',
         { class: 'panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, vsCpu ? 'Playing as & against' : 'Playing as'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
+        h('div', { class: 'row spread' }, h('h1', {}, 'Players'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
         h(
           'p',
           { class: 'dim' },

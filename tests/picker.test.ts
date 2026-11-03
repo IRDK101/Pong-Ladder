@@ -41,7 +41,7 @@ describe('home-screen picks', () => {
     m.tableLocked = (d) => d === 'larks';
     m.setDesign('larks');
     expect(m.config().design).toBe('pitch');
-    expect(m.rows().find((r) => r.label === 'Playing as')?.action).toBe('pickCharacters');
+    expect(m.rows().find((r) => r.label === 'Players')?.action).toBe('pickCharacters');
   });
 
   it('reads saved picks defensively', () => {

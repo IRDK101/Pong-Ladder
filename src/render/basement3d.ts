@@ -11,7 +11,7 @@ import type { Vec3 } from '../core/physics';
 import type { Theme } from '../theme';
 import { BAR, BEAMS, BENCH, FIXTURES, FRIDGES, PILLARS, ROOM, ROW_Y, SOFFIT, STAGE, VENUE_ORDER, basementToWorld, tableToBasement, type Paint } from './basement';
 import { project, type Camera } from './camera';
-import { cylinder, disc, floorSpecks, line, poly, screenEllipse, shadeHex, stripe, textBitmap, texturedTop, xbox, type Xf } from './prims';
+import { cylinder, disc, trashCan, floorSpecks, line, poly, screenEllipse, shadeHex, stripe, textBitmap, texturedTop, xbox, type Xf } from './prims';
 
 /** Height where the black painted header band starts on the walls. */
 const HEADER_Z = 1.5;
@@ -599,7 +599,10 @@ export function drawTableAt(h: CanvasRenderingContext2D, theme: Theme, cfg: Game
   const { length: L, width: W } = cfg.table;
   const floorZ = -cfg.physics.tableHeight;
   const th = 0.035;
-  cylinder(h, cam, place({ x: L / 2, y: W / 2, z: 0 }), 0.3, floorZ, -th, { light: T.canLight, mid: T.can, dark: T.canDark });
+  // The table rests on two trash cans, one under the middle of each team's half.
+  const cans = [0.25, 0.75].map((fx) => place({ x: L * fx, y: W / 2, z: 0 }));
+  cans.sort((p, q) => Math.hypot(q.x - cam.eye.x, q.y - cam.eye.y) - Math.hypot(p.x - cam.eye.x, p.y - cam.eye.y)); // far one first
+  for (const at of cans) trashCan(h, cam, at, 0.24, floorZ, -th, { light: T.canLight, mid: T.can, dark: T.canDark });
   xbox(h, cam, place, 0, 0, -th, L, W, 0, V.side, V.side, V.sideDark);
   texturedTop(h, cam, tableArt(theme, design), L, W, place, scenery ? 24 : 48);
   // Faint chalk center lines (the quarters matter for serves).

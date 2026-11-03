@@ -239,7 +239,7 @@ export class OnlineScreen {
     const meCard = h(
       'div',
       { class: 'box lobby-row' },
-      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Edit profile or Playing as)`))),
+      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Edit profile or Players)`))),
       h('p', { class: 'dim', style: 'font-size:12px;max-width:420px' }, `Your challenges use your menu settings: ${settingsLine(s)}. 1v1, single game. You serve first from Team A; they play Team B on their device.`),
     );
     const invites = incoming.map((p) =>

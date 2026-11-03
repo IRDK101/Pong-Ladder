@@ -885,3 +885,8 @@ Decided with the owner: the serve cursor locks at the toss, and the clash is rea
   - **Effects:** a Perfect throws pixel plus-sparkles, and a whiff shakes.
   - **Spin pair:** drawn smaller underneath in the same style.
 - **Speed:** every level about 2.3% slower again (about 4.5% under the original ladder): Relaxed 0.44, Normal 0.592, Quick 0.744, Fast 0.84 (default), Pro 0.936, Masters 1.031.
+
+## Trash cans under the tables, "Players" row
+
+- **Trash cans:** every table rests on two trash cans, one under the middle of each team's half (at a quarter and three quarters of the length), instead of one big can in the center. Each is a ribbed metal can (`trashCan` in `render/prims.ts`): slightly wider at the top, with alternating ribs, two pressed bands, a rolled rim, a darker foot, side handles and a floor shadow. The far can is drawn first. With the current camera the near can on the table being played peeks out under its near edge, so the table visibly stands on something.
+- **"Players":** the home screen's "Playing as" row is now "Players", and its picker is titled the same. It picks your characters and, against the CPU, the CPU's. How to Play has a Players entry.
