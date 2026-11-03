@@ -159,15 +159,21 @@ describe('game loop (physics + rules + input)', () => {
   });
 
   it('aim is sticky: holding a key slides the crosshair, releasing leaves it there, and it clamps', () => {
+    // Only the serving team aims before the serve (the other side's crosshair stays put).
     const g = new Game(cfgWith(), mulberry32(10));
-    const hold = (inp: Partial<TeamInput>) => g.update(0.1, { A: { ...idleInput(), ...inp }, B: idleInput() });
+    const srv = g.engine.peek().server.team;
+    const rcv = srv === 'A' ? 'B' : 'A';
+    const hold = (inp: Partial<TeamInput>) => g.update(0.1, { A: { ...idleInput(), ...inp }, B: { ...idleInput(), ...inp } });
     hold({ right: true });
-    expect(g.aim.A.x).toBeCloseTo(g.cfg.hitting.aimSpeed * 0.1);
+    const one = Math.abs(g.aim[srv].x) + Math.abs(g.aim[srv].y);
+    expect(one).toBeCloseTo(g.cfg.hitting.aimSpeed * 0.1);
+    const at = { ...g.aim[srv] };
     hold({});
-    expect(g.aim.A.x).toBeCloseTo(g.cfg.hitting.aimSpeed * 0.1);
+    expect(g.aim[srv]).toEqual(at);
     for (let i = 0; i < 30; i++) hold({ right: true, up: true });
-    expect(g.aim.A).toEqual({ x: 1, y: -1 });
-    expect(g.aim.B).toEqual({ x: 0, y: 0 });
+    expect(Math.abs(g.aim[srv].x)).toBe(1);
+    expect(Math.abs(g.aim[srv].y)).toBe(1);
+    expect(g.aim[rcv]).toEqual({ x: 0, y: 0 });
   });
 
   it('the timing cue appears once the ball is hittable and reads zero at the apex', () => {

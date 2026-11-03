@@ -412,10 +412,15 @@ export class Game {
     for (const team of ['A', 'B'] as TeamId[]) {
       if (only && team !== only) continue;
       if (this.remoteAim[team] && !only) continue;
-      // Once the timing ring is up, the crosshair freezes (direction keys now pick spin), and it
-      // stays frozen for the rest of that ball, even after a whiff, until the team aims afresh.
+      // The crosshair moves only while this team is aiming: serving (before the toss) or with the
+      // ball coming to it (before the timing rings). Any other time it stays exactly where it was,
+      // so it is still there for the next serve or return. Once the rings are up it locks (direction
+      // keys pick spin) for the rest of that ball, even after a whiff.
+      if (!this.aiming(team)) {
+        this.aimLock[team] = false;
+        continue;
+      }
       if (this.timingCue(team)) this.aimLock[team] = true;
-      if (!this.aiming(team)) this.aimLock[team] = false;
       if (this.aimLock[team]) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
       const f = this.controlFrames[team];

@@ -95,3 +95,31 @@ describe('the hit jolt', () => {
     expect(Object.keys(g.netState().hz ?? {})).toContain(`${s.team}-${s.side}`);
   });
 });
+
+describe('the crosshair moves only while aiming', () => {
+  it('stays put after your shot and through the other side’s turn, and moves again when the ball comes back', () => {
+    const g = new Game(makeConfig({ teamSize: 1 }), () => 0.5, genericRoster(1));
+    const server = g.engine.peek().server.team;
+    const other = server === 'A' ? 'B' : 'A';
+    const hold = { ...idleInput(), left: true, up: true };
+    const step = (inpFor: (t: 'A' | 'B') => ReturnType<typeof idleInput>) => g.update(1 / 60, { A: inpFor('A'), B: inpFor('B') });
+    // Serving: the server's crosshair moves; the receiver's doesn't.
+    const recv0 = { ...g.aim[other] };
+    const srv0 = { ...g.aim[server] };
+    for (let i = 0; i < 10; i++) step(() => hold);
+    expect(g.aim[server]).not.toEqual(srv0);
+    expect(g.aim[other]).toEqual(recv0);
+    // Toss and serve.
+    step((t) => ({ ...idleInput(), hit: t === server }));
+    for (let i = 0; i < 600 && Math.abs(g.timingCue(server)?.offset ?? 1) > 0.01; i++) step(() => idleInput());
+    step((t) => ({ ...idleInput(), hit: t === server }));
+    expect(g.engine.peek().phase).not.toBe('awaitServe');
+    // The server holds keys while the ball travels: their crosshair stays where it locked.
+    const locked = { ...g.aim[server] };
+    const recvBefore = { ...g.aim[other] };
+    for (let i = 0; i < 8; i++) step(() => hold);
+    expect(g.aim[server]).toEqual(locked);
+    // The receiver, with the serve coming, can aim (until their rings appear).
+    if (!g.timingCue(other)) expect(g.aim[other]).not.toEqual(recvBefore);
+  });
+});
