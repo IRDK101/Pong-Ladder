@@ -158,9 +158,10 @@ export const theme = {
   },
   /** Shared table parts (3D view): the trash-can base, chalk lines, ski shadow. */
   table: {
-    can: '#4f5457',
-    canLight: '#6a7074',
-    canDark: '#373b3e',
+    // Black plastic trash cans.
+    can: '#232527',
+    canLight: '#3c4044',
+    canDark: '#111213',
     centerLine: 'rgba(228, 218, 192, 0.45)',
     skiShadow: 'rgba(0, 0, 0, 0.35)',
   },

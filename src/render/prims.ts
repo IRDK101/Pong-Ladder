@@ -267,14 +267,22 @@ export function trashCan(h: CanvasRenderingContext2D, cam: Camera, c: Vec3, r: n
     // The rolled rim: a short, slightly wider band at the top.
     poly(h, cam, [at(a0, body, r * 1.05), at(a1, body, r * 1.05), at(a1, z1, r * 1.05), at(a0, z1, r * 1.05)], shadeHex(shade(am, true), 1.08));
   }
-  // Pressed bands, a dark line under the rim, and a darker foot.
+  // Pressed bands, a dark line under the rim, and a darker foot: only the half facing the camera
+  // (a full circle would show its back half through the front of the can).
+  const frontArc = (z: number, rr: number, color: string, width: number) => {
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2;
+      const a1 = ((i + 1) / n) * Math.PI * 2;
+      if (faces(a0, a1)) line(h, cam, at(a0, z, rr), at(a1, z, rr), color, width);
+    }
+  };
   for (const f of [0.22, 0.62]) {
     const z = z0 + (body - z0) * f;
-    ring(h, cam, { x: c.x, y: c.y, z }, rAt(z) + 0.004, colors.dark, 3, n);
-    ring(h, cam, { x: c.x, y: c.y, z: z + 0.012 }, rAt(z) + 0.004, shadeHex(colors.light, 1.1), 1, n);
+    frontArc(z, rAt(z) + 0.004, colors.dark, 3);
+    frontArc(z + 0.012, rAt(z) + 0.004, shadeHex(colors.light, 1.15), 1);
   }
-  ring(h, cam, { x: c.x, y: c.y, z: body }, r * 1.02, colors.dark, 2, n);
-  ring(h, cam, { x: c.x, y: c.y, z: z0 + 0.02 }, rb + 0.004, colors.dark, 2, n);
+  frontArc(body, r * 1.05, colors.dark, 2);
+  frontArc(z0 + 0.02, rb + 0.004, colors.dark, 2);
   // Handles on the left and right of the can, as seen from its table's long sides.
   for (const a of [Math.PI / 2, -Math.PI / 2]) {
     if (!faces(a - 0.2, a + 0.2)) continue;
