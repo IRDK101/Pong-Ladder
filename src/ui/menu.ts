@@ -6,6 +6,7 @@ import type { View } from '../render/renderer';
 import type { Sprite } from '../core/character';
 import type { NameStyle } from '../progress/nameStyles';
 import { drawStyledName } from './nameStyle';
+import { updateLabel } from '../version';
 import { panel } from '../render/hud';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 import { DESIGN_ORDER, DESIGNS } from '../render/designs';
@@ -402,6 +403,14 @@ export function drawMenu(ctx: CanvasRenderingContext2D, theme: Theme, screen: Vi
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);
   drawMenuBody(ctx, theme, menu, note, extras, L.portrait);
+  ctx.restore();
+  // The update number, small and dim in the bottom-left corner.
+  ctx.save();
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(220, 205, 180, 0.38)';
+  ctx.fillText(updateLabel(), 8, screen.height - 6);
   ctx.restore();
 }
 

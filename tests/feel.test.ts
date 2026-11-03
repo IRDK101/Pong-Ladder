@@ -185,3 +185,13 @@ describe('paddle spin vs ball spin', () => {
     expect(Math.max(Math.abs(inc.top), Math.abs(inc.side))).toBeGreaterThan(0.3);
   });
 });
+
+import { spinPair } from '../src/game/game';
+describe('the spin callout', () => {
+  it('names the ball spin, then the return spin', () => {
+    expect(spinPair({ top: -0.8, side: 0 }, { type: 'top', dir: 1 })).toBe('Backspin + Topspin');
+    expect(spinPair({ top: 0.1, side: 0.9 }, null)).toBe('Sidespin + No spin');
+    expect(spinPair({ top: 0.05, side: 0 }, { type: 'back', dir: 1 })).toBeNull();
+    expect(spinPair(null, null)).toBeNull();
+  });
+});

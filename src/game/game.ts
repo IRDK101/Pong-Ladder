@@ -696,7 +696,9 @@ export class Game {
     const t = this.aimTarget(team, this.aim[team], style);
     const spec: AimSpec = { x: t.x, y: t.y, z: t.cup ? this.cfg.physics.cupHeight : 0, forward: team === 'A' ? 1 : -1, lateness: off / w, spin, incoming: this.incomingSpin };
     const shot = computeHit(this.cfg, pacedStyle(this.cfg, style, rally.hits), from, spec, q, this.rng, stats);
-    if (shot.clash && this.feedback) this.feedback.label += clashNote(shot.clash, this.incomingSpin);
+    // The spin pair: the ball's spin, then the spin of the return ("Backspin + Topspin").
+    const pair = spinPair(this.incomingSpin, spin);
+    if (pair && this.feedback) this.feedback.label = `${timingLabel(q, off, w <= 0)} · ${pair}`;
     this.incomingSpin = spinOf(this.cfg, shot.fx);
     this.resetBallTracking();
     this.incomingPower = stats.power;
@@ -760,14 +762,16 @@ export class Game {
 }
 
 /** "Perfect · Topspin" when a hit connects with spin. */
-/** What the incoming spin did to a return, for the hit feedback (empty when it didn't matter). */
-function clashNote(c: { dx: number; dy: number; countered: boolean }, inc: IncomingSpin | null): string {
-  if (c.countered) return ' · countered';
-  if (!inc) return '';
-  const depth = Math.abs(c.dx);
-  const side = Math.abs(c.dy);
-  if (Math.max(depth, side) < 0.05) return '';
-  return depth >= side ? (inc.top > 0 ? ' · topspin pushed it long' : ' · backspin dropped it short') : ' · sidespin pulled it wide';
+/** The spin on the ball coming in, by name (null when it has little). */
+export function incomingName(inc: IncomingSpin | null): string | null {
+  if (!inc || Math.max(Math.abs(inc.top), Math.abs(inc.side)) < 0.2) return null;
+  return Math.abs(inc.top) >= Math.abs(inc.side) ? (inc.top > 0 ? 'Topspin' : 'Backspin') : 'Sidespin';
+}
+
+/** "Ball spin + return spin" for the hit callout, when the ball had spin (else null). */
+export function spinPair(inc: IncomingSpin | null, ret: SpinChoice | null): string | null {
+  const a = incomingName(inc);
+  return a ? `${a} + ${ret ? SPIN_LABELS[ret.type] : 'No spin'}` : null;
 }
 
 function withSpin(label: string, q: number | null, spin: SpinChoice | null): string {

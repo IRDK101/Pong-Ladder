@@ -845,3 +845,9 @@ Decided with the owner: the serve cursor locks at the toss, and the clash is rea
   - **Same spin** keeps the push, but carries 30% of the incoming spin into yours (`carry`).
   - **Feedback:** hit feedback adds "countered", "topspin pushed it long", "backspin dropped it short" or "sidespin pulled it wide".
   - **CPU:** counters heavy spin some of the time (`counterRate`: Easy 15%, Medium 45%, Hard 75%).
+
+## Update number, spin callout, jolt on both sides
+
+- **Update number:** small and dim in the home screen's bottom-left corner: `v1.00` plus 0.01 per commit (`git rev-list --count HEAD`, filled in at build time by `vite.config.ts`), so every change moves it on with nothing to update by hand. The Pages workflow checks out the full history so its count matches.
+- **Spin callout:** when the incoming ball carries spin, a hit's callout reads "<timing> · <ball spin> + <return spin>", e.g. "Good · Backspin + Topspin", with "No spin" when the return has none. Without incoming spin it's just the return's spin, as before.
+- **Hit jolt** checked on all four players: the far team, and the near team seen from behind.
