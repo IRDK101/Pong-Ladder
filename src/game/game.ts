@@ -96,6 +96,8 @@ export interface TeamInput {
    * player saw on their own device when they pressed hit. The host uses these
    * instead of measuring again, so network delay doesn't make hits late.
    */
+  /** Fine aim: the crosshair moves slowly while this is held. */
+  fine?: boolean;
   q?: number | null;
   off?: number;
   /** Online play: the game time on the guest's screen when it pressed hit (the host rewinds to it). */
@@ -458,11 +460,12 @@ export class Game {
       if (this.timingCue(team)) this.aimLock[team] = true;
       if (this.aimLock[team]) continue;
       const k = Game.aimOf(inputs[team]); // k.y = screen-down, k.x = screen-right
+      const speed = inputs[team].fine ? step * this.cfg.hitting.fineAim : step;
       const f = this.controlFrames[team];
       const d = { x: -k.y * f.up[0] + k.x * f.right[0], y: -k.y * f.up[1] + k.x * f.right[1] };
       const a = this.aim[team];
-      a.x = Math.max(-1, Math.min(1, a.x + d.x * step));
-      a.y = Math.max(-1, Math.min(1, a.y + d.y * step));
+      a.x = Math.max(-1, Math.min(1, a.x + d.x * speed));
+      a.y = Math.max(-1, Math.min(1, a.y + d.y * speed));
     }
   }
 

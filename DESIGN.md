@@ -986,3 +986,25 @@ Glasses are thin rims drawn at full size. Hats flatten the hair under them. New
 realistic face shapes, body types and everyday hairstyles go on the end of each
 list (parts are stored by index, so existing characters keep their picks). The
 editor's thumbnails crop on the 16×24 grid scaled to the real sprite size.
+
+## Version 2.02
+
+**Challenges.** The Challenge button opens the terms first: the challenger sets
+table, spot, cups, speed and ski collision and picks a character, then sends.
+The challenged player opens it (View and accept), sees the terms and the
+challenger's character, picks their own, and the match starts on Accept and
+play. (This replaces 2.01's Ready handshake.)
+
+**Online fix.** On the game's own site a match start waits for its room to
+open. A second start ran in that gap and cleared the host's start signal, so
+the guest never joined and nobody could serve. `begin()` now runs once per
+match (`starting`). Checked against the Firebase emulators with real key
+presses (serve, rally) for both players.
+
+**Fine aim.** Hold Shift to move the crosshair at `hitting.fineAim` (30%) of
+its speed: left Shift for WASD, right Shift for the arrows (either when one
+player has both sets, online and against the CPU).
+
+**Aim marker.** Deeper team colors with a thicker dark edge and a light inner
+line. When it sits under cups it is drawn again over them, see-through, so it
+shows through the glass.

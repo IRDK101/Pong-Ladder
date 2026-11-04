@@ -437,6 +437,7 @@ function mergeInputs(a: TeamInput, b: TeamInput): TeamInput {
     right: a.right || b.right,
     hit: a.hit || b.hit,
     style: a.style || b.style,
+    fine: a.fine || b.fine,
     nav: a.nav || b.nav,
   };
 }

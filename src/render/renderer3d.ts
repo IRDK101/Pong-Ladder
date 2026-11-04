@@ -263,6 +263,19 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, game.ballShown(), ball.vel, ball.fx) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
+  // A marker under the cups shows through them: drawn again over the cups, see-through.
+  for (const team of ['A', 'B'] as TeamId[]) {
+    if (!ui || !showsAim(game, vp, team)) continue;
+    const style = game.currentStyle(team);
+    if (!style) continue;
+    const at = game.aimTarget(team, game.aim[team], style);
+    const reach = 0.11 + cfg.cups.diameter / 2;
+    if (!game.cups.some((c) => c.state !== 'removed' && Math.hypot(c.x - at.x, c.y - at.y) < reach)) continue;
+    h.save();
+    h.globalAlpha = 0.6;
+    drawAim(h, theme, game, ch, team);
+    h.restore();
+  }
   if (ui) drawTimingRings(h, theme, game, ch);
   drawCupFx(h, theme, game, ch);
   drawCelebrations3D(h, theme, game, ch);
@@ -437,17 +450,20 @@ function drawAim(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: Cam
   const R = 0.085 + (locked ? 0 : 0.008 * Math.sin(game.time * 6));
   const c = { x: t.x, y: t.y, z };
   if (locked) {
-    h.globalAlpha = flash ? 0.45 : 0.25;
+    const a0 = h.globalAlpha;
+    h.globalAlpha = a0 * (flash ? 0.45 : 0.25);
     disc(h, cam, c, R, col, 24);
-    h.globalAlpha = 1;
+    h.globalAlpha = a0;
   }
-  ring(h, cam, c, R, dark, 4, 28);
-  ring(h, cam, c, R, col, 2, 28);
+  // A dark edge and a light inner line around a strong team color, so it reads under clear cups and on any table.
+  ring(h, cam, c, R, dark, 5, 28);
+  ring(h, cam, c, R, col, 3, 28);
+  ring(h, cam, c, R * 0.86, 'rgba(255,255,255,0.55)', 1, 28);
   const tick = (dx: number, dy: number) => {
     const a = { x: t.x + dx * R * 1.25, y: t.y + dy * R * 1.25, z };
     const e = { x: t.x + dx * R * (locked ? 1.45 : 1.75), y: t.y + dy * R * (locked ? 1.45 : 1.75), z };
-    line(h, cam, a, e, dark, 4);
-    line(h, cam, a, e, col, 2);
+    line(h, cam, a, e, dark, 5);
+    line(h, cam, a, e, col, 3);
   };
   tick(1, 0);
   tick(-1, 0);

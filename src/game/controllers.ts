@@ -22,7 +22,7 @@ export function coopInput(game: Game, team: TeamId, left: TeamInput, right: Team
   const lead = leadSide(game, team);
   const leader = lead === 'left' ? left : right;
   const other = lead === 'left' ? right : left;
-  const base: TeamInput = { ...leader, hit: false, side: lead, nav: leader.nav || other.nav };
+  const base: TeamInput = { ...leader, hit: false, side: lead, nav: leader.nav || other.nav, fine: leader.fine || other.fine };
   if (leader.hit) return { ...base, hit: true };
   if (other.hit) return { ...base, hit: true, side: lead === 'left' ? 'right' : 'left', style: other.style };
   return base;

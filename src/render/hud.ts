@@ -110,11 +110,11 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
       ctx.fillText(text, x0 + w / 2, v.height - M - 13);
     };
     if (coop && game.solo) {
-      tag('You: WASD or arrows · Space or Enter', M, 'left', c.teamA);
+      tag('You: WASD or arrows · Space or Enter · Shift: fine aim', M, 'left', c.teamA);
       tag('CPU', W - M, 'right', c.teamB);
     } else {
-      tag(coop ? 'Left teammate: WASD · Space' : 'Team A: WASD · Space', M, 'left', c.teamA);
-      tag(coop ? 'Right teammate: Arrows · Enter' : 'Team B: Arrows · Enter', W - M, 'right', c.teamB);
+      tag(coop ? 'Left teammate: WASD · Space · L-Shift fine' : 'Team A: WASD · Space · L-Shift fine', M, 'left', c.teamA);
+      tag(coop ? 'Right teammate: Arrows · Enter · R-Shift fine' : 'Team B: Arrows · Enter · R-Shift fine', W - M, 'right', c.teamB);
     }
   }
 }

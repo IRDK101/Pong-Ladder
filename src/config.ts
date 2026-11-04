@@ -21,6 +21,8 @@ export interface TeamControls {
   /** Hold while pressing hit to use the character's 2nd / 3rd style. */
   style2: string;
   style3: string;
+  /** Held: the crosshair moves slowly, for fine adjustments. */
+  fine: string;
 }
 
 export interface GameConfig {
@@ -174,6 +176,8 @@ export interface HitTuning {
   clash: { depthPush: number; sidePush: number; timingRelief: number; carry: number };
   /** How fast a held aim key moves the crosshair (full range per second, real time). */
   aimSpeed: number;
+  /** The aim speed while the fine-aim key is held (a fraction of aimSpeed). */
+  fineAim: number;
   /** Server toss: launch speed (m/s) and start height above the table (m). */
   tossSpeed: number;
   tossHeight: number;
@@ -197,8 +201,8 @@ export const defaultConfig: GameConfig = {
   view: 'behindA',
   camera: { behind: 2.85, height: 2.3, lookAt: 0.5, lookHeight: 0.3, fovY: 35, pixelSize: 2, rows: 400, detail: 1 },
   controls: {
-    A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE' },
-    B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash' },
+    A: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', hit: 'Space', style2: 'KeyQ', style3: 'KeyE', fine: 'ShiftLeft' },
+    B: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', hit: 'Enter', style2: 'Period', style3: 'Slash', fine: 'ShiftRight' },
   },
   // Placeholder dimensions (8 ft x 4 ft); adjust to the real basement table.
   table: { length: 2.44, width: 1.22 },
@@ -240,6 +244,7 @@ export const defaultConfig: GameConfig = {
     spin: { top: 0.85, back: 0.8, side: 0.95 },
     clash: { depthPush: 0.2, sidePush: 0.15, timingRelief: 0.35, carry: 0.3 },
     aimSpeed: 1.6,
+    fineAim: 0.3,
     tossSpeed: 2.4,
     tossHeight: 0.1,
     standOff: 0.25,

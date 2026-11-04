@@ -29,8 +29,8 @@ export const theme = {
     hudPanel3d: 'rgba(10, 9, 8, 0.72)',
     good: '#8fe388',
     /** Aim markers: lighter team colors that read on the wood. */
-    aimA: '#ff9c8c',
-    aimB: '#9cc4ff',
+    aimA: '#d63a28',
+    aimB: '#2560d8',
     /** The aim marker flashes this color once a shot is locked in. */
     lockFlash: '#ffffff',
     bad: '#ff7b6b',
