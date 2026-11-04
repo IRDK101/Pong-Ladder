@@ -15,6 +15,7 @@
 import type { Character, Sprite } from '../core/character';
 import type { NetState, TeamInput } from '../game/game';
 import { cleanNameStyle, type NameStyle } from '../progress/nameStyles';
+import { cleanStats, type GameStats } from '../game/stats';
 
 export interface RoomPeer {
   peer: string;
@@ -285,8 +286,8 @@ export class MatchLink {
   /** Newest state from the host (guest side), and the guest's newest input (host side). */
   net: NetState | null = null;
   input: GuestInput | null = null;
-  /** The host's final word: XP for the guest's character. */
-  final: { xp: Record<string, number> } | null = null;
+  /** The host's final word: XP for the guest's character, and the game's stats. */
+  final: { xp: Record<string, number>; st: GameStats | null } | null = null;
   gone = false;
   /** Last error the room reported for a match update, or ''. */
   error = '';
@@ -316,7 +317,7 @@ export class MatchLink {
   ) {
     const read = () => {
       const other = room.peers().find((p) => p.peer === this.otherPeer);
-      const pr = (other?.presence ?? {}) as { mid?: string; net?: NetState; inp?: GuestInput; final?: { xp: [string, number][] | Record<string, number> } };
+      const pr = (other?.presence ?? {}) as { mid?: string; net?: NetState; inp?: GuestInput; final?: { xp: [string, number][] | Record<string, number>; st?: unknown } };
       if (!other || pr.mid !== this.mid) {
         // Once they've been in this match, leaving the room or the match ends it; never arriving times out.
         if (this.seen || Date.now() - this.since > 20000) this.gone = true;
@@ -324,7 +325,7 @@ export class MatchLink {
       }
       this.seen = true;
       if (role === 'guest' && pr.net) this.net = pr.net;
-      if (role === 'guest' && pr.final) this.final = { xp: Array.isArray(pr.final.xp) ? Object.fromEntries(pr.final.xp) : pr.final.xp };
+      if (role === 'guest' && pr.final) this.final = { xp: Array.isArray(pr.final.xp) ? Object.fromEntries(pr.final.xp) : pr.final.xp, st: cleanStats(pr.final.st) };
       if (role === 'host' && pr.inp && pr.inp !== this.input) {
         this.input = pr.inp;
         this.inputAt = performance.now();
@@ -369,8 +370,9 @@ export class MatchLink {
   }
 
   /** Character ids aren't guaranteed to be presence keys, so XP travels as pairs. */
-  sendFinal(xp: Record<string, number>): void {
-    this.put({ final: { xp: Object.entries(xp).slice(0, 32) } });
+  sendFinal(xp: Record<string, number>, st: GameStats | null = null): void {
+    const round = (v: unknown): unknown => (typeof v === 'number' ? +v.toFixed(3) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, round(x)])) : v);
+    this.put({ final: { xp: Object.entries(xp).slice(0, 32), ...(st ? { st: round(st) } : {}) } });
   }
 
   /** Guest: queue a hit (with the timing seen here) or a penalty-cup step. */

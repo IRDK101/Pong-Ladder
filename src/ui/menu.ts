@@ -8,6 +8,8 @@ import type { NameStyle } from '../progress/nameStyles';
 import { drawStyledName } from './nameStyle';
 import { updateLabel } from '../version';
 import { panel } from '../render/hud';
+import { pixelText } from '../render/pixelText';
+import type { TeamStats } from '../game/stats';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 import { DESIGN_ORDER, DESIGNS } from '../render/designs';
 
@@ -1173,33 +1175,246 @@ function logoShine(lg: HTMLCanvasElement, t: number): HTMLCanvasElement {
 }
 
 /** Game / match over: a centered panel in the menu style, scaled like the menu. */
-export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, title: string, lines: string[], prompt: string): void {
+/** What the end screen shows. */
+export interface EndScreen {
+  title: string;
+  /** win: a celebration; lose: the defeat screen; the colors follow `team` (the winner). */
+  mood: 'win' | 'lose';
+  team: 'A' | 'B';
+  /** The winners' names (or the score line). */
+  subtitle: string;
+  /** Smaller lines under the stats (cups left, XP, rematch…). */
+  lines: string[];
+  prompt: string;
+  /** Stats for each team, with the names to head the columns; null while they're on the way. */
+  stats: { A: TeamStats; B: TeamStats; longestRally: number } | null;
+  names: { A: string; B: string };
+  /** Seconds since the game ended (drives the animation). */
+  t: number;
+}
+
+/**
+ * The end of a game: a celebration for the winner (gold rays, confetti in the
+ * team color, the title bouncing in) or a defeat screen for the loser (a cold
+ * wash, falling rain, the title dropping in and shaking), with the match stats.
+ */
+export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, screen: View, e: EndScreen): void {
   const c = theme.colors;
   const m = theme.menu;
+  const win = e.mood === 'win';
+  const teamCol = e.team === 'A' ? c.teamA : c.teamB;
+  const t = e.t;
+  // Backdrop: the scene darkens; warm for a win, cold for a loss.
   ctx.fillStyle = c.overlay;
+  ctx.fillRect(0, 0, screen.width, screen.height);
+  ctx.fillStyle = win ? 'rgba(60, 40, 0, 0.25)' : 'rgba(8, 14, 32, 0.55)';
   ctx.fillRect(0, 0, screen.width, screen.height);
   const L = endLayout(screen);
   ctx.save();
   ctx.translate(L.ox, L.oy);
   ctx.scale(L.s, L.s);
-  const w = 640;
-  const h = 150 + lines.length * 30;
+  ctx.imageSmoothingEnabled = false;
+  const cx = MENU_W / 2;
+  const ease = (x: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 3);
+  const back = (x: number) => {
+    // Overshoots a little, then settles (a pop).
+    const k = Math.max(0, Math.min(1, x));
+    return 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);
+  };
+  if (win) {
+    // Rays turning slowly behind the title, stepped like pixel art.
+    ctx.save();
+    ctx.translate(cx, 150);
+    ctx.rotate(t * 0.25);
+    const rays = 14;
+    ctx.globalAlpha = 0.16 * ease(t * 2);
+    for (let i = 0; i < rays; i++) {
+      ctx.fillStyle = i % 2 ? m.accent : teamCol;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      const a0 = (i / rays) * Math.PI * 2;
+      const a1 = a0 + (Math.PI * 2) / rays / 2;
+      ctx.lineTo(Math.cos(a0) * 900, Math.sin(a0) * 900);
+      ctx.lineTo(Math.cos(a1) * 900, Math.sin(a1) * 900);
+      ctx.fill();
+    }
+    ctx.restore();
+    // Confetti: square pixels drifting down and fluttering, in gold, white and the team color.
+    const cols = [m.accent, '#fff4dc', teamCol, '#ffe066'];
+    for (let i = 0; i < 90; i++) {
+      const seed = (i * 9301 + 49297) % 233280;
+      const r = (k: number) => ((seed * (k + 1) * 7919) % 1000) / 1000;
+      const fall = 60 + r(1) * 90;
+      const y = ((r(2) * MENU_H + t * fall) % (MENU_H + 40)) - 20;
+      const x = r(3) * MENU_W + Math.sin(t * (1.5 + r(4) * 2) + i) * 14;
+      const sz = 3 + Math.round(r(5) * 3);
+      const flip = Math.abs(Math.sin(t * (3 + r(6) * 4) + i));
+      ctx.globalAlpha = Math.min(1, t * 1.5) * 0.9;
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.fillRect(Math.round(x), Math.round(y), sz, Math.max(1, Math.round(sz * flip)));
+    }
+    ctx.globalAlpha = 1;
+  } else {
+    // Rain: thin streaks falling at a slant.
+    ctx.fillStyle = 'rgba(150, 170, 210, 0.22)';
+    for (let i = 0; i < 70; i++) {
+      const seed = (i * 7841 + 1013) % 10007;
+      const x0 = (seed * 13) % MENU_W;
+      const sp = 320 + (seed % 200);
+      const y = ((seed * 7) % MENU_H) + t * sp;
+      const yy = (y % (MENU_H + 60)) - 30;
+      const xx = (x0 - (y % (MENU_H + 60)) * 0.12 + MENU_W) % MENU_W;
+      ctx.fillRect(Math.round(xx), Math.round(yy), 1, 12);
+    }
+    // A dark vignette closing in.
+    const vg = ctx.createRadialGradient(cx, MENU_H / 2, 120, cx, MENU_H / 2, 620);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, `rgba(0,0,0,${0.55 * ease(t * 1.5)})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, MENU_W, MENU_H);
+  }
+
+  // The panel slides up into place.
+  const rows = e.stats ? 7 : 1;
+  const w = 720;
+  const hgt = 210 + rows * 26 + e.lines.length * 22 + (e.prompt ? 26 : 0);
   const x = (MENU_W - w) / 2;
-  const y = (MENU_H - h) / 2;
-  panel(ctx, theme, x, y, w, h, m.accent, m.panel);
+  const y0 = Math.max(12, (MENU_H - hgt) / 2 + 24);
+  const y = y0 + (1 - ease(t * 3)) * 40;
+  ctx.globalAlpha = ease(t * 3);
+  panel(ctx, theme, x, y, w, hgt, win ? m.accent : '#5a6684', m.panel);
+  // A colored band across the top of the panel.
+  ctx.fillStyle = win ? teamCol : '#3a4560';
+  ctx.fillRect(x + 2, y + 2, w - 4, 6);
+  if (win) {
+    // A shine sweeping across the band.
+    const sx = x + ((t * 420) % (w + 200)) - 100;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(Math.max(x + 2, sx), y + 2, Math.max(0, Math.min(40, x + w - 2 - sx)), 6);
+  }
+  ctx.globalAlpha = 1;
+
+  // The title: big pixel letters. A win pops in and bobs; a loss drops in and shakes once.
+  const word = e.title.toUpperCase();
+  const img = win ? pixelText(word, '#fff1a8', '#ffb43c', '#3a2400', 14) : pixelText(word, '#d8dcec', '#8c94b0', '#10131e', 14);
+  const scale = Math.min(5, (w - 60) / img.width);
+  const tt = t - 0.15;
+  let sc = scale;
+  let ty = y + 70;
+  if (tt < 0) sc = 0;
+  else if (win) {
+    sc = scale * back(tt * 3.2);
+    ty += Math.round(Math.sin(t * 3) * 3);
+  } else {
+    const drop = ease(tt * 2.5);
+    ty = y + 70 - (1 - drop) * 90;
+    if (tt > 0.4 && tt < 0.75) ty += (Math.floor(tt * 40) % 2 ? 2 : -2);
+  }
+  if (sc > 0) {
+    const iw = Math.round(img.width * sc);
+    const ih = Math.round(img.height * sc);
+    if (win) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 200, 80, 0.7)';
+      ctx.shadowBlur = 18 + Math.sin(t * 4) * 6;
+      ctx.drawImage(img, Math.round(cx - iw / 2), Math.round(ty - ih / 2), iw, ih);
+      ctx.restore();
+      // Sparkles around the title.
+      for (let i = 0; i < 6; i++) {
+        const ph = (t * 1.3 + i / 6) % 1;
+        const a = (i / 6) * Math.PI * 2 + t * 0.6;
+        const sx = cx + Math.cos(a) * (iw / 2 + 18);
+        const sy = ty + Math.sin(a) * (ih / 2 + 10);
+        const s2 = Math.round(2 + 3 * Math.sin(ph * Math.PI));
+        ctx.fillStyle = '#fff4dc';
+        ctx.fillRect(Math.round(sx - s2), Math.round(sy), s2 * 2 + 1, 1);
+        ctx.fillRect(Math.round(sx), Math.round(sy - s2), 1, s2 * 2 + 1);
+      }
+    } else ctx.drawImage(img, Math.round(cx - iw / 2), Math.round(ty - ih / 2), iw, ih);
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = c.text;
-  ctx.font = 'bold 34px monospace';
-  ctx.fillText(title, MENU_W / 2, y + 48);
+  ctx.globalAlpha = ease((t - 0.35) * 3);
+  ctx.font = 'bold 18px monospace';
+  ctx.fillStyle = win ? teamCol : c.textDim;
+  ctx.fillText(e.subtitle, cx, y + 128);
+
+  // Stats: Team A | what | Team B, the better number lit up in its team's color, counting up row by row.
+  let ry = y + 166;
+  if (e.stats) {
+    const st = e.stats;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const statRows: [string, number, number, (v: number) => string, boolean][] = [
+      ['Hits', st.A.hits, st.B.hits, String, true],
+      ['Sinks', st.A.sinks, st.B.sinks, String, true],
+      ['Cups hit', st.A.cupHits, st.B.cupHits, String, true],
+      ['Saves', st.A.saves, st.B.saves, String, true],
+      ['Accuracy', st.A.accuracy, st.B.accuracy, pct, true],
+      ['Perfect hits', st.A.perfect, st.B.perfect, String, true],
+      ['Misses & faults', st.A.misses + st.A.faults, st.B.misses + st.B.faults, String, false],
+    ];
+    const colA = x + 150;
+    const colB = x + w - 150;
+    ctx.globalAlpha = ease((t - 0.45) * 3);
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = c.teamA;
+    ctx.fillText(e.names.A.toUpperCase(), colA, ry);
+    ctx.fillStyle = c.teamB;
+    ctx.fillText(e.names.B.toUpperCase(), colB, ry);
+    ctx.fillStyle = c.textDim;
+    ctx.fillText(`LONGEST RALLY: ${st.longestRally}`, cx, ry);
+    ry += 26;
+    statRows.forEach(([label, a, b, fmt, more], i) => {
+      const k = ease((t - 0.6 - i * 0.08) * 2.5);
+      if (k <= 0) return;
+      ctx.globalAlpha = k;
+      // Bars toward the middle show who did more.
+      const max = Math.max(a, b, fmt === pct ? 1 : 1);
+      const barW = 120;
+      const aw = Math.round((a / max) * barW * k);
+      const bw = Math.round((b / max) * barW * k);
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x + 24, ry - 10, w - 48, 20);
+      ctx.fillStyle = c.teamA;
+      ctx.globalAlpha = k * 0.35;
+      ctx.fillRect(cx - 80 - aw, ry - 4, aw, 8);
+      ctx.fillStyle = c.teamB;
+      ctx.fillRect(cx + 80, ry - 4, bw, 8);
+      ctx.globalAlpha = k;
+      const better = a === b ? null : (a > b) === more ? 'A' : 'B';
+      const show = (v: number) => fmt(fmt === pct ? v : Math.round(v * k));
+      ctx.font = 'bold 16px monospace';
+      ctx.fillStyle = better === 'A' ? c.teamA : c.text;
+      ctx.fillText(show(a), colA, ry);
+      ctx.fillStyle = better === 'B' ? c.teamB : c.text;
+      ctx.fillText(show(b), colB, ry);
+      ctx.font = theme.fonts.label;
+      ctx.fillStyle = c.textDim;
+      ctx.fillText(label.toUpperCase(), cx, ry);
+      ry += 26;
+    });
+  } else {
+    ctx.globalAlpha = 0.7;
+    ctx.font = theme.fonts.label;
+    ctx.fillStyle = c.textDim;
+    ctx.fillText('Match stats on the way…', cx, ry);
+    ry += 26;
+  }
+  ry += 8;
+  ctx.globalAlpha = ease((t - 1.1) * 3);
   ctx.font = theme.fonts.hud;
   ctx.fillStyle = c.textDim;
-  lines.forEach((l, i) => ctx.fillText(l, MENU_W / 2, y + 96 + i * 30));
-  if (prompt) {
+  for (const l of e.lines) {
+    ctx.fillText(l, cx, ry);
+    ry += 22;
+  }
+  if (e.prompt) {
+    ctx.globalAlpha = 0.65 + 0.35 * Math.sin(t * 4);
     ctx.fillStyle = m.accent;
     ctx.font = theme.fonts.label;
-    ctx.fillText(prompt.toUpperCase(), MENU_W / 2, y + h - 26);
+    ctx.fillText(e.prompt.toUpperCase(), cx, y + hgt - 22);
   }
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 
@@ -1211,7 +1426,7 @@ export const HELP: [string, string][] = [
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
   ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
-  ['Speed', 'The Speed setting goes Relaxed, Slow, Normal, Fast, Extreme and Masters (Normal is the realistic pace): each step plays faster with smaller timing windows (saves included).'],
+  ['Speed', 'The Speed bar runs from Relaxed (left) through Normal (the middle, the realistic pace) to Masters (right), with small steps in between: further right plays faster with smaller timing windows (saves included). Click or drag the bar, or use \u25c0 \u25b6.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],

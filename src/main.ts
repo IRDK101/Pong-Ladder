@@ -2,6 +2,7 @@
 
 import { makeConfig, type GameConfig, type TableDesign } from './config';
 import { tableArt } from './render/basement3d';
+import { gameStats, sumStats, type GameStats } from './game/stats';
 import { composeBase, composeSprite, PART_OPTIONS, randomParts } from './core/sprite';
 import { theme } from './theme';
 import type { TeamId } from './core/types';
@@ -193,6 +194,18 @@ let cpu: CpuController | null = null;
 let record: MatchRecord | null = null;
 let menuNote = '';
 let gameOverAt = 0;
+let matchEndAt = 0;
+/** The stats of the game that just ended (end screen). */
+let lastStats: GameStats | null = null;
+/**
+ * The team the player at this screen is on, for a win or a defeat screen: their
+ * own team online and against the CPU; null when two people share the keyboard
+ * (then the winners get the celebration).
+ */
+function youTeam(g: Game): TeamId | null {
+  if (online) return online.role === 'host' ? 'A' : 'B';
+  return g.cfg.players.mode === 'coop' ? 'A' : null;
+}
 /** A local match is paused (Escape, or the window losing focus). Online, the same overlay asks before leaving, and the match runs on. */
 let paused = false;
 /** The last local match's settings and players, for Restart and Rematch. */
@@ -222,6 +235,7 @@ if (location.hash === '#debug') {
     parts: PART_OPTIONS,
     run: (a: MenuAction) => runMenuAction(a),
     setInputs: (fn: typeof debugInputs) => (debugInputs = fn),
+    cpu: (team: TeamId, level: 'easy' | 'medium' | 'hard') => new CpuController(team, level, Math.random),
   };
 }
 
@@ -380,6 +394,7 @@ let xpNote = '';
 
 /** Persist the finished game (and match, if decided), and give the player their XP. */
 function recordGame(): void {
+  if (game) lastStats = gameStats(game.cfg, game.engine.log);
   if (!game || !record) return;
   const winner = game.engine.peek().winner;
   record.games.push({ winner, log: game.engine.log });
@@ -400,7 +415,7 @@ function recordGame(): void {
       : 'Make a profile (Your profile) to earn XP from games'
     : `Your side (Team ${side}): +${gained} XP` + (boxes > res.boxesBefore ? ` · LEVEL UP! ${boxes} loot box${boxes === 1 ? '' : 'es'} in the Collection` : '');
   // Online: the guest's XP comes from the host's record of the game.
-  if (online?.role === 'host') online.link.sendFinal(matchXp(baseCfg, record, 'B'));
+  if (online?.role === 'host') online.link.sendFinal(matchXp(baseCfg, record, 'B'), lastStats);
 }
 
 /** Keyboard (and CPU) input for the current mode. */
@@ -672,7 +687,18 @@ function frame(dt: number): void {
     if (screen === 'gameEnd') {
       const st = g.engine.peek();
       const ready = performance.now() - gameOverAt > 800;
-      drawEndScreen(ctx, theme, view, st.winner === 'B' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`, [g.teamLine(st.winner ?? 'A'), g.cupsLeftLine(), xpNote, rematchLine()].filter(Boolean), ready ? rematchPrompt() : '');
+      const won = st.winner === 'B';
+      drawEndScreen(ctx, theme, view, {
+        title: won ? 'Victory!' : 'Defeat',
+        mood: won ? 'win' : 'lose',
+        team: st.winner ?? 'A',
+        subtitle: won ? `You beat ${online.otherName}` : `${online.otherName} wins`,
+        lines: [g.cupsLeftLine(), xpNote, rematchLine()].filter(Boolean),
+        prompt: ready ? rematchPrompt() : '',
+        stats: online.link.final?.st ?? null,
+        names: { A: online.otherName, B: 'You' },
+        t: (performance.now() - gameOverAt) / 1000,
+      });
       if (ready && anyPressed(['hit'])) rematchPressed();
     }
     return;
@@ -717,8 +743,25 @@ function frame(dt: number): void {
       const r = rematchLine();
       if (r) lines.push(r);
     }
-    const title = online ? (st.winner === 'A' ? 'YOU WIN!' : `${online.otherName.toUpperCase()} WINS`) : matchWinner ? `TEAM ${st.winner} WINS!` : `Team ${st.winner} takes game ${g.match.games.length}`;
-    drawEndScreen(ctx, theme, view, title, lines, ready ? (online ? rematchPrompt() : 'Press Space / Enter') : '');
+    lines.shift(); // the winners' names go in the subtitle
+    const you = youTeam(g);
+    const won = you === null || st.winner === you;
+    const title = online
+      ? won ? 'Victory!' : 'Defeat'
+      : !matchWinner
+        ? `Team ${st.winner} takes game ${g.match.games.length}`
+        : you === null ? `Team ${st.winner} wins!` : won ? 'Victory!' : 'Defeat';
+    drawEndScreen(ctx, theme, view, {
+      title,
+      mood: won ? 'win' : 'lose',
+      team: st.winner!,
+      subtitle: online ? (won ? `You beat ${online.otherName}` : `${online.otherName} wins`) : won ? g.teamLine(st.winner!) : `${g.teamLine(st.winner!)} win${g.solo ? 's' : ''}`,
+      lines,
+      prompt: ready ? (online ? rematchPrompt() : 'Press Space / Enter') : '',
+      stats: lastStats,
+      names: online ? { A: 'You', B: online.otherName } : { A: g.teamLine('A'), B: g.teamLine('B') },
+      t: (performance.now() - gameOverAt) / 1000,
+    });
     if (online?.role === 'host') online.link.sendState(g.netState(), performance.now());
     if (ready && anyPressed(['hit']) && online) {
       rematchPressed();
@@ -731,10 +774,23 @@ function frame(dt: number): void {
         record!.finishedAt = new Date().toISOString();
         store.matches.save(record!);
         screen = 'matchEnd';
+        matchEndAt = performance.now();
       } else screen = 'playing';
     }
   } else if (screen === 'matchEnd') {
-    drawEndScreen(ctx, theme, view, `TEAM ${g.match.winner} WINS THE MATCH`, [g.teamLine(g.match.winner!), `Games: A ${g.match.wins.A} – ${g.match.wins.B} B`, xpNote || 'Match log saved', 'R: rematch with the same players'], 'Press Space / Enter for the menu');
+    const you = youTeam(g);
+    const won = you === null || g.match.winner === you;
+    drawEndScreen(ctx, theme, view, {
+      title: you === null ? `Team ${g.match.winner} wins the match!` : won ? 'Match won!' : 'Match lost',
+      mood: won ? 'win' : 'lose',
+      team: g.match.winner!,
+      subtitle: `${g.teamLine(g.match.winner!)} · games ${g.match.wins.A} – ${g.match.wins.B}`,
+      lines: [xpNote || 'Match log saved', 'R: rematch with the same players'],
+      prompt: 'Press Space / Enter for the menu',
+      stats: record ? sumStats(record.games.map((x) => gameStats(g.cfg, x.log))) : lastStats,
+      names: { A: g.teamLine('A'), B: g.teamLine('B') },
+      t: (performance.now() - matchEndAt) / 1000,
+    });
     if (anyPressed(['hit'])) {
       if (record && hasTrackedPlayers(record)) {
         const rec = record;
