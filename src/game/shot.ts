@@ -76,8 +76,9 @@ export function timingWindow(cfg: GameConfig, style: ShotStyle, ctx: SwingContex
 export function timingQuality(cfg: GameConfig, style: ShotStyle, offset: number, ctx: SwingContext = neutral): number | null {
   const w = timingWindow(cfg, style, ctx);
   const a = Math.abs(offset);
-  if (w <= 0 || a > w) return null;
-  return Math.pow(1 - a / w, style.timing.falloff);
+  // Just past the edge of the window (missGrace of it) still connects, as the weakest hit, instead of a whiff.
+  if (w <= 0 || a > w * (1 + (cfg.hitting.missGrace ?? 0))) return null;
+  return Math.max(0.02, Math.pow(Math.max(0, 1 - a / w), style.timing.falloff));
 }
 
 /** Seconds from the ball's apex: negative = early (still rising), positive = late. */
@@ -249,7 +250,11 @@ export function computeServe(cfg: GameConfig, style: ShotStyle, from: Vec3, aim:
   const { dx, dy } = scatter(radius, rng);
   const target = { x: aim.x + dx + timingDrift(cfg, aim) * 0.5, y: aim.y + dy };
   // Serve spin lasts two bounces, so it still kicks on the receiver's side.
-  const fx = { ...spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null), bounces: 2 };
-  const { vel } = solveServe(cfg, from, target, softPeak(cfg, shotPeak(cfg, style, q, rng) * passiveEffect(passives, 'peak')), fx);
+  // A better server puts more spin on it and serves it lower and faster.
+  const spin = statEffect(cfg, 'serveSpin', stats.serve);
+  const raw = spinEffects(cfg, style, stats, target.y >= from.y ? 1 : -1, aim.spin ?? null);
+  const fx = { ...raw, topspin: Math.max(-1, Math.min(1, raw.topspin * spin)), curve: raw.curve * spin, sideKick: raw.sideKick * spin, bounces: 2 };
+  const peak = shotPeak(cfg, style, q, rng) * passiveEffect(passives, 'peak') * statEffect(cfg, 'servePeak', stats.serve);
+  const { vel } = solveServe(cfg, from, target, softPeak(cfg, peak), fx);
   return { vel, peak: predictPeak(from, vel, cfg.physics.gravity), target, fx };
 }

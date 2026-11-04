@@ -1017,3 +1017,35 @@ replaced and clicks were lost. The board now redraws only when what it shows
 changes, and then swaps just the table in place. The overlay also holds back a
 refresh of the current screen while a mouse button or finger is down on it,
 and shows it on release, so a click always lands (`Overlay.show`).
+
+## Version 2.04
+
+**Realistic shapes that read.** At the 16×24 grid a head is only six pixels
+wide, so the 2.01 face shapes barely differed. They now get their own outline
+at full size (`FACE_PROFILE`, `reshapeHead`): Natural tapers to a rounded chin,
+Defined jaw is square with a flat chin, High cheekbones narrows in a V, Soft
+round is fuller, Long oval is longer and narrower. Only the face's own edge
+moves, never into hair. Bodies change their outline too: Toned and Muscular get
+shoulder caps (Muscular thicker arms), Curvy an hourglass with hips, Dad bod a
+belly over the belt.
+
+**Online, the guest's view.** Over a jittery network (60–220 ms) the guest's
+clock went backwards about a thousand times a game, the ball jumped on ~2% of
+frames, and hit windows shut and reopened. Now the guest's clock runs on its own
+and is only nudged toward the host's (never back by more than a few ms a frame);
+each host update is moved on to the guest's own moment; within a flight an
+early update can't un-bounce the ball or un-swing the guest; the drawn ball
+glides onto a new flight after the other player's hit. `tests/online-jitter`
+checks it.
+
+**Gameplay.**
+- Timing: a swing up to 3% past the window's edge (`hitting.missGrace`) connects
+  as the weakest hit instead of a whiff.
+- Serve stat: more spin on serves (`serveSpin`) and a lower, faster serve
+  (`servePeak`).
+- CPU: an extra 4% chance to miss a save (`saveMiss`).
+- Q / E (or . and /) hit with that style on their own; online the style travels
+  with the hit.
+- "SINK!" is pixel lettering like the hit callouts, with sparkles.
+- The passive abilities section is hidden for now (the code stays; see
+  `passivesPanel`).

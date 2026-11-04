@@ -82,7 +82,7 @@ export interface GuestInput {
   style: 0 | 1 | 2;
   aim: { x: number; y: number };
   /** Hits (with the timing seen on the guest's screen) and penalty-cup steps, numbered. */
-  ev: { n: number; k: 'hit' | 'nav'; q?: number | null; off?: number; at?: number; d?: -1 | 1 }[];
+  ev: { n: number; k: 'hit' | 'nav'; q?: number | null; off?: number; at?: number; st?: 0 | 1 | 2; d?: -1 | 1 }[];
   /** The guest's clock when it sent this (echoed back so it can measure the round trip). */
   ts?: number;
 }
@@ -334,7 +334,7 @@ export class MatchLink {
   }
 
   /** Guest: queue a hit (with the timing seen here) or a penalty-cup step. */
-  event(k: 'hit' | 'nav', extra: { q?: number | null; off?: number; at?: number; d?: -1 | 1 } = {}): void {
+  event(k: 'hit' | 'nav', extra: { q?: number | null; off?: number; at?: number; st?: 0 | 1 | 2; d?: -1 | 1 } = {}): void {
     this.evs = [...this.evs, { n: ++this.evN, k, ...extra }].slice(-6);
   }
 
@@ -359,6 +359,8 @@ export class MatchLink {
         if (e.q !== undefined) inp.q = e.q;
         if (typeof e.off === 'number') inp.off = e.off;
         if (typeof e.at === 'number') inp.at = e.at;
+        // The style goes with the hit (a style key pressed for that one hit).
+        if (e.st === 0 || e.st === 1 || e.st === 2) inp.style = e.st;
       } else if (e.k === 'nav' && (e.d === 1 || e.d === -1)) inp.nav = e.d;
     }
     return inp;

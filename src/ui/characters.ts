@@ -69,7 +69,6 @@ export function characterCard(c: Character, level: number, extra: HTMLElement[] 
     ),
     statBars(c.stats),
     h('p', { class: 'dim', style: 'font-size:12px' }, `Hits: ${c.hitStyles.map((id) => getStyle(id).name).join(', ')}`),
-    passiveChips(c),
     ...extra,
   );
 }
@@ -388,7 +387,7 @@ class CharacterEditor {
         'div',
         { class: 'cols2' },
         h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.identityPanel(), this.statsPanel()),
-        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.passivesPanel(), this.footer()),
+        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.footer()),
       ),
     );
     // Re-rendering after a change keeps the scroll position (the first show starts at the top).
@@ -462,7 +461,11 @@ class CharacterEditor {
     );
   }
 
-  /** Passive abilities: always-on traits from the catalog in core/passives.ts, up to MAX_PASSIVES. */
+  /**
+   * Passive abilities: always-on traits from the catalog in core/passives.ts, up to MAX_PASSIVES.
+   * Not shown for now (the section may come back); add this.passivesPanel() to the editor's column to show it.
+   */
+  // @ts-expect-error unused while the section is hidden
   private passivesPanel(): HTMLElement {
     const c = this.c;
     if (!c.passives) c.passives = [];
@@ -500,7 +503,7 @@ class CharacterEditor {
 
   private stylesPanel(): HTMLElement {
     const c = this.c;
-    const keyHint = ['plain hit key', 'hold Q (Team A) or . (Team B)', 'hold E (Team A) or / (Team B)'];
+    const keyHint = ['plain hit key', 'Q (Team A) or . (Team B)', 'E (Team A) or / (Team B)'];
     const chosen = h(
       'div',
       { style: 'display:flex;flex-direction:column;gap:6px' },

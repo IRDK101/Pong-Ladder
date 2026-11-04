@@ -154,13 +154,11 @@ function headRows(shape: string): [number, number][] {
       // Narrow at the temples and jaw, with room for the eyes.
       return [[6, 9], [6, 9], [5, 10], [5, 10], [6, 9], [6, 9], [7, 8]];
     case 'Natural':
-      // A real head's taper: full at the cheekbones, narrowing to a rounded chin.
-      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9]];
     case 'Defined jaw':
     case 'Soft round':
-      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
     case 'High cheekbones':
-      return [[6, 9], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9], [6, 9]];
+      // The oval at grid size; the full-size pass gives each its own outline (FACE_PROFILE).
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
     case 'Long oval':
       return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9]];
     default: // Oval
@@ -395,14 +393,15 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       c.set(tx1, y, '');
     }
   }
+  // The realistic builds change the outline (what reads at a glance), not just the inside.
   if (build === 'Toned') {
-    // Shoulders a touch wider than the waist.
-    c.set(tx0 - 1, torsoTop, sleeve);
-    c.set(tx1 + 1, torsoTop, sleeve);
+    // A V shape: rounded shoulders out past the arms, a narrower waist.
+    c.set(tx0 - 2, torsoTop + 1, sleeve);
+    c.set(tx1 + 2, torsoTop + 1, sleeve);
     c.set(tx0, belt, '');
     c.set(tx1, belt, '');
   } else if (build === 'Muscular') {
-    // A wide chest and shoulders, thicker upper arms, and a narrower waist.
+    // Big shoulders and upper arms, a wide chest, a narrow waist.
     c.rect(tx0 - 2, torsoTop + 1, tx0 - 2, torsoTop + 3, sleeve);
     c.rect(tx1 + 2, torsoTop + 1, tx1 + 2, torsoTop + 3, sleeve);
     c.rect(tx0 + 1, torsoTop + 2, tx1 - 1, torsoTop + 2, shade(shirt, 0.88)); // the chest line
@@ -411,19 +410,18 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       c.set(tx1, y, '');
     }
   } else if (build === 'Curvy') {
-    // A defined waist and fuller hips.
-    c.set(tx0, belt - 2, '');
-    c.set(tx1, belt - 2, '');
-    // Hips: the trousers as wide as the torso at the top, tapering to the legs.
-    c.rect(tx0, legTop, tx0, legTop + 1, pants);
-    c.rect(tx1, legTop, tx1, legTop + 1, pants);
-    c.set(tx0, legTop + 2, shade(pants, 0.85));
-    c.set(tx1, legTop + 2, shade(pants, 0.85));
+    // An hourglass: the waist pulls in, the hips flare out past the torso.
+    c.set(tx0, belt - 1, '');
+    c.set(tx1, belt - 1, '');
+    c.rect(tx0, legTop, tx1, legTop + 1, pants);
+    c.set(tx0 - 1, legTop, pants);
+    c.set(tx1 + 1, legTop, pants);
   } else if (build === 'Dad bod') {
-    // A soft middle: sloping shoulders over a wider waist that hangs over the belt.
+    // Sloping shoulders, and a belly that rounds out over the belt, past the hands.
     c.set(tx0, torsoTop, '');
     c.set(tx1, torsoTop, '');
-    c.rect(tx0, belt, tx1, belt, shirt);
+    c.rect(tx0 - 1, belt, tx1 + 1, belt, shirt);
+    c.rect(tx0 + 1, legTop, tx1 - 1, legTop, shirt);
   } else if (build === 'Big and tall') {
     // Broad all the way down, long legs.
     c.rect(tx0, belt, tx1, belt, shirt);
@@ -1214,10 +1212,63 @@ export function epx(src: Sprite): Sprite {
  * bottom of each shape, a lit pixel on its left and top), catch-lights in the
  * eyes, and a one-pixel dark outline round the silhouette.
  */
+/**
+ * Full-size outline changes for the realistic face shapes, per row of the head
+ * (from its top, at full size): +1 widens the face by a pixel on each side, -1
+ * narrows it. Only the face's own edge moves (never into hair beside it).
+ */
+const FACE_PROFILE: Partial<Record<string, number[]>> = {
+  // Widths at full size (oval): 8, 12 ×10, 8. Natural tapers smoothly below the cheeks.
+  Natural: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, 0, 0],
+  // Square: the jaw as wide as the cheeks, a flat chin.
+  'Defined jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2],
+  // Wide at the cheekbones, then a smooth V to the chin.
+  'High cheekbones': [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, -1, -1, -1, -1],
+  // Fuller and rounder: a wider crown, full cheeks, a soft wide chin.
+  'Soft round': [1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+  // Longer and narrower.
+  'Long oval': [0, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+};
+
+function reshapeHead(src: string[], w: number, meta: FaceMeta): void {
+  const prof = FACE_PROFILE[meta.face];
+  if (!prof || !meta.colors.skin) return;
+  const top = meta.headTop * 2;
+  const mid = w / 2;
+  prof.forEach((d, k) => {
+    if (!d) return;
+    const y = top + k;
+    const row = (x: number) => src[y * w + x];
+    // The face's left and right edges on this row (outermost skin-or-feature pixels touching empty space).
+    for (const side of [-1, 1] as const) {
+      let x = side < 0 ? 0 : w - 1;
+      while (x !== mid && !row(x)) x -= side;
+      if (x === mid) continue;
+      const edge = row(x);
+      // Only a face edge moves (skin, or a beard on the face), and only into empty space.
+      const isFace = edge === meta.colors.skin || shadeOf(edge, meta.colors.skin) || edge === shade(meta.colors.hair, 0.95);
+      if (!isFace) continue;
+      if (d > 0) for (let n = 1; n <= d; n++) {
+        const o = x + side * n;
+        if (o < 0 || o >= w || row(o)) break;
+        src[y * w + o] = edge;
+      }
+      if (d < 0) for (let n = 0; n < -d; n++) if (Math.abs(x - side * n - mid) > 3) src[y * w + x - side * n] = '';
+    }
+  });
+}
+
+/** Is `col` a darker or lighter shade of `base` (the face's cheek shadow, for example)? */
+function shadeOf(col: string, base: string): boolean {
+  for (const f of [0.92, 0.85, 0.9, 0.78]) if (col === shade(base, f)) return true;
+  return false;
+}
+
 function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
   const big = epx(flat);
   const { w, h } = big;
   const src = big.pixels;
+  if (meta.front || meta.face) reshapeHead(src, w, meta);
   // Wide-set eyes: each pupil moves half a grid pixel outward (one pixel at this size).
   if (meta.front && meta.wideEyes && meta.colors.skin)
     for (const e of meta.eyes) {

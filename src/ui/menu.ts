@@ -1419,7 +1419,7 @@ export function drawEndScreen(ctx: CanvasRenderingContext2D, theme: Theme, scree
 }
 
 export const HELP: [string, string][] = [
-  ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Hold Q / E (Team A) or . / / (Team B) for a character\u2019s other hit styles. Esc pauses (R restarts from the pause card, or rematches after a match).'],
+  ['Keys', 'Team A: WASD to aim, Space to hit.  Team B: arrow keys to aim, Enter to hit.  Press Q / E (Team A) or . / / (Team B) to hit with a character\u2019s other hit styles (no need for the hit key). Esc pauses (R restarts from the pause card, or rematches after a match).'],
   ['Aim', 'The marker on the table is where your shot will land, and it stays where you leave it. Hold Shift (left Shift for WASD, right Shift for the arrows) to move it slowly for fine adjustments. Up/down is deeper/shorter, left/right is across. It turns red with an X when you are aiming off the table. To sink a cup, put the marker right over it.'],
   ['Hit', 'After the ball bounces on your side, a colored ring closes in on a white ring around the ball. Hit as they meet: yellow is early, green is right, red is late. Early hits land short, late ones long, and the further from perfect, the less accurate the shot. Fast balls, long rallies and balls far from you leave less time.'],
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too. Spin on the ball you return pushes your shot (topspin long, backspin short, sidespin wide) unless you hit the opposite spin to cancel it; the same spin adds to yours.'],

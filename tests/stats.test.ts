@@ -32,3 +32,20 @@ describe('match stats', () => {
     expect(cleanStats({ nope: 1 })).toBeNull();
   });
 });
+
+describe('serve stat', () => {
+  it('a higher serve stat spins serves more and serves them lower and faster', async () => {
+    const { computeServe } = await import('../src/game/shot');
+    const { getStyle } = await import('../src/core/styles');
+    const cfg = makeConfig();
+    const style = getStyle('standardServe');
+    const from = { x: -0.1, y: 0.3, z: 0.3 };
+    const aim = { x: 1.9, y: 0.9, forward: 1 as const, spin: { type: 'side' as const, dir: 1 as const } };
+    const serve = (stat: number) => computeServe(cfg, style, from, aim, 1, () => 0.5, { accuracy: 5, power: 5, spin: 5, serve: stat, saves: 5 });
+    const lo = serve(2);
+    const hi = serve(9);
+    expect(Math.abs(hi.fx.curve)).toBeGreaterThan(Math.abs(lo.fx.curve));
+    expect(hi.peak).toBeLessThan(lo.peak);
+    expect(Math.hypot(hi.vel.x, hi.vel.y)).toBeGreaterThan(Math.hypot(lo.vel.x, lo.vel.y));
+  });
+});

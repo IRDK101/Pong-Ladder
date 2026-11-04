@@ -539,6 +539,7 @@ export class Game {
   netTick(realDt: number, own: TeamId, inp: TeamInput): void {
     const dt = realDt * this.cfg.physics.timeScale;
     this.time += dt;
+    this.nudgedBack = false;
     if (this.ball.status === 'flying') this.localStep(dt);
     const k = Math.exp(-realDt * 14);
     this.drawOffset = { x: this.drawOffset.x * k, y: this.drawOffset.y * k, z: this.drawOffset.z * k };
@@ -684,18 +685,49 @@ export class Game {
     const before = this.ballShown();
     const wasFlying = this.ball.status === 'flying';
     const hitsBefore = JSON.stringify(this.hitTimes);
+    const localTime = this.time;
+    const localBounced = { ...this.bounced };
+    const localSwung = { ...this.swung };
+    const synced = this.clockSynced;
     this.applyNet(n, own);
     this.lastNetHz = hz;
-    const lead = Math.max(0, Math.min(0.35, ahead)) * this.cfg.physics.timeScale;
-    if (lead > 0) {
-      this.time += lead;
-      if (this.ball.status === 'flying') for (let t = 0; t < lead - 1e-6; t += 1 / 240) this.localStep(Math.min(1 / 240, lead - t));
+    const ts = this.cfg.physics.timeScale;
+    // The guest's clock runs on its own and is only nudged toward the host's (its update time plus
+    // the network delay), so it never jumps back and the timing rings don't stutter.
+    const target = n.t + Math.max(0, Math.min(0.35, ahead)) * ts;
+    const diff = target - localTime;
+    // Slowing the clock is limited to one small step per frame (several updates can land in one frame).
+    const back = this.nudgedBack ? 0 : -0.004;
+    const now = !synced || Math.abs(diff) > 0.4 ? target : localTime + Math.max(back, Math.min(0.02, diff * 0.2));
+    if (now < localTime) this.nudgedBack = true;
+    this.clockSynced = true;
+    // Move the host's ball on to that moment (an update from further ahead is used as it is).
+    const lead = Math.max(0, now - n.t);
+    this.time = n.t;
+    if (this.ball.status === 'flying') for (let t = 0; t < lead - 1e-6; t += 1 / 240) this.localStep(Math.min(1 / 240, lead - t));
+    this.time = Math.max(now, n.t);
+    const sameFlight = wasFlying && this.ball.status === 'flying' && (predicting || hitsBefore === JSON.stringify(this.hitTimes));
+    if (sameFlight) {
+      // Within one flight, an update sent before the bounce (or before this device's own swing)
+      // must not take them back: that's what made hit windows shut and reopen.
+      for (const t of ['A', 'B'] as TeamId[]) {
+        this.bounced[t] = this.bounced[t] || localBounced[t];
+        if (t === own) this.swung[t] = this.swung[t] || localSwung[t];
+      }
     }
     const p = this.ball.pos;
     const d = { x: before.x - p.x, y: before.y - p.y, z: before.z - p.z };
-    const sameFlight = wasFlying && this.ball.status === 'flying' && (predicting || hitsBefore === JSON.stringify(this.hitTimes));
-    this.drawOffset = sameFlight && Math.hypot(d.x, d.y, d.z) < (predicting ? 0.7 : 0.4) ? d : { x: 0, y: 0, z: 0 };
+    // The drawn ball glides over the difference: within a flight, and also onto a new flight the
+    // other player's hit started (the news arrives a little late) instead of jumping there.
+    const gap = Math.hypot(d.x, d.y, d.z);
+    const glide = wasFlying && this.ball.status === 'flying' && gap < (sameFlight ? (predicting ? 0.7 : 0.4) : 0.8);
+    this.drawOffset = glide ? d : { x: 0, y: 0, z: 0 };
   }
+
+  /** Guest: the clock has been set from the host once (after that it's only nudged). */
+  private clockSynced = false;
+  /** Guest: the clock was slowed this frame already. */
+  private nudgedBack = false;
 
   /** Guest: move the ball on here, noting bounces (so this device's hit window opens on time). */
   private localStep(dt: number): void {

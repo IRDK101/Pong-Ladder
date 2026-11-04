@@ -51,12 +51,15 @@ describe('shot model', () => {
   const cfg = cfgWith();
   const hit = getStyle('standardHit');
 
-  it('timing quality is 1 at the apex, falls to 0 at the window edge, null outside', () => {
+  it('timing quality is 1 at the apex, falls to the weakest hit at the window edge, a little grace past it, then null', () => {
     const w = cfg.hitting.timingWindow;
     expect(timingQuality(cfg, hit, 0)).toBe(1);
     expect(timingQuality(cfg, hit, w / 2)).toBeCloseTo(0.5);
-    expect(timingQuality(cfg, hit, -w)).toBe(0);
-    expect(timingQuality(cfg, hit, w * 1.01)).toBeNull();
+    expect(timingQuality(cfg, hit, -w)).toBe(0.02);
+    // Just past the edge (3% grace) still connects, weakly; beyond that it's a whiff.
+    expect(timingQuality(cfg, hit, w * 1.02)).toBe(0.02);
+    expect(timingQuality(cfg, hit, -w * 1.02)).toBe(0.02);
+    expect(timingQuality(cfg, hit, w * 1.04)).toBeNull();
   });
 
   it('a perfect hit lands near the aim point and reaches the style peak; a bad one scatters and drops', () => {

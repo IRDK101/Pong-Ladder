@@ -142,6 +142,8 @@ export interface PhysicsTuning {
 
 export interface HitTuning {
   /** Seconds either side of the ideal moment in which a swing connects. */
+  /** How far past the window's edge (a fraction of it) a swing still connects as the weakest hit. */
+  missGrace?: number;
   timingWindow: number;
   /** Difficulty: every timing window is multiplied by this (1 = Normal; smaller is harder). */
   windowScale: number;
@@ -227,6 +229,7 @@ export const defaultConfig: GameConfig = {
   },
   hitting: {
     timingWindow: 0.24,
+    missGrace: 0.03,
     windowScale: 1,
     saveWindowScale: 0.48,
     scatterPerfect: 0.018,
@@ -259,6 +262,8 @@ export const defaultConfig: GameConfig = {
     serveWindow: [0.84, 1.16],
     saveWindow: [0.75, 1.25],
     saveReach: [0.8, 1.2],
+    serveSpin: [0.75, 1.25],
+    servePeak: [1.1, 0.9],
   },
   progression: {
     xp: { gamePlayed: 20, gameWon: 15, matchWon: 25, cupSunk: 8, cupDowned: 4, saveMade: 5, clutchSave: 10, ace: 3, perfectHit: 1 },

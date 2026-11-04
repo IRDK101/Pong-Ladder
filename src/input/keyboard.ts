@@ -43,8 +43,9 @@ export class Keyboard {
       down: this.held.has(c.down),
       left: this.held.has(c.left),
       right: this.held.has(c.right),
-      hit: this.pressed.has(c.hit),
-      style: this.held.has(c.style3) ? 2 : this.held.has(c.style2) ? 1 : 0,
+      // The style keys hit on their own (with that style); holding one while pressing hit works too.
+      hit: this.pressed.has(c.hit) || this.pressed.has(c.style2) || this.pressed.has(c.style3),
+      style: this.pressed.has(c.style3) || this.held.has(c.style3) ? 2 : this.pressed.has(c.style2) || this.held.has(c.style2) ? 1 : 0,
       fine: this.held.has(c.fine),
       nav,
     };

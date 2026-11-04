@@ -365,8 +365,9 @@ function guestFrame(g: Game, dt: number): void {
   if (screen === 'playing') {
     const st = g.engine.peek();
     if (inp.hit) {
+      g.selectedStyle.B = inp.style; // timed with the style it's hit with
       const tm = g.timingNow('B');
-      o.link.event('hit', tm ?? {});
+      o.link.event('hit', { ...(tm ?? {}), st: inp.style });
       // Show the hit here at once; the host's result follows.
       if (tm) g.predictSwing('B', { ...inp, q: tm.q, off: tm.off });
     }

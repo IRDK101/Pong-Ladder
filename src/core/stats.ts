@@ -63,6 +63,9 @@ export interface StatEffects {
   saveWindow: EffectRange;
   /** Reach multiplier on saves. */
   saveReach: EffectRange;
+  /** Serve stat: spin on serves, and how low and fast a serve flies (peak height). */
+  serveSpin: EffectRange;
+  servePeak: EffectRange;
 }
 
 /** Interpolate an effect range for a stat value (1–10). */

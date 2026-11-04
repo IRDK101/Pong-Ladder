@@ -678,23 +678,38 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
       ctx.globalAlpha = 1;
     }
   }
-  // "SINK!" popping up from a sunk cup.
+  // "SINK!" popping up from a sunk cup: chunky pixel letters like the hit callouts, about as tall
+  // as the old text (3 screen pixels per art pixel), stepping in big, then settling, with sparkles.
   for (const f of game.cupFx) {
     const t = game.time - f.time;
     if (f.kind !== 'sink' || t > 1.0) continue;
     const at = project(vp.cam, { x: f.x, y: f.y, z: game.cfg.physics.cupHeight + 0.1 + t * 0.25 });
     if (!at) continue;
-    const pop = t < 0.12 ? 0.6 + (t / 0.12) * 0.6 : 1.2 - Math.min(0.2, (t - 0.12) * 0.5);
+    const img = pixelText('SINK!', '#d8fbff', '#35b6e8', '#062a3a', 10);
+    const S = t < 0.06 ? 2 : t < 0.16 ? 4 : 3;
+    const cx = Math.round(vp.x + at.x * k);
+    const cy = Math.round(Math.max(minY + 20, vp.y + at.y * k));
     ctx.save();
+    ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-    ctx.translate(vp.x + at.x * k, Math.max(minY + 20, vp.y + at.y * k));
-    ctx.scale(pop, pop);
-    ctx.font = 'bold 28px monospace';
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = theme.colors.activeText;
-    ctx.strokeText('SINK!', 0, 0);
-    ctx.fillStyle = theme.fx.sinkText;
-    ctx.fillText('SINK!', 0, 0);
+    // Pixel sparkles: plus signs flying out on the pixel grid.
+    if (t < 0.6) {
+      const u = 3;
+      for (let n = 0; n < 6; n++) {
+        const a = (n / 6) * Math.PI * 2 + 0.4;
+        const d = (img.width * S) / 2 + 6 + t * 70;
+        const sx = Math.round((cx + Math.cos(a) * d) / u) * u;
+        const sy = Math.round((cy + Math.sin(a) * d * 0.55) / u) * u;
+        const arm = t < 0.3 ? 2 : 1;
+        ctx.fillStyle = '#062a3a';
+        ctx.fillRect(sx - u * arm - 1, sy - 1, u * (arm * 2 + 1) + 2, u + 2);
+        ctx.fillRect(sx - 1, sy - u * arm - 1, u + 2, u * (arm * 2 + 1) + 2);
+        ctx.fillStyle = n % 2 ? '#ffffff' : '#7fe3ff';
+        ctx.fillRect(sx - u * arm, sy, u * (arm * 2 + 1), u);
+        ctx.fillRect(sx, sy - u * arm, u, u * (arm * 2 + 1));
+      }
+    }
+    ctx.drawImage(img, cx - Math.round((img.width * S) / 2), cy - Math.round((img.height * S) / 2), img.width * S, img.height * S);
     ctx.restore();
   }
   // Timing feedback ("Perfect", "Late"...) popping up over the hitter.

@@ -19,6 +19,8 @@ export interface CpuLevel {
   saveSigma: number;
   /** Chance to miss a swing outright (swings too late). */
   whiff: number;
+  /** Extra chance to miss a save outright (on top of whiff). */
+  saveMiss: number;
   /** How far (m) its chosen aim point wanders from the cup it picked. */
   aimJitter: number;
   /** Chance it goes for a cup at all (otherwise a safe ball to mid-table). */
@@ -34,9 +36,9 @@ export interface CpuLevel {
 }
 
 export const CPU_LEVELS: Record<Difficulty, CpuLevel> = {
-  easy: { timingSigma: 0.09, saveSigma: 0.11, whiff: 0.07, aimJitter: 0.2, cupRate: 0.4, spinRate: 0.05, counterRate: 0.15, styleMix: 0.15, serveDelay: 0.9 },
-  medium: { timingSigma: 0.05, saveSigma: 0.065, whiff: 0.025, aimJitter: 0.1, cupRate: 0.7, spinRate: 0.2, counterRate: 0.45, styleMix: 0.3, serveDelay: 0.6 },
-  hard: { timingSigma: 0.025, saveSigma: 0.035, whiff: 0.006, aimJitter: 0.04, cupRate: 0.9, spinRate: 0.35, counterRate: 0.75, styleMix: 0.4, serveDelay: 0.4 },
+  easy: { saveMiss: 0.04, timingSigma: 0.09, saveSigma: 0.11, whiff: 0.07, aimJitter: 0.2, cupRate: 0.4, spinRate: 0.05, counterRate: 0.15, styleMix: 0.15, serveDelay: 0.9 },
+  medium: { saveMiss: 0.04, timingSigma: 0.05, saveSigma: 0.065, whiff: 0.025, aimJitter: 0.1, cupRate: 0.7, spinRate: 0.2, counterRate: 0.45, styleMix: 0.3, serveDelay: 0.6 },
+  hard: { saveMiss: 0.04, timingSigma: 0.025, saveSigma: 0.035, whiff: 0.006, aimJitter: 0.04, cupRate: 0.9, spinRate: 0.35, counterRate: 0.75, styleMix: 0.4, serveDelay: 0.4 },
 };
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
@@ -77,7 +79,7 @@ export class CpuController {
     const scale = game.cfg.hitting.windowScale ?? 1;
     const w = game.cfg.hitting.timingWindow * scale;
     let swingAt = this.gauss() * (save ? L.saveSigma : L.timingSigma) * scale;
-    if (this.rng() < L.whiff) swingAt = w * 2; // too late: whiff
+    if (this.rng() < L.whiff + (save ? L.saveMiss : 0)) swingAt = w * 2; // too late: whiff
     swingAt = Math.max(-w * 1.5, swingAt);
     // Aim (in meters) at a live opponent cup, or a safe mid-table ball, with some wander.
     const opp: TeamId = this.team === 'A' ? 'B' : 'A';
