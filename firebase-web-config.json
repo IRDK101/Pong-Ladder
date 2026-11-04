@@ -1,0 +1,10 @@
+const firebaseConfig = {
+  apiKey: "AIzaSyBEswWGcwtHq_zBXDtKduzQsBt-Ie3PuAA",
+  authDomain: "pong-zimulator.firebaseapp.com",
+  databaseURL: "https://pong-zimulator-default-rtdb.firebaseio.com",
+  projectId: "pong-zimulator",
+  storageBucket: "pong-zimulator.firebasestorage.app",
+  messagingSenderId: "923848324332",
+  appId: "1:923848324332:web:ad43245c6f41f1818e61c9",
+  measurementId: "G-LSSWZBBX47"
+};
