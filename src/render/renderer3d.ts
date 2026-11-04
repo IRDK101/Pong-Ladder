@@ -263,19 +263,6 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, game.ballShown(), ball.vel, ball.fx) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
-  // A marker under the cups shows through them: drawn again over the cups, see-through.
-  for (const team of ['A', 'B'] as TeamId[]) {
-    if (!ui || !showsAim(game, vp, team)) continue;
-    const style = game.currentStyle(team);
-    if (!style) continue;
-    const at = game.aimTarget(team, game.aim[team], style);
-    const reach = 0.11 + cfg.cups.diameter / 2;
-    if (!game.cups.some((c) => c.state !== 'removed' && Math.hypot(c.x - at.x, c.y - at.y) < reach)) continue;
-    h.save();
-    h.globalAlpha = 0.6;
-    drawAim(h, theme, game, ch, team);
-    h.restore();
-  }
   if (ui) drawTimingRings(h, theme, game, ch);
   drawCupFx(h, theme, game, ch);
   drawCelebrations3D(h, theme, game, ch);

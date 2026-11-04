@@ -1006,5 +1006,4 @@ its speed: left Shift for WASD, right Shift for the arrows (either when one
 player has both sets, online and against the CPU).
 
 **Aim marker.** Deeper team colors with a thicker dark edge and a light inner
-line. When it sits under cups it is drawn again over them, see-through, so it
-shows through the glass.
+line, so it reads under the clear cups. It stays drawn under them.
