@@ -301,9 +301,38 @@ export class Overlay {
   }
 
   /** Show a screen. `keepScroll` re-renders the same screen in place (no jump back to the top). */
+  /** A button or finger is down on a screen: swapping it now would eat the click, so swaps wait. */
+  private pointerDown = false;
+  private pending: { panel: HTMLElement; keepScroll: boolean } | null = null;
+  private watching = false;
+  private watchPointer(): void {
+    if (this.watching) return;
+    this.watching = true;
+    this.root.addEventListener('pointerdown', () => (this.pointerDown = true), true);
+    const up = () => {
+      if (!this.pointerDown) return;
+      this.pointerDown = false;
+      // Let the click land on what was pressed first, then show the newest screen.
+      setTimeout(() => {
+        const p = this.pending;
+        this.pending = null;
+        if (p && !this.root.hidden) this.show(p.panel, p.keepScroll);
+      }, 0);
+    };
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+  }
+
   show(panel: HTMLElement, keepScroll = false): void {
-    // Entrance animations play when a different screen opens, not on every refresh of the same one.
+    this.watchPointer();
+    // A refresh of the same screen while the pointer is pressed on it waits for the release.
     const title = panel.querySelector('h1')?.textContent ?? '';
+    if (this.pointerDown && !this.root.hidden && keepScroll && title === this.lastTitle) {
+      this.pending = { panel, keepScroll };
+      return;
+    }
+    this.pending = null;
+    // Entrance animations play when a different screen opens, not on every refresh of the same one.
     if (this.root.hidden || title !== this.lastTitle) panel.classList.add('fresh');
     this.lastTitle = title;
     const y = this.root.scrollTop;
@@ -322,6 +351,7 @@ export class Overlay {
 
   hide(): void {
     this.lastTitle = '';
+    this.pending = null;
     this.root.hidden = true;
     this.root.replaceChildren();
   }

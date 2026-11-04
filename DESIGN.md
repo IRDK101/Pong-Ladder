@@ -1007,3 +1007,13 @@ player has both sets, online and against the CPU).
 
 **Aim marker.** Deeper team colors with a thicker dark edge and a light inner
 line, so it reads under the clear cups. It stays drawn under them.
+
+## Version 2.03
+
+**Leaderboard freezing the mouse.** Every profile update (other players' XP
+changing while they play) rebuilt the whole leaderboard screen, several times a
+second with a few people playing, so the element under the pointer kept being
+replaced and clicks were lost. The board now redraws only when what it shows
+changes, and then swaps just the table in place. The overlay also holds back a
+refresh of the current screen while a mouse button or finger is down on it,
+and shows it on release, so a click always lands (`Overlay.show`).

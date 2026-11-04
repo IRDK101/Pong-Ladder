@@ -210,10 +210,18 @@ export class LeaderboardScreen {
     return !!this.panel && this.overlay.isOpen() && this.overlay.root.contains(this.panel);
   }
 
+  /** What the board shows, so a live update that changes nothing redraws nothing. */
+  private sig = '';
+  private table: HTMLElement | null = null;
+
   show(): void {
     const a = this.account;
     const rows = a.leaderboard();
     const me = a.uid;
+    const sig = JSON.stringify([me, a.role, a.mode, a.profiles.size, a.myProfile?.name ?? null, rows.map(({ uid, card }) => [uid, card.name, card.style, card.level, card.xp, card.moderator ?? false, card.updatedAt])]);
+    const live = this.isShowing();
+    if (live && sig === this.sig) return;
+    const headSig = JSON.stringify([me, a.role, !!a.myProfile]);
     const table = rows.length
       ? h(
           'div',
@@ -236,10 +244,21 @@ export class LeaderboardScreen {
         ? null
         : h('div', { class: 'box row spread' }, h('span', { class: 'dim' }, a.role === 'pending' ? 'Your profile is waiting for approval: you’ll show up here once it’s approved.' : 'Make a profile to earn XP and get on the board.'), a.role === 'unregistered' || a.role === 'pending' ? h('button', { class: 'primary', onclick: () => this.openProfile() }, 'Your profile') : null);
     const edit = a.myProfile && (a.role === 'player' || a.role === 'moderator') ? h('button', { onclick: () => this.openEdit() }, 'Edit how you appear') : null;
+    this.sig = sig;
+    // Live updates (other players' XP changing while they play) swap just the table, in place:
+    // the buttons and everything else on the screen stay put under the pointer.
+    if (live && this.table && headSig === this.headSig && this.panel?.contains(this.table)) {
+      this.table.replaceWith(table);
+      this.table = table;
+      return;
+    }
+    this.headSig = headSig;
     const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('div', { class: 'row' }, edit, h('button', { onclick: () => this.back() }, 'Back to menu'))), h('p', { class: 'dim' }, 'Total XP from every character each player has played. Updates live.'), note, table);
     this.panel = panel;
+    this.table = table;
     this.overlay.show(panel, true);
   }
+  private headSig = '';
 }
 
 type ModTab = 'profiles' | 'review' | 'collection' | 'powers';
