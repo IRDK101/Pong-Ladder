@@ -302,17 +302,18 @@ export class CharactersScreen {
 type SpriteMode = 'parts' | 'draw' | 'upload';
 
 /** Which part of the figure each part's thumbnails show (rows y0..y1), at what scale, and from which side. */
-const THUMB_REGION: Record<PartKey, { y0: number; y1: number; scale: number; back?: boolean }> = {
+const THUMB_REGION: Record<PartKey, { y0: number; y1: number; scale: number; back?: boolean; x0?: number; x1?: number }> = {
   build: { y0: 0, y1: 23, scale: 2 },
   skin: { y0: 0, y1: 23, scale: 2 },
-  faceShape: { y0: 0, y1: 11, scale: 4 },
-  eyes: { y0: 2, y1: 9, scale: 5 },
-  mouth: { y0: 3, y1: 10, scale: 5 },
-  facialHair: { y0: 2, y1: 11, scale: 4 },
-  hairStyle: { y0: 0, y1: 11, scale: 4 },
-  hairColor: { y0: 0, y1: 11, scale: 4 },
-  headwear: { y0: 0, y1: 11, scale: 4 },
-  hatColor: { y0: 0, y1: 11, scale: 4 },
+  // Face parts: just the head (no shoulders or paddle), bigger.
+  faceShape: { y0: 0, y1: 9, scale: 4, x0: 2, x1: 13 },
+  eyes: { y0: 1, y1: 8, scale: 4, x0: 3, x1: 12 },
+  mouth: { y0: 3, y1: 10, scale: 4, x0: 3, x1: 12 },
+  facialHair: { y0: 2, y1: 12, scale: 4, x0: 2, x1: 13 },
+  hairStyle: { y0: 0, y1: 11, scale: 4, x0: 1, x1: 14 },
+  hairColor: { y0: 0, y1: 11, scale: 4, x0: 1, x1: 14 },
+  headwear: { y0: 0, y1: 11, scale: 4, x0: 1, x1: 14 },
+  hatColor: { y0: 0, y1: 11, scale: 4, x0: 1, x1: 14 },
   shirtStyle: { y0: 8, y1: 18, scale: 4 },
   shirtColor: { y0: 8, y1: 18, scale: 4 },
   pantsStyle: { y0: 15, y1: 23, scale: 4 },
@@ -321,9 +322,16 @@ const THUMB_REGION: Record<PartKey, { y0: number; y1: number; scale: number; bac
   accessory: { y0: 0, y1: 17, scale: 3 },
 };
 
-/** Rows y0..y1 of a sprite. */
-function cropSprite(s: Sprite, y0: number, y1: number): Sprite {
-  return { w: s.w, h: y1 - y0 + 1, pixels: s.pixels.slice(y0 * s.w, (y1 + 1) * s.w) };
+/** Rows y0..y1 of a sprite, given on the 16×24 drawing grid (scaled to the sprite's real size). */
+function cropSprite(s: Sprite, y0: number, y1: number, x0 = 0, x1 = SPRITE_W - 1): Sprite {
+  const k = s.h / SPRITE_H;
+  const a = Math.round(y0 * k);
+  const b = Math.round((y1 + 1) * k);
+  const l = Math.round(x0 * k);
+  const r = Math.round((x1 + 1) * k);
+  const pixels: string[] = [];
+  for (let y = a; y < b; y++) for (let x = l; x < r; x++) pixels.push(s.pixels[y * s.w + x] ?? '');
+  return { w: r - l, h: b - a, pixels };
 }
 
 class CharacterEditor {
@@ -623,7 +631,7 @@ class CharacterEditor {
             // Hair thumbnails go hatless, so each style shows; the preview still wears the hat.
             const bare = key === 'hairStyle' ? { headwear: 0 } : {};
             const look = composeSprite({ ...parts, ...bare, [key]: i }, region.back ? 'back' : 'front');
-            const img = spriteImage(cropSprite(look, region.y0, region.y1), region.scale, 'sprite');
+            const img = spriteImage(cropSprite(look, region.y0, region.y1, region.x0, region.x1), region.scale, 'sprite');
             return h('button', { class: v === i ? 'thumb on' : 'thumb', title: name, 'aria-label': `${PART_LABELS[key]}: ${name}`, 'aria-pressed': v === i ? 'true' : 'false', onclick: () => set(key, i) }, img, h('span', {}, name));
           }),
         );

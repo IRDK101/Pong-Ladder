@@ -13,15 +13,15 @@ export const SPRITE_H = 24;
  */
 export const PART_OPTIONS = {
   // Body
-  build: ['Slim', 'Average', 'Broad', 'Stocky', 'Heavy', 'Lanky', 'Athletic', 'Petite', 'Tall'],
+  build: ['Slim', 'Average', 'Broad', 'Stocky', 'Heavy', 'Lanky', 'Athletic', 'Petite', 'Tall', 'Toned', 'Muscular', 'Curvy', 'Dad bod', 'Big and tall'],
   skin: ['#f6d7c3', '#e8b892', '#c98e63', '#a0673f', '#7a4a2a', '#4f2f1c', '#fbe3d3', '#ddb08c', '#b9835a', '#8d5a3b', '#5e3a24', '#3b2416', '#ffeee2', '#f1c7a4', '#d6a079', '#b07047', '#6b4026', '#2e1b10'],
   // Face
-  faceShape: ['Oval', 'Round', 'Square', 'Long', 'Pointed chin', 'Wide jaw', 'Heart', 'Diamond', 'Narrow'],
+  faceShape: ['Oval', 'Round', 'Square', 'Long', 'Pointed chin', 'Wide jaw', 'Heart', 'Diamond', 'Narrow', 'Natural', 'Defined jaw', 'High cheekbones', 'Soft round', 'Long oval'],
   eyes: ['Dots', 'Big', 'Sleepy', 'Wide-set', 'Lashes', 'Squint', 'Angry', 'Wink', 'Closed', 'Tired', 'Blue', 'Green'],
   mouth: ['Neutral', 'Smile', 'Grin', 'Smirk', 'Surprised', 'Flat', 'Laugh', 'Tongue out', 'Frown', 'Gap tooth', 'Whistle'],
   facialHair: ['None', 'Stubble', 'Mustache', 'Goatee', 'Full beard', 'Chin strap', 'Soul patch', 'Handlebar', 'Mutton chops', 'Long beard', 'Pencil mustache'],
   // Hair
-  hairStyle: ['Bald', 'Short', 'Long', 'Mohawk', 'Curly', 'Cap', 'Buzz', 'Side part', 'Spiky', 'Ponytail', 'Bun', 'Afro', 'Mullet', 'Bob', 'Swoop', 'Receding', 'Shaggy', 'Pigtails', 'Undercut', 'Dreads', 'Top knot', 'Flat top', 'Bowl cut', 'Braids'],
+  hairStyle: ['Bald', 'Short', 'Long', 'Mohawk', 'Curly', 'Cap', 'Buzz', 'Side part', 'Spiky', 'Ponytail', 'Bun', 'Afro', 'Mullet', 'Bob', 'Swoop', 'Receding', 'Shaggy', 'Pigtails', 'Undercut', 'Dreads', 'Top knot', 'Flat top', 'Bowl cut', 'Braids', 'Crew cut', 'Fade', 'Textured crop', 'Quiff', 'Slicked back', 'Short curls', 'Ivy league', 'Pixie cut', 'Shoulder length', 'Wavy'],
   hairColor: ['#2b1d14', '#5a3a22', '#a5662e', '#e2c171', '#d9d9d9', '#b5332e', '#1c1c1c', '#7a2e1a', '#f3e6b8', '#8a8a8a', '#3b6fd6', '#d65fa8', '#3fae5a', '#c98a4b', '#f5f0e6', '#6a4fb0', '#ff8a3d', '#2fbcc4', '#e85a5a', '#4a3a2a'],
   headwear: ['None', 'Cap', 'Backwards cap', 'Beanie', 'Bucket hat', 'Visor', 'Bandana', 'Cowboy hat', 'Top hat', 'Headphones', 'Beret', 'Hard hat', 'Party hat'],
   hatColor: ['#00693e', '#b5332e', '#1f2a44', '#f2f2f2', '#222222', '#e8a33d', '#3a8ec9', '#6b3fa0', '#c2a878', '#e23b3b', '#f0d34a', '#2fb3a5', '#d96c8a', '#6b4a2b', '#7d8c3a'],
@@ -151,7 +151,18 @@ function headRows(shape: string): [number, number][] {
     case 'Diamond':
       return [[7, 8], [6, 9], [5, 10], [4, 11], [5, 10], [6, 9], [7, 8]];
     case 'Narrow':
-      return [[6, 9], [6, 9], [6, 9], [6, 9], [6, 9], [6, 9], [7, 8]];
+      // Narrow at the temples and jaw, with room for the eyes.
+      return [[6, 9], [6, 9], [5, 10], [5, 10], [6, 9], [6, 9], [7, 8]];
+    case 'Natural':
+      // A real head's taper: full at the cheekbones, narrowing to a rounded chin.
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9]];
+    case 'Defined jaw':
+    case 'Soft round':
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
+    case 'High cheekbones':
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9], [6, 9]];
+    case 'Long oval':
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [6, 9]];
     default: // Oval
       return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
   }
@@ -165,6 +176,13 @@ interface FaceMeta {
   front: boolean;
   /** Grid rows: the eyes, the chin, the top of the torso, the belt, the bottom of the legs. */
   rows: { eye: number; chin: number; torso: number; belt: number; legBot: number };
+  /** The face shape (some get extra modelling at full size), the head's rows, and wide-set eyes. */
+  face: string;
+  head: [number, number][];
+  headTop: number;
+  wideEyes: boolean;
+  /** Glasses, drawn at full size around the eyes. */
+  glasses: 'square' | 'round' | null;
 }
 
 /**
@@ -173,7 +191,7 @@ interface FaceMeta {
  */
 function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite; meta: FaceMeta } {
   const parts = normalizeParts(raw);
-  const meta: FaceMeta = { eyes: [], colors: { skin: '', hair: '', shirt: '', pants: '' }, front: facing === 'front', rows: { eye: 0, chin: 0, torso: 0, belt: 0, legBot: 0 } };
+  const meta: FaceMeta = { eyes: [], colors: { skin: '', hair: '', shirt: '', pants: '' }, front: facing === 'front', rows: { eye: 0, chin: 0, torso: 0, belt: 0, legBot: 0 }, face: '', head: [], headTop: 0, wideEyes: false, glasses: null };
   const c = new Canvas();
   const P = PART_OPTIONS;
   const skin = P.skin[parts.skin];
@@ -192,12 +210,13 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   meta.colors = { skin, hair, shirt, pants };
 
   // ---- Body type: torso half-width, how far everything drops (stocky is shorter), torso and leg rows.
-  const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2, Athletic: 3, Petite: 2, Tall: 3 }[build];
+  const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2, Athletic: 3, Petite: 2, Tall: 3, Toned: 3, Muscular: 4, Curvy: 3, 'Dad bod': 4, 'Big and tall': 4 }[build];
   const drop = build === 'Stocky' || build === 'Petite' ? 1 : 0;
   const tx0 = 8 - half - 1;
   const tx1 = 7 + half + 1;
   const torsoTop = 10 + drop;
-  const belt = build === 'Lanky' || build === 'Tall' ? 15 : 16;
+  const tallBuild = build === 'Lanky' || build === 'Tall' || build === 'Big and tall';
+  const belt = tallBuild ? 15 : 16;
   const legTop = belt + 1;
   const legBot = 21;
 
@@ -207,9 +226,12 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   rows.forEach(([l, r], k) => c.rect(l, hy + k, r, hy + k, skin));
   const chin = hy + rows.length - 1;
   meta.rows = { eye: hy + 3, chin, torso: torsoTop, belt, legBot };
+  meta.face = P.faceShape[parts.faceShape];
+  meta.head = rows;
+  meta.headTop = hy;
   const hl = Math.min(...rows.map((r) => r[0]));
   const hr = Math.max(...rows.map((r) => r[1]));
-  const neckW = build === 'Heavy' || build === 'Broad' ? [6, 9] : [7, 8];
+  const neckW = build === 'Heavy' || build === 'Broad' || build === 'Muscular' || build === 'Big and tall' ? [6, 9] : [7, 8];
   for (let y = chin + 1; y < torsoTop; y++) c.rect(neckW[0], y, neckW[1], y, shade(skin, 0.85));
   if (build === 'Heavy') c.rect(6, chin, 9, chin, shade(skin, 0.9)); // a softer jaw
 
@@ -224,7 +246,7 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   const sleeveless = shirtStyle === 'Tank' || shirtStyle === 'Vest';
   const sleeve = sleeveless ? skin : shirt;
   const armTop = torsoTop;
-  const armBot = build === 'Lanky' || build === 'Tall' ? 15 : 15 + drop;
+  const armBot = tallBuild ? 15 : 15 + drop;
   c.rect(tx0 - 1, armTop, tx0 - 1, armTop + 2, sleeve);
   c.rect(tx1 + 1, armTop, tx1 + 1, armTop + 2, sleeve);
   const longSleeve = ['Hoodie', 'Flannel', 'Button-up', 'Big D sweater', 'Open jacket', 'Suit and tie', 'Turtleneck', 'Varsity jacket', 'Raglan'].includes(shirtStyle);
@@ -365,12 +387,46 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   c.rect(8, legTop, lx1, legBot, pants);
   c.rect(tx0, belt, tx1, belt, shade(shirt, 0.72)); // belt line
   if (build === 'Athletic') {
-    // Broad shoulders over a narrow waist.
-    c.rect(tx0 - 1, torsoTop, tx1 + 1, torsoTop, shirtStyle === 'Tank' || shirtStyle === 'Vest' ? skin : shirt);
+    // Broad shoulders over a narrow waist (the shoulder ends only: a tank's straps stay as they are).
+    c.set(tx0 - 1, torsoTop, sleeve);
+    c.set(tx1 + 1, torsoTop, sleeve);
     for (const y of [belt - 1, belt]) {
       c.set(tx0, y, '');
       c.set(tx1, y, '');
     }
+  }
+  if (build === 'Toned') {
+    // Shoulders a touch wider than the waist.
+    c.set(tx0 - 1, torsoTop, sleeve);
+    c.set(tx1 + 1, torsoTop, sleeve);
+    c.set(tx0, belt, '');
+    c.set(tx1, belt, '');
+  } else if (build === 'Muscular') {
+    // A wide chest and shoulders, thicker upper arms, and a narrower waist.
+    c.rect(tx0 - 2, torsoTop + 1, tx0 - 2, torsoTop + 3, sleeve);
+    c.rect(tx1 + 2, torsoTop + 1, tx1 + 2, torsoTop + 3, sleeve);
+    c.rect(tx0 + 1, torsoTop + 2, tx1 - 1, torsoTop + 2, shade(shirt, 0.88)); // the chest line
+    for (const y of [belt - 1, belt]) {
+      c.set(tx0, y, '');
+      c.set(tx1, y, '');
+    }
+  } else if (build === 'Curvy') {
+    // A defined waist and fuller hips.
+    c.set(tx0, belt - 2, '');
+    c.set(tx1, belt - 2, '');
+    // Hips: the trousers as wide as the torso at the top, tapering to the legs.
+    c.rect(tx0, legTop, tx0, legTop + 1, pants);
+    c.rect(tx1, legTop, tx1, legTop + 1, pants);
+    c.set(tx0, legTop + 2, shade(pants, 0.85));
+    c.set(tx1, legTop + 2, shade(pants, 0.85));
+  } else if (build === 'Dad bod') {
+    // A soft middle: sloping shoulders over a wider waist that hangs over the belt.
+    c.set(tx0, torsoTop, '');
+    c.set(tx1, torsoTop, '');
+    c.rect(tx0, belt, tx1, belt, shirt);
+  } else if (build === 'Big and tall') {
+    // Broad all the way down, long legs.
+    c.rect(tx0, belt, tx1, belt, shirt);
   }
   c.set(7, legTop + 2, shade(pants, 0.7));
   c.set(8, legTop + 2, shade(pants, 0.7));
@@ -438,14 +494,31 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
 
   // ---- Face (front only).
   const eyeY = hy + 3;
+  // Facial features stay inside the face: `inside` clips a row to its skin, one pixel in from the edge.
+  const rowAt = (y: number): [number, number] | null => (y >= hy && y <= chin ? rows[y - hy] : null);
+  const inner = (x: number, y: number) => {
+    const r = rowAt(y);
+    return !!r && x > r[0] && x < r[1];
+  };
+  const onFace = (x: number, y: number) => {
+    const r = rowAt(y);
+    return !!r && x >= r[0] && x <= r[1];
+  };
+  const fset = (x: number, y: number, col: string) => inner(x, y) && c.set(x, y, col);
+  const frect = (x0: number, y0: number, x1: number, y1: number, col: string) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fset(x, y, col);
+  };
   if (front) {
     const eyes = P.eyes[parts.eyes];
-    const ex = eyes === 'Wide-set' ? [5, 10] : [6, 9];
+    // Eyes sit one pixel in from the edge of the face; wide-set ones move out half a pixel at full size.
+    const ex = [6, 9];
+    meta.wideEyes = eyes === 'Wide-set';
     const brow = shade(hair, 0.9);
     for (const x of ex) {
       switch (eyes) {
         case 'Big':
-          c.set(x, eyeY - 1, WHITE);
+          // Taller eyes (no brow line).
+          c.set(x, eyeY - 1, OUTLINE);
           c.set(x, eyeY, OUTLINE);
           break;
         case 'Sleepy':
@@ -488,61 +561,64 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       if (eyes !== 'Lashes' && eyes !== 'Big' && eyes !== 'Sleepy' && eyes !== 'Angry' && eyes !== 'Closed') c.set(x, eyeY - 1, brow);
       if (eyes !== 'Squint' && eyes !== 'Closed' && !(eyes === 'Wink' && x > 8)) meta.eyes.push({ x, y: eyeY });
     }
-    c.set(hl, eyeY + 1, shade(skin, 0.92)); // cheek shadow
+    const cheek = rowAt(eyeY + 1);
+    if (cheek && c.get(cheek[0], eyeY + 1) === skin) c.set(cheek[0], eyeY + 1, shade(skin, 0.92)); // cheek shadow
     const mouth = P.mouth[parts.mouth];
     const my = eyeY + 2;
     const lip = shade(skin, 0.68);
+    // The mouth is drawn through fset/frect, so it never spills past the edge of a narrow chin.
+    const mc = { set: fset, rect: frect };
     switch (mouth) {
       case 'Smile':
         // Corners up, middle down.
-        c.set(6, my - 1, lip);
-        c.rect(7, my, 8, my, shade(skin, 0.6));
-        c.set(9, my - 1, lip);
+        mc.set(6, my - 1, lip);
+        mc.rect(7, my, 8, my, shade(skin, 0.6));
+        mc.set(9, my - 1, lip);
         break;
       case 'Grin':
-        c.rect(6, my, 9, my, WHITE);
-        c.set(6, my, lip);
-        c.set(9, my, lip);
+        mc.rect(6, my, 9, my, WHITE);
+        mc.set(6, my, lip);
+        mc.set(9, my, lip);
         break;
       case 'Smirk':
-        c.rect(7, my, 8, my, lip);
-        c.set(9, my - 1, lip);
+        mc.rect(7, my, 8, my, lip);
+        mc.set(9, my - 1, lip);
         break;
       case 'Surprised':
-        c.set(7, my, OUTLINE);
-        c.set(8, my, OUTLINE);
+        mc.set(7, my, OUTLINE);
+        mc.set(8, my, OUTLINE);
         break;
       case 'Flat':
-        c.rect(6, my, 9, my, lip);
+        mc.rect(6, my, 9, my, lip);
         break;
       case 'Laugh':
-        c.rect(6, my, 9, my, '#5a1e1e');
-        c.rect(7, my, 8, my, WHITE);
-        if (my + 1 <= chin) c.rect(7, my + 1, 8, my + 1, '#c84a4a');
+        mc.rect(6, my, 9, my, '#5a1e1e');
+        mc.rect(7, my, 8, my, WHITE);
+        if (my + 1 <= chin) mc.rect(7, my + 1, 8, my + 1, '#c84a4a');
         break;
       case 'Tongue out':
-        c.rect(7, my, 8, my, lip);
-        if (my + 1 <= chin) c.set(8, my + 1, '#e86a8a');
+        mc.rect(7, my, 8, my, lip);
+        if (my + 1 <= chin) mc.set(8, my + 1, '#e86a8a');
         break;
       case 'Frown':
-        c.rect(7, my, 8, my, shade(skin, 0.6));
+        mc.rect(7, my, 8, my, shade(skin, 0.6));
         if (my + 1 <= chin) {
-          c.set(6, my + 1, lip);
-          c.set(9, my + 1, lip);
+          mc.set(6, my + 1, lip);
+          mc.set(9, my + 1, lip);
         }
         break;
       case 'Gap tooth':
-        c.rect(6, my, 9, my, WHITE);
-        c.set(6, my, lip);
-        c.set(9, my, lip);
-        c.set(8, my, shade(skin, 0.4));
+        mc.rect(6, my, 9, my, WHITE);
+        mc.set(6, my, lip);
+        mc.set(9, my, lip);
+        mc.set(8, my, shade(skin, 0.4));
         break;
       case 'Whistle':
-        c.set(8, my, OUTLINE);
-        c.set(9, my - 1, shade(skin, 0.8));
+        mc.set(8, my, OUTLINE);
+        mc.set(9, my - 1, shade(skin, 0.8));
         break;
       default:
-        c.rect(7, my, 8, my, lip);
+        mc.rect(7, my, 8, my, lip);
     }
     // Facial hair.
     const fh = P.facialHair[parts.facialHair];
@@ -552,11 +628,13 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
         for (let y = my; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin && (x + y) % 2 === 0) c.set(x, y, shade(skin, 0.78));
         break;
       case 'Mustache':
-        c.rect(6, my - 1, 9, my - 1, beard);
+        c.rect(7, my - 1, 8, my - 1, beard);
+        c.set(6, my - 1, shade(beard, 1.15)); // tapered ends
+        c.set(9, my - 1, shade(beard, 1.15));
         break;
       case 'Goatee':
         c.rect(7, my - 1, 8, my - 1, beard);
-        c.rect(7, my + 1, 8, chin, beard);
+        for (let y = my + 1; y <= chin; y++) for (const x of [7, 8]) if (onFace(x, y)) c.set(x, y, beard);
         break;
       case 'Full beard':
         for (let y = my - 1; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin || c.get(x, y) === shade(skin, 0.92)) c.set(x, y, beard);
@@ -579,8 +657,8 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
         break;
       case 'Handlebar':
         c.rect(6, my - 1, 9, my - 1, beard);
-        c.set(5, my, beard);
-        c.set(10, my, beard);
+        if (onFace(5, my)) c.set(5, my, beard);
+        if (onFace(10, my)) c.set(10, my, beard);
         break;
       case 'Mutton chops':
         for (let y = eyeY; y < chin; y++) {
@@ -666,8 +744,8 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       c.rect(hr + 1, hy + 2, hr + 2, hy + 4, hair);
       c.set(hl - 2, top - 2, '');
       c.set(hr + 2, top - 2, '');
-      // Leave the face open.
-      if (front) rows.forEach(([l, r], k) => k >= 1 && c.rect(l, hy + k, r, hy + k, c.get(l, hy + k) === hair ? skin : c.get(l, hy + k)));
+      // Leave the forehead open (the face below it was never covered).
+      if (front) c.rect(rows[1][0], hy + 1, rows[1][1], hy + 1, skin);
       break;
     case 'Mullet':
       crown(top, hy);
@@ -746,6 +824,93 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       break;
   }
 
+  // The newer, everyday styles (mostly short).
+  const blend = (a: string, b: string) => {
+    const x = parseInt(a.slice(1), 16);
+    const y = parseInt(b.slice(1), 16);
+    const m = (s: number) => Math.round((((x >> s) & 255) + ((y >> s) & 255)) / 2);
+    return `#${[16, 8, 0].map((k) => m(k).toString(16).padStart(2, '0')).join('')}`;
+  };
+  const faded = blend(hair, skin);
+  switch (hairStyle) {
+    case 'Crew cut':
+      // Short and tidy: a rounded top, tight sides.
+      c.rect(hl + 1, top, hr - 1, top, hair);
+      c.rect(hl, hy, hr, hy, hair);
+      break;
+    case 'Fade':
+      // Short on top, the sides fading into the skin.
+      c.rect(hl + 1, top, hr - 1, top, hair);
+      c.rect(hl, hy, hr, hy, hair);
+      c.set(hl, hy, faded);
+      c.set(hr, hy, faded);
+      if (onFace(hl, hy + 1)) c.set(hl, hy + 1, faded);
+      if (onFace(hr, hy + 1)) c.set(hr, hy + 1, faded);
+      break;
+    case 'Textured crop':
+      // A choppy top and a short, uneven fringe.
+      crown(top, hy);
+      for (let x = hl + 1; x <= hr - 1; x += 2) c.set(x, top - 1, hair);
+      for (let x = hl + 1; x <= hr - 1; x++) if (x % 2 === 0) c.set(x, hy + 1, hair);
+      break;
+    case 'Quiff':
+      // Swept up and back at the front, short at the sides.
+      crown(top, hy);
+      c.rect(hl + 1, top - 1, hr - 1, top - 1, hair);
+      c.rect(hl + 1, top - 2, hl + 3, top - 2, shade(hair, 1.15));
+      c.set(hl, hy, faded);
+      c.set(hr, hy, faded);
+      break;
+    case 'Slicked back':
+      // Combed straight back: smooth, with a sheen, no fringe.
+      crown(top, hy);
+      for (let x = hl + 1; x <= hr - 1; x += 2) c.set(x, top, shade(hair, 1.3));
+      if (onFace(hl, hy + 1)) c.set(hl, hy + 1, hair);
+      if (onFace(hr, hy + 1)) c.set(hr, hy + 1, hair);
+      break;
+    case 'Short curls':
+      // Tight curls close to the head.
+      c.rect(hl, top, hr, hy, hair);
+      for (let x = hl; x <= hr; x++) if (x % 2 === 1) c.set(x, top - 1, hair);
+      for (let x = hl; x <= hr; x++) for (const y of [top, hy]) if ((x + y) % 2 === 0) c.set(x, y, shade(hair, 0.75));
+      if (onFace(hl, hy + 1)) c.set(hl, hy + 1, hair);
+      if (onFace(hr, hy + 1)) c.set(hr, hy + 1, hair);
+      break;
+    case 'Ivy league':
+      // A short side part, the front pushed up and over.
+      c.rect(hl + 1, top, hr - 1, top, hair);
+      c.rect(hl, hy, hr, hy, hair);
+      c.rect(hl + 1, top - 1, hl + 3, top - 1, hair);
+      c.set(hl + 2, top, shade(hair, 0.7)); // the part
+      break;
+    case 'Pixie cut':
+      // Cropped close with a side-swept fringe and short sideburns.
+      crown(top, hy);
+      c.rect(hl, hy + 1, hl + 2, hy + 1, hair);
+      if (onFace(hr, hy + 1)) c.set(hr, hy + 1, hair);
+      break;
+    case 'Shoulder length':
+      // Down to the shoulders, parted in the middle.
+      crown(top, hy);
+      c.set(7, top, shade(hair, 0.75));
+      c.rect(hl - 1, hy, hl - 1, chin + 1, hair);
+      c.rect(hr + 1, hy, hr + 1, chin + 1, hair);
+      c.set(hl, hy + 1, hair);
+      c.set(hr, hy + 1, hair);
+      break;
+    case 'Wavy':
+      // Loose waves past the jaw.
+      crown(top, hy);
+      for (let y = hy; y <= chin; y++) {
+        const out = (y - hy) % 3 === 1 ? 2 : 1;
+        c.rect(hl - out, y, hl - 1, y, hair);
+        c.rect(hr + 1, y, hr + out, y, hair);
+      }
+      c.set(hl, hy + 1, hair);
+      c.set(hr, hy + 1, shade(hair, 0.85));
+      break;
+  }
+
   // ---- Back of the head: covered by most hair, skin for bald, buzz shows its texture.
   if (!front) {
     const back = hairStyle === 'Bald' || hairStyle === 'Receding' ? skin : hairStyle === 'Buzz' ? shade(hair, 1.1) : hair;
@@ -754,7 +919,16 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       rows.forEach(([l, r], k) => c.rect(l, hy + k, r, hy + k, skin));
       c.rect(7, top - 1, 8, chin, hair);
     }
-    if (hairStyle === 'Short' || hairStyle === 'Side part' || hairStyle === 'Spiky' || hairStyle === 'Swoop') c.rect(hl + 1, chin, hr - 1, chin, skin); // the nape
+    if (['Short', 'Side part', 'Spiky', 'Swoop', 'Crew cut', 'Textured crop', 'Quiff', 'Short curls', 'Ivy league', 'Pixie cut'].includes(hairStyle)) c.rect(hl + 1, chin, hr - 1, chin, skin); // the nape
+    if (hairStyle === 'Fade' || hairStyle === 'Crew cut') rows.forEach(([l, r], k) => k >= 3 && c.rect(l, hy + k, r, hy + k, k >= 5 ? shade(skin, 0.9) : faded));
+    if (hairStyle === 'Shoulder length' || hairStyle === 'Wavy') c.rect(hl - 1, chin - 1, hr + 1, chin + 1, hair);
+    // Short curls: the curl texture all over the back of the head.
+    if (hairStyle === 'Short curls') rows.forEach(([l, r], k) => k < rows.length - 1 && [...Array(r - l + 1).keys()].forEach((d) => (l + d + k) % 2 === 0 && c.set(l + d, hy + k, shade(hair, 0.75))));
+    // Slicked back: combed down over the nape, with the comb lines showing.
+    if (hairStyle === 'Slicked back') {
+      c.rect(hl + 1, chin + 1, hr - 1, chin + 1, shade(hair, 0.9));
+      for (let y = hy; y <= chin; y += 2) c.set(7, y, shade(hair, 1.25));
+    }
     if (hairStyle === 'Ponytail') c.rect(7, chin - 2, 8, chin + 3, shade(hair, 0.9));
     if (hairStyle === 'Undercut') rows.forEach(([l, r], k) => k >= 2 && c.rect(l, hy + k, r, hy + k, shade(skin, 0.78)));
     if (hairStyle === 'Dreads' || hairStyle === 'Braids') for (let x = hl; x <= hr; x += 2) c.rect(x, chin, x, chin + 3, shade(hair, x % 4 ? 0.85 : 1));
@@ -762,7 +936,16 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
     for (let y = chin + 1; y < torsoTop; y++) c.rect(neckW[0], y, neckW[1], y, shade(skin, 0.85));
   }
 
-  // ---- Headwear, over the hair.
+  // ---- Headwear, over the hair. A hat that covers the crown flattens what's under it: no hair pokes out above it.
+  const crownTop: Partial<Record<string, number>> = { Cap: top, 'Backwards cap': top, Beanie: top - 1, 'Bucket hat': top - 1, Bandana: top, 'Cowboy hat': top - 1, Beret: top, 'Hard hat': top - 1, 'Top hat': 0 };
+  const capY = crownTop[headwear];
+  if (capY !== undefined)
+    for (let y = 0; y <= capY; y++)
+      for (let x = hl - 2; x <= hr + 2; x++) {
+        if (y === capY && x >= hl && x <= hr) continue; // the hat itself goes here
+        const col = c.get(x, y);
+        if (col && (col === hair || col === shade(hair, 1.25) || col === shade(hair, 1.15) || col === shade(hair, 0.7) || col === shade(hair, 0.75) || col === shade(hair, 1.2) || col === shade(hair, 1.3))) c.set(x, y, '');
+      }
   switch (headwear) {
     case 'Cap':
       c.rect(hl, top, hr, hy, hat);
@@ -857,16 +1040,9 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   // ---- Extras.
   switch (front ? acc : ['Headband', 'Chain', 'Wristband', 'Earring', 'Eye patch', 'Scarf', 'Lei', 'Backpack'].includes(acc) ? acc : 'None') {
     case 'Glasses':
-      c.rect(hl, eyeY, hr, eyeY, OUTLINE);
-      c.set(6, eyeY, '#9fd3ff');
-      c.set(9, eyeY, '#9fd3ff');
-      break;
     case 'Round glasses':
-      for (const x of [6, 9]) {
-        c.set(x, eyeY, '#cfe9ff');
-        c.set(x - 1, eyeY, GOLD);
-        c.set(x + 1, eyeY, GOLD);
-      }
+      // Drawn at full size (thin rims around the eyes): see finishHigh.
+      meta.glasses = acc === 'Glasses' ? 'square' : 'round';
       break;
     case 'Shades':
       c.rect(hl, eyeY - 1, hr, eyeY, '#111111');
@@ -1042,6 +1218,19 @@ function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
   const big = epx(flat);
   const { w, h } = big;
   const src = big.pixels;
+  // Wide-set eyes: each pupil moves half a grid pixel outward (one pixel at this size).
+  if (meta.front && meta.wideEyes && meta.colors.skin)
+    for (const e of meta.eyes) {
+      const out = e.x < 8 ? -1 : 1;
+      const x0 = e.x * 2;
+      const lead = out < 0 ? x0 - 1 : x0 + 2;
+      const trail = out < 0 ? x0 + 1 : x0;
+      for (const yy of [e.y * 2, e.y * 2 + 1]) {
+        if (src[yy * w + lead] !== meta.colors.skin) continue;
+        src[yy * w + lead] = src[yy * w + trail];
+        src[yy * w + trail] = meta.colors.skin;
+      }
+    }
   const get = (x: number, y: number) => (x >= 0 && y >= 0 && x < w && y < h ? src[y * w + x] : '');
   const px = src.slice();
   const set = (x: number, y: number, col: string) => {
@@ -1071,11 +1260,37 @@ function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
     }
   if (meta.front && C.skin) {
     const ey = R.eye * 2;
-    // Eye whites beside each pupil (outer side), when that spot is still skin.
-    for (const e of meta.eyes) {
-      const px0 = e.x * 2;
-      const outer = e.x < 8 ? px0 - 1 : px0 + 2;
-      for (const yy of [e.y * 2, e.y * 2 + 1]) if (is(outer, yy, C.skin)) set(outer, yy, '#f3efe6');
+    // Face modelling for the realistic shapes: shadows along a jaw, under cheekbones, soft cheeks.
+    const edges = (gy: number): [number, number] | null => {
+      const r = meta.head[gy - meta.headTop];
+      return r ? [r[0] * 2, r[1] * 2 + 1] : null;
+    };
+    const darken = (x: number, y: number, f: number) => is(x, y, C.skin) && set(x, y, shade(C.skin, f));
+    if (meta.face === 'Defined jaw') {
+      for (const gy of [R.chin - 1, R.chin]) {
+        const e = edges(gy);
+        if (!e) continue;
+        for (const y of [gy * 2, gy * 2 + 1]) {
+          darken(e[0] + 1, y, 0.84);
+          darken(e[1] - 1, y, 0.84);
+        }
+      }
+      darken(w / 2 - 1, R.chin * 2 + 1, 0.86); // a hint of a cleft
+      for (let x = 0; x < w; x++) if (is(x, R.chin * 2 + 1, C.skin) && !is(x, R.chin * 2 + 2, C.skin)) set(x, R.chin * 2 + 1, shade(C.skin, 0.88));
+    } else if (meta.face === 'High cheekbones') {
+      const e = edges(R.eye + 1);
+      if (e) {
+        darken(e[0] + 2, (R.eye + 1) * 2 + 1, 0.86);
+        darken(e[1] - 2, (R.eye + 1) * 2 + 1, 0.86);
+        darken(e[0] + 2, (R.eye + 1) * 2, 1.07);
+        darken(e[1] - 2, (R.eye + 1) * 2, 1.07);
+      }
+    } else if (meta.face === 'Soft round' || meta.face === 'Natural') {
+      const e = edges(R.eye + 1);
+      if (e) {
+        darken(e[0] + 2, (R.eye + 1) * 2 + 1, meta.face === 'Soft round' ? 1.08 : 1.04);
+        darken(e[1] - 2, (R.eye + 1) * 2 + 1, meta.face === 'Soft round' ? 1.08 : 1.04);
+      }
     }
     // A nose: a shadow under the brow line between the eyes, and a lit tip.
     const nx = w / 2 - 1;
@@ -1101,10 +1316,37 @@ function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
       else if (edge(-1, 0) && get(x - 1, y) !== OUTLINE) set(x, y, shade(col, 1.14));
       else if (edge(0, -1) && get(x, y - 1) !== OUTLINE) set(x, y, shade(col, 1.08));
     }
-  // Eyes: a bright catch-light in the top corner of each pupil, so faces read at a glance.
-  for (const e of meta.eyes) {
-    const ex = e.x * 2 + (e.x < 8 ? 1 : 0);
-    set(ex, e.y * 2, '#ffffff');
+  // Glasses: a thin rim around each eye with a faint lens tint, a bridge and the arms to the temples.
+  if (meta.front && meta.glasses) {
+    const frame = meta.glasses === 'square' ? '#2b2b30' : '#b8912f';
+    const ey = meta.rows.eye * 2;
+    const boxes = [6, 9].map((gx) => {
+      // Five wide: the pupil plus a pixel of lens on its outer side.
+      const x0 = (gx < 8 ? gx * 2 - 2 : gx * 2 - 1) + (meta.wideEyes ? (gx < 8 ? -1 : 1) : 0);
+      return { x0, x1: x0 + 4, y0: ey - 1, y1: ey + 2 };
+    });
+    const lens = (col: string) => {
+      const n = parseInt(col.slice(1), 16);
+      const mix = (k: number, t: number) => Math.round(((n >> k) & 255) * 0.75 + t * 0.25);
+      return `#${[mix(16, 200), mix(8, 230), mix(0, 255)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    };
+    for (const b of boxes)
+      for (let y = b.y0; y <= b.y1; y++)
+        for (let x = b.x0; x <= b.x1; x++) {
+          const edge = x === b.x0 || x === b.x1 || y === b.y0 || y === b.y1;
+          const corner = (x === b.x0 || x === b.x1) && (y === b.y0 || y === b.y1);
+          const cur = px[y * w + x];
+          if (!cur) continue;
+          if (edge && !(corner && meta.glasses === 'round')) px[y * w + x] = frame;
+          else if (!edge && /^#/.test(cur) && cur !== OUTLINE && !is(x, y, OUTLINE)) px[y * w + x] = lens(cur);
+        }
+    // Bridge between the lenses, and the arms out to the sides of the face.
+    for (let x = boxes[0].x1 + 1; x < boxes[1].x0; x++) px[ey * w + x] = frame;
+    const e = meta.head[meta.rows.eye - meta.headTop];
+    if (e) {
+      for (let x = e[0] * 2; x < boxes[0].x0; x++) if (px[(ey - 1) * w + x]) px[(ey - 1) * w + x] = frame;
+      for (let x = boxes[1].x1 + 1; x <= e[1] * 2 + 1; x++) if (px[(ey - 1) * w + x]) px[(ey - 1) * w + x] = frame;
+    }
   }
   // Outline: every empty pixel beside the figure takes a dark shade of what it touches.
   const out = px.slice();

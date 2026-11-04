@@ -256,7 +256,7 @@ export class ProfileEditor {
               this.show();
             },
           },
-          colors ? h('span', { class: 'swatch', style: `background:${colors.length > 1 ? `linear-gradient(90deg, ${colors.join(', ')})` : colors[0]}` }) : null,
+          colors ? h('span', { class: 'style-bar', style: `background:${colors.length > 1 ? `linear-gradient(90deg, ${colors.join(', ')})` : colors[0]}` }) : null,
           styledName(sample, next),
           h('small', {}, open ? o.label : `🔒 ${o.label} · Lv ${o.level}`),
         );

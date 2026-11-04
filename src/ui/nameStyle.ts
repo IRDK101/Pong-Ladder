@@ -40,7 +40,7 @@ export const NAME_STYLE_CSS = (gold: string) => `
   #ui .style-opt.on { border-color: ${gold}; box-shadow: 0 0 0 2px ${gold}; background: #4a3f24; color: inherit; }
   #ui .style-opt:disabled { opacity: 0.45; }
   #ui .style-opt small { font-size: 11px; opacity: 0.75; font-weight: normal; }
-  #ui .swatch { display: inline-block; width: 100%; height: 12px; border: 1px solid #0008; }
+  #ui .style-bar { display: inline-block; width: 100%; height: 12px; border: 1px solid #0008; }
   #ui .preview-stack { display: flex; flex-direction: column; gap: 8px; }
   #ui .preview-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; }
   #ui .board-row .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
