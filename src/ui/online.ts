@@ -3,7 +3,7 @@
 
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
-import { Lobby, matchRoomName, newMatchId, packChar, setupSig, unpackChar, type LobbyPeer, type MatchSettings, type RoomApi, type RoomLike } from '../net/online';
+import { Lobby, matchRoomName, newMatchId, packChar, unpackChar, type LobbyPeer, type MatchSettings, type RoomApi, type RoomLike } from '../net/online';
 import { DESIGN_ORDER, DESIGNS } from '../render/designs';
 import { VENUE_ORDER, VENUES } from '../render/basement';
 import type { TableDesign, Venue } from '../config';
@@ -135,7 +135,7 @@ export class OnlineScreen {
     if (!lb?.me) return;
     const me = this.deps.me();
     const ch = this.chosen ?? me.char;
-    lb.update({ status: 'lobby', invite: null, answer: null, setup: null, char: ch ? packChar(ch) : null });
+    lb.update({ status: 'lobby', invite: null, answer: null, char: ch ? packChar(ch) : null });
   }
 
   /** Rematch from the end screen: accept their rematch if they asked, else ask them. */
@@ -171,8 +171,7 @@ export class OnlineScreen {
     const ans = lb.answer();
     if (ans) {
       const inv = lb.me!.invite!;
-      if (ans.ok && inv.re) return void this.begin('host', ans.from, inv.id, inv.settings);
-      if (ans.ok && !this.setup) return this.enterSetup('host', ans.from, inv.id, inv.settings);
+      if (ans.ok) return void this.begin('host', ans.from, inv.id, inv.settings);
       this.note = `${ans.from.card.name} said no this time.`;
       lb.update({ invite: null });
     }
@@ -181,7 +180,12 @@ export class OnlineScreen {
     const me = lb.myPeer;
     const crossed = mine && me ? lb.incoming().find((p) => p.peer === mine.to) : undefined;
     if (crossed && me! < crossed.peer) return void this.begin('guest', crossed, crossed.card.invite!.id, crossed.card.invite!.settings);
-    if (this.setup) this.checkSetup();
+    // The challenge being looked at was taken back.
+    const st = this.setup;
+    if (st?.mode === 'accept' && !lb.incoming().some((x) => x.peer === st.peer && x.card.invite?.id === st.id)) {
+      this.setup = null;
+      this.note = `${st.name} took the challenge back.`;
+    }
     // During matches the room updates many times a second: redraw only when the lobby itself changed,
     // so buttons aren't replaced under the player's pointer.
     if (this.isShowing() && this.signature() !== this.lastSig) this.render();
@@ -191,151 +195,130 @@ export class OnlineScreen {
   private signature(): string {
     const lb = this.lobby;
     if (!lb) return '';
-    return JSON.stringify([this.note, lb.error, lb.me, this.setup, this.chosen?.id ?? null, lb.peers().map((p) => [p.peer, p.isMe, p.card])]);
+    return JSON.stringify([this.note, lb.error, lb.me, this.setup?.mode ?? null, this.setup?.peer ?? null, lb.peers().map((p) => [p.peer, p.isMe, p.card])]);
   }
 
   private async begin(role: 'host' | 'guest', other: LobbyPeer, id: string, settings: MatchSettings): Promise<void> {
-    const mine = this.chosen ?? this.deps.me().char;
+    // Only once per match: on the game's own site the room join below waits, and lobby updates keep coming meanwhile.
+    if (this.starting) return;
+    const mine = this.myPick();
     const theirs = unpackChar(other.card.char) ?? this.known.get(other.peer) ?? null;
     if (!mine || !theirs) {
       this.note = 'Both players need a character to play online.';
       return this.render();
     }
     this.playing = true;
+    this.starting = true;
+    this.setup = null;
     const lb = this.lobby!;
     // On the game's own site each match has its own room (only its two players download it); on
     // claude.ai named rooms may not be offered, so the match shares the lobby room there.
     const own = (lb.room as { matchRooms?: boolean }).matchRooms === true;
     const room: RoomLike = own ? await lb.room.join(matchRoomName(id)).catch(() => lb.room) : lb.room;
-    // The host's card drops its character while playing, to leave room in its presence for the game state.
-    // The host keeps a small setup card saying "go" (the guest starts when it sees it); the terms were agreed already.
-    const go = this.setup && role === 'host' ? { setup: { id, with: other.peer, host: true, ready: null, go: true } } : { setup: null };
-    this.setup = null;
-    lb.update({ status: 'playing', invite: null, ...go, ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true } } : { answer: null, ...(own ? {} : { char: null }) }) });
+    // The guest's answer carries its character (the host reads it from the card). The host's card drops its
+    // character while playing on claude.ai, to leave room in its presence for the game state.
+    lb.update({ status: 'playing', invite: null, ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true }, char: packChar(mine) } : { answer: null, ...(own ? {} : { char: null }) }) });
+    this.chosen = mine;
+    this.starting = false;
     this.deps.start({ role, room, mid: id, otherPeer: other.peer, mine, theirs, settings, otherName: other.card.name });
   }
 
-  // ------------------------------------------------------------ the setup screen
+  // ------------------------------------------------------------ the challenge screens
 
-  /** The setup this player is in: who with, which match, and the terms as last seen. */
-  private setup: { role: 'host' | 'guest'; peer: string; id: string; name: string; terms: MatchSettings; since: number; seen: boolean } | null = null;
-  /** The character this player picked on the setup screen (kept for rematches). */
+  /**
+   * The challenge screen: `send` while the challenger sets the terms (table,
+   * spot, cups, speed, ski) and picks a character before sending; `accept` while
+   * the challenged player looks the terms over and picks their own character.
+   */
+  private setup: { mode: 'send' | 'accept'; peer: string; name: string; id: string; terms: MatchSettings } | null = null;
+  /** The character this player picked for their last match (kept for rematches). */
   private chosen: Character | null = null;
+  /** A match is starting (begin() is waiting for its room): never start it twice. */
+  private starting = false;
 
-  /** A challenge was accepted: both players go to the setup screen. */
-  private enterSetup(role: 'host' | 'guest', other: LobbyPeer, id: string, terms: MatchSettings): void {
+  /** This player's pick, or their usual character. */
+  private myPick(): Character | null {
+    return this.chosen && this.deps.characters().some((c) => c.id === this.chosen!.id) ? this.chosen : this.deps.me().char;
+  }
+
+  /** Challenge: first set the terms and pick a character. */
+  private challenge(p: LobbyPeer): void {
+    if (!this.lobby) return;
+    this.chosen = this.myPick();
+    this.note = '';
+    this.setup = { mode: 'send', peer: p.peer, name: p.card.name, id: newMatchId(), terms: this.deps.settings() };
+    this.render();
+  }
+
+  /** Send the challenge on these terms, with this character. */
+  private sendChallenge(): void {
+    const st = this.setup;
     const lb = this.lobby;
-    if (!lb) return;
-    const mine = this.chosen && this.deps.characters().some((c) => c.id === this.chosen!.id) ? this.chosen : this.deps.me().char;
-    if (!mine) {
-      this.note = 'You need a character to play online.';
+    if (!st || st.mode !== 'send' || !lb || !this.chosen) return;
+    const there = lb.peers().find((x) => x.peer === st.peer);
+    if (!there || there.card.status === 'playing') {
+      this.setup = null;
+      this.note = there ? `${st.name} just started another match.` : `${st.name} left the lobby.`;
       return this.render();
     }
-    this.chosen = mine;
-    this.note = '';
-    this.setup = { role, peer: other.peer, id, name: other.card.name, terms, since: Date.now(), seen: false };
-    lb.update({
-      invite: null,
-      char: packChar(mine),
-      setup: { id, with: other.peer, host: role === 'host', ready: null, ...(role === 'host' ? { terms } : {}) },
-      ...(role === 'guest' ? { answer: { to: other.peer, id, ok: true } } : { answer: null }),
-    });
-    this.deps.show();
-    this.render();
-  }
-
-  /** The other player's card in this setup, if they're in it. */
-  private setupOther(): LobbyPeer | undefined {
-    const st = this.setup;
-    return st ? this.lobby?.peers().find((p) => p.peer === st.peer && p.card.setup?.id === st.id) : undefined;
-  }
-
-  /** The signature both Readies must match right now. */
-  private currentSig(): string | null {
-    const st = this.setup;
-    const other = this.setupOther();
-    if (!st || !other) return null;
-    const mine = this.chosen?.id ?? null;
-    const theirs = unpackChar(other.card.char)?.id ?? null;
-    return setupSig(st.terms, st.role === 'host' ? mine : theirs, st.role === 'host' ? theirs : mine);
-  }
-
-  /** Follow the other player's setup card: their terms (guest), both Readies, and the start. */
-  private checkSetup(): void {
-    const st = this.setup;
-    const lb = this.lobby;
-    if (!st || !lb) return; // the match may have just started
-    const other = this.setupOther();
-    if (!other) {
-      // Not arrived yet (a moment after the accept), or gone.
-      const gone = !lb.peers().some((p) => p.peer === st.peer);
-      if (st.seen || gone || Date.now() - st.since > 15000) this.leaveSetup(`${st.name} left the match setup.`);
-      return;
-    }
-    st.seen = true;
-    const theirs = unpackChar(other.card.char);
-    if (theirs) this.known.set(other.peer, theirs);
-    if (st.role === 'guest') {
-      if (other.card.setup!.terms) st.terms = other.card.setup!.terms;
-      if (other.card.setup!.go) return void this.begin('guest', other, st.id, st.terms);
-    }
-    // A Ready that no longer matches the terms and characters is dropped.
-    const sig = this.currentSig();
-    const mine = lb.me?.setup;
-    if (mine?.ready && mine.ready !== sig) lb.update({ setup: { ...mine, ready: null } });
-    if (st.role === 'host' && sig && lb.me?.setup?.ready === sig && other.card.setup!.ready === sig) return void this.begin('host', other, st.id, st.terms);
-  }
-
-  private leaveSetup(note: string): void {
+    lb.update({ invite: { to: st.peer, id: st.id, settings: st.terms }, answer: null, char: packChar(this.chosen) });
     this.setup = null;
-    this.note = note;
-    this.lobby?.update({ setup: null, answer: null, invite: null });
+    this.note = `Challenge sent to ${st.name}. Waiting for an answer…`;
     this.render();
   }
 
-  /** Host: change the terms (un-readies both). */
-  private setTerms(patch: Partial<MatchSettings>): void {
+  /** A challenge came in: look the terms over and pick a character. */
+  private openAccept(p: LobbyPeer): void {
+    const inv = p.card.invite;
+    if (!inv) return;
+    this.chosen = this.myPick();
+    this.note = '';
+    this.setup = { mode: 'accept', peer: p.peer, name: p.card.name, id: inv.id, terms: inv.settings };
+    this.render();
+  }
+
+  /** Accept with the picked character: the match starts. */
+  private acceptChallenge(): void {
     const st = this.setup;
     const lb = this.lobby;
-    if (!st || st.role !== 'host' || !lb?.me?.setup) return;
-    st.terms = { ...st.terms, ...patch };
-    lb.update({ setup: { ...lb.me.setup, terms: st.terms, ready: null } });
+    if (!st || st.mode !== 'accept' || !lb) return;
+    const p = lb.incoming().find((x) => x.peer === st.peer && x.card.invite?.id === st.id);
+    if (!p) {
+      this.setup = null;
+      this.note = `${st.name} took the challenge back.`;
+      return this.render();
+    }
+    this.setup = null;
+    void this.begin('guest', p, st.id, st.terms);
   }
 
-  private pickCharacter(c: Character): void {
-    const lb = this.lobby;
-    if (!lb?.me?.setup) return;
-    this.chosen = c;
-    lb.update({ char: packChar(c), setup: { ...lb.me.setup, ready: null } });
-  }
-
-  private toggleReady(): void {
-    const lb = this.lobby;
-    const sig = this.currentSig();
-    if (!lb?.me?.setup || !sig) return;
-    lb.update({ setup: { ...lb.me.setup, ready: lb.me.setup.ready === sig ? null : sig } });
-    this.checkSetup();
+  private decline(peer: string, id: string): void {
+    this.setup = null;
+    this.lobby?.update({ answer: { to: peer, id, ok: false } });
+    this.render();
   }
 
   private renderSetup(): void {
     const st = this.setup!;
     const lb = this.lobby!;
-    const other = this.setupOther();
-    const host = st.role === 'host';
+    const send = st.mode === 'send';
+    const other = lb.peers().find((x) => x.peer === st.peer);
     const t = st.terms;
     const me = this.deps.me();
-    const sig = this.currentSig();
-    const iReady = !!sig && lb.me?.setup?.ready === sig;
-    const theyReady = !!sig && other?.card.setup?.ready === sig;
     const theirChar = other ? unpackChar(other.card.char) : null;
     const step = SPEED_STEPS.indexOf(speedStepOf(t.speed));
+    const speedName = (k: number) => `${SPEED_STEPS[k].label}${k === SPEED_MID ? ' (realistic)' : ''}`;
+    const setTerms = (patch: Partial<MatchSettings>) => {
+      st.terms = { ...st.terms, ...patch };
+      this.render();
+    };
     const portrait = (c: Character | null) => (c ? spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 3) : h('div', { class: 'slot-random big' }, '?'));
-    // The terms: the challenger edits them; the other player sees them, read-only, as they change.
+    // The terms: the challenger edits them; the challenged player reads them.
     const term = (label: string, control: HTMLElement | string) => h('div', { class: 'kv setup-term' }, h('span', { class: 'dim' }, label), typeof control === 'string' ? h('b', {}, control) : control);
-    const select = (value: string, options: [string, string, boolean?][], on: (v: string) => void) =>
-      h('select', { onchange: (e: Event) => on((e.target as HTMLSelectElement).value) }, ...options.map(([v, label, off]) => h('option', { value: v, selected: v === value, disabled: !!off }, label)));
-    const speedLabel = h('b', { class: 'speed-label' }, `${SPEED_STEPS[step].label}${step === SPEED_MID ? ' (realistic)' : ''}`);
-    const speed = host
+    const select = (label: string, value: string, options: [string, string, boolean?][], on: (v: string) => void) =>
+      h('select', { 'aria-label': label, onchange: (e: Event) => on((e.target as HTMLSelectElement).value) }, ...options.map(([v, name, off]) => h('option', { value: v, selected: v === value, disabled: !!off }, name)));
+    const speedLabel = h('b', { class: 'speed-label' }, speedName(step));
+    const speed = send
       ? h(
           'div',
           { class: 'col', style: 'gap:2px;min-width:220px' },
@@ -347,80 +330,69 @@ export class OnlineScreen {
             step: 1,
             value: step,
             'aria-label': 'Speed',
-            // The label follows the slider while dragging; the terms change on release.
             oninput: (e: Event) => {
               const k = +(e.target as HTMLInputElement).value;
-              speedLabel.textContent = `${SPEED_STEPS[k].label}${k === SPEED_MID ? ' (realistic)' : ''}`;
+              speedLabel.textContent = speedName(k);
+              st.terms = { ...st.terms, speed: SPEED_STEPS[k].timeScale };
             },
-            onchange: (e: Event) => this.setTerms({ speed: SPEED_STEPS[+(e.target as HTMLInputElement).value].timeScale }),
           }),
           h('div', { class: 'row spread dim', style: 'font-size:11px' }, h('span', {}, 'Relaxed'), h('span', {}, 'Normal'), h('span', {}, 'Masters')),
         )
-      : `${SPEED_STEPS[step].label}${step === SPEED_MID ? ' (realistic)' : ''}`;
+      : speedName(step);
     const tableName = DESIGNS[t.design as TableDesign]?.name ?? t.design;
+    const cups = (f: string) => (f === 'tree' ? 'Tree · 11 cups' : 'Shrub · 7 cups');
     const terms = h(
       'div',
       { class: 'box setup-terms' },
-      h('div', { class: 'row spread' }, h('h2', {}, 'The terms'), h('span', { class: 'dim', style: 'font-size:12px' }, host ? 'You set these as the challenger' : `${st.name} sets these`)),
-      h('div', { class: 'setup-table' }, h('img', { class: 'table-shot', src: this.deps.tableArt(t.design), alt: tableName }), h('div', { class: 'col', style: 'gap:6px;flex:1;min-width:0' },
-        term('Table', host ? select(t.design, DESIGN_ORDER.map((d) => [d, DESIGNS[d].name, this.deps.tableLocked(d)]), (v) => this.setTerms({ design: v })) : tableName),
-        term('Spot', host ? select(t.venue, VENUE_ORDER.map((v) => [v, VENUES[v].spot]), (v) => this.setTerms({ venue: v })) : (VENUES[t.venue as Venue]?.spot ?? t.venue)),
-        term('Cups', host ? select(t.formation, [['tree', 'Tree · 11 cups'], ['shrub', 'Shrub · 7 cups']], (v) => this.setTerms({ formation: v as 'tree' | 'shrub' })) : t.formation === 'tree' ? 'Tree · 11 cups' : 'Shrub · 7 cups'),
-        term('Ski collision', host ? select(t.ski ? 'on' : 'off', [['off', 'Off'], ['on', 'On']], (v) => this.setTerms({ ski: v === 'on' })) : t.ski ? 'On' : 'Off'),
-        term('Speed', speed),
-      )),
+      h('div', { class: 'row spread' }, h('h2', {}, 'The terms'), h('span', { class: 'dim', style: 'font-size:12px' }, send ? 'You set these as the challenger' : `Set by ${st.name}`)),
+      h(
+        'div',
+        { class: 'setup-table' },
+        h('img', { class: 'table-shot', src: this.deps.tableArt(t.design), alt: tableName }),
+        h(
+          'div',
+          { class: 'col', style: 'gap:6px;flex:1;min-width:0' },
+          term('Table', send ? select('Table', t.design, DESIGN_ORDER.map((d) => [d, DESIGNS[d].name, this.deps.tableLocked(d)]), (v) => setTerms({ design: v })) : tableName),
+          term('Spot', send ? select('Spot', t.venue, VENUE_ORDER.map((v) => [v, VENUES[v].spot]), (v) => setTerms({ venue: v })) : (VENUES[t.venue as Venue]?.spot ?? t.venue)),
+          term('Cups', send ? select('Cups', t.formation, [['tree', cups('tree')], ['shrub', cups('shrub')]], (v) => setTerms({ formation: v as 'tree' | 'shrub' })) : cups(t.formation)),
+          term('Ski collision', send ? select('Ski collision', t.ski ? 'on' : 'off', [['off', 'Off'], ['on', 'On']], (v) => setTerms({ ski: v === 'on' })) : t.ski ? 'On' : 'Off'),
+          term('Speed', speed),
+        ),
+      ),
       h('p', { class: 'dim', style: 'font-size:12px' }, '1v1, single game. The challenger serves first as Team A.'),
     );
-    // Characters: each picks their own; the other's pick shows live.
     const chars = this.deps.characters();
     const picker = h(
       'div',
       { class: 'pickgrid chars setup-chars' },
       ...chars.map((c, i) =>
-        h('button', { class: `pickcard${this.chosen?.id === c.id ? ' on' : ''}`, style: `--i:${i}`, onclick: () => this.pickCharacter(c) }, spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2), h('span', { class: 'pickname' }, c.name)),
+        h('button', { class: `pickcard${this.chosen?.id === c.id ? ' on' : ''}`, style: `--i:${i}`, onclick: () => ((this.chosen = c), this.render()) }, spriteImage(characterSprite(c.sprite, c.cosmetics.spriteItem ?? null), 2), h('span', { class: 'pickname' }, c.name)),
       ),
     );
     const side = (mine: boolean) => {
-      const team = (mine ? host : !host) ? 'A' : 'B';
-      const ready = mine ? iReady : theyReady;
-      const c = mine ? this.chosen : theirChar;
+      const team = mine === send ? 'A' : 'B';
+      const c = mine ? this.chosen : send ? null : theirChar;
       return h(
         'div',
-        { class: `team-col team${team}${mine ? ' mine' : ''}${ready ? ' ready' : ''}` },
-        h('div', { class: 'team-head' }, h('span', {}, `Team ${team} · ${mine ? 'You' : st.name}`), h('span', { class: ready ? 'ok' : 'dim' }, ready ? '✓ Ready' : other || mine ? 'Not ready' : 'Joining…')),
-        h('div', { class: 'setup-champ' }, portrait(c), h('div', {}, mine ? styledName(me.name, me.style) : other ? styledName(other.card.name, other.card.style) : h('b', {}, st.name), h('p', { class: 'dim', style: 'font-size:12px' }, c ? `playing as ${c.name}` : '—'))),
+        { class: `team-col team${team}${mine ? ' mine' : ''}` },
+        h('div', { class: 'team-head' }, h('span', {}, `Team ${team} · ${mine ? 'You' : st.name}`), h('span', { class: 'dim' }, mine ? 'your pick' : send ? 'picks when accepting' : 'their pick')),
+        h('div', { class: 'setup-champ' }, portrait(c), h('div', {}, mine ? styledName(me.name, me.style) : other ? styledName(other.card.name, other.card.style) : h('b', {}, st.name), h('p', { class: 'dim', style: 'font-size:12px' }, c ? `playing as ${c.name}` : mine ? '—' : 'their choice'))),
       );
     };
-    const status = !other
-      ? `Waiting for ${st.name} to join the setup…`
-      : iReady && theyReady
-        ? 'Both ready: starting…'
-        : iReady
-          ? `You’re ready. Waiting for ${st.name}…`
-          : theyReady
-            ? `${st.name} is ready. Check the terms and press Ready.`
-            : host
-              ? 'Set the terms and pick your character, then press Ready. Any change un-readies both players.'
-              : `${st.name} sets the terms. Pick your character, then press Ready.`;
+    const action = send
+      ? h('div', { class: 'setup-ready' }, h('p', { class: 'dim' }, `Set the terms and pick your character, then send. ${st.name} sees the terms and picks their character to accept.`), h('div', { class: 'row' }, h('button', { onclick: () => ((this.setup = null), this.render()) }, 'Back'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.sendChallenge() }, 'Send challenge')))
+      : h('div', { class: 'setup-ready go' }, h('p', { class: 'dim' }, 'Pick your character, then accept: the match starts straight away.'), h('div', { class: 'row' }, h('button', { onclick: () => this.decline(st.peer, st.id) }, 'Decline'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.acceptChallenge() }, 'Accept and play')));
     this.put(
       h(
         'div',
         { class: 'panel setup' },
-        h('div', { class: 'row spread' }, h('h1', {}, 'Match setup'), h('button', { onclick: () => this.leaveSetup('You left the match setup.') }, 'Leave')),
+        h('div', { class: 'row spread' }, h('h1', {}, send ? `Challenge ${st.name}` : `${st.name} challenges you!`), h('button', { onclick: () => ((this.setup = null), this.render()) }, 'Back to lobby')),
         h('div', { class: 'lineup' }, side(true), h('div', { class: 'vs-badge' }, 'VS'), side(false)),
         terms,
         h('div', { class: 'box' }, h('h2', {}, 'Your character'), picker),
-        h('div', { class: `setup-ready${iReady && theyReady ? ' go' : ''}` }, h('p', { class: iReady && theyReady ? 'ok' : 'dim' }, status), h('button', { class: `primary big${iReady ? ' on' : ''}`, disabled: !other, onclick: () => this.toggleReady() }, iReady ? 'Not ready' : 'Ready')),
+        action,
       ),
     );
-  }
-
-  private challenge(p: LobbyPeer): void {
-    if (!this.lobby) return;
-    const id = newMatchId();
-    this.lobby.update({ invite: { to: p.peer, id, settings: this.deps.settings() }, answer: null });
-    this.note = `Challenge sent to ${p.card.name}. Waiting for an answer…`;
-    this.render();
   }
 
   private render(): void {
@@ -455,7 +427,7 @@ export class OnlineScreen {
       'div',
       { class: 'box lobby-row' },
       h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Edit profile or Players)`))),
-      h('p', { class: 'dim', style: 'font-size:12px;max-width:420px' }, `When a challenge is accepted, you both go to a setup screen: the challenger sets the table, spot, cups and speed (starting from their menu settings: ${settingsLine(s)}), each player picks a character, and the match starts when both press Ready. 1v1, single game.`),
+      h('p', { class: 'dim', style: 'font-size:12px;max-width:420px' }, `Challenge someone to set the terms first (table, spot, cups and speed, starting from your menu settings: ${settingsLine(s)}) and pick your character. They see the terms, pick their character and accept, and the match starts. 1v1, single game.`),
     );
     const invites = incoming.map((p) =>
       h(
@@ -465,8 +437,8 @@ export class OnlineScreen {
         h(
           'div',
           { class: 'row' },
-          h('button', { class: 'primary', onclick: () => (p.card.invite!.re ? void this.begin('guest', p, p.card.invite!.id, p.card.invite!.settings) : this.enterSetup('guest', p, p.card.invite!.id, p.card.invite!.settings)) }, 'Accept'),
-          h('button', { onclick: () => (lb.update({ answer: { to: p.peer, id: p.card.invite!.id, ok: false } }), this.render()) }, 'Decline'),
+          h('button', { class: 'primary', onclick: () => (p.card.invite!.re ? void this.begin('guest', p, p.card.invite!.id, p.card.invite!.settings) : this.openAccept(p)) }, p.card.invite!.re ? 'Play again' : 'View and accept'),
+          h('button', { onclick: () => this.decline(p.peer, p.card.invite!.id) }, 'Decline'),
         ),
       ),
     );

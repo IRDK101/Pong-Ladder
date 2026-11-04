@@ -61,50 +61,9 @@ export interface LobbyCard {
   style: NameStyle;
   status: 'lobby' | 'playing';
   char: PackedChar | null;
-  /** A challenge (`re`: a rematch on the same terms, which skips the setup screen). */
+  /** A challenge (`re`: a rematch on the same terms, which skips the challenge screens). */
   invite: { to: string; id: string; settings: MatchSettings; re?: boolean } | null;
   answer: { to: string; id: string; ok: boolean } | null;
-  /** The match setup this player is in (after a challenge is accepted), or null. */
-  setup?: SetupCard | null;
-}
-
-/**
- * One player's side of the setup screen. The challenger (host) sets the terms;
- * each player picks their own character (their card's `char`). A Ready holds
- * the signature of everything it agreed to (setupSig), so any later change to
- * the terms or either character un-readies both.
- */
-export interface SetupCard {
-  id: string;
-  /** The other player's peer label. */
-  with: string;
-  host: boolean;
-  /** Host only: the terms. */
-  terms?: MatchSettings;
-  /** The setupSig this player is ready for, or null. */
-  ready: string | null;
-  /** Host only: both were ready, the match is starting. */
-  go?: boolean;
-}
-
-/** A short signature of the terms and both characters (what a Ready agrees to). */
-export function setupSig(terms: MatchSettings, hostChar: string | null, guestChar: string | null): string {
-  const s = JSON.stringify([terms.design, terms.venue, terms.formation, terms.speed, terms.ski, hostChar, guestChar]);
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return (h >>> 0).toString(36);
-}
-
-function cleanSettings(v: unknown): MatchSettings | undefined {
-  const t = v as Partial<MatchSettings> | null;
-  if (!t || typeof t.design !== 'string' || typeof t.venue !== 'string' || typeof t.speed !== 'number') return undefined;
-  return { design: t.design, venue: t.venue, formation: t.formation === 'shrub' ? 'shrub' : 'tree', speed: t.speed, ski: !!t.ski };
-}
-
-function cleanSetup(v: unknown): SetupCard | null {
-  const s = v as Partial<SetupCard> | null;
-  if (!s || typeof s.id !== 'string' || typeof s.with !== 'string') return null;
-  return { id: s.id, with: s.with, host: !!s.host, terms: cleanSettings(s.terms), ready: typeof s.ready === 'string' ? s.ready : null, go: !!s.go };
 }
 
 export interface LobbyPeer {
@@ -179,7 +138,6 @@ export function cardOf(p: Pick<RoomPeer, "presence">): LobbyCard | null {
     char: (pr.char as PackedChar) ?? null,
     invite: pr.invite && typeof pr.invite.to === 'string' && typeof pr.invite.id === 'string' ? pr.invite : null,
     answer: pr.answer && typeof pr.answer.to === 'string' && typeof pr.answer.id === 'string' ? pr.answer : null,
-    setup: cleanSetup(pr.setup),
   };
 }
 
@@ -225,8 +183,8 @@ export class Lobby {
       .filter((p): p is LobbyPeer => !!p.card);
   }
 
-  open(card: Omit<LobbyCard, 'pz' | 'invite' | 'answer' | 'status' | 'setup'>): void {
-    this.me = { pz: 1, status: 'lobby', invite: null, answer: null, setup: null, ...card };
+  open(card: Omit<LobbyCard, 'pz' | 'invite' | 'answer' | 'status'>): void {
+    this.me = { pz: 1, status: 'lobby', invite: null, answer: null, ...card };
     this.send({ ...this.me });
     this.unsub?.();
     this.unsub = this.room.onPeers(
@@ -250,7 +208,7 @@ export class Lobby {
     this.unsub?.();
     this.unsub = null;
     this.me = null;
-    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null, setup: null, ...MATCH_CLEAR }).catch(() => {});
+    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null, ...MATCH_CLEAR }).catch(() => {});
   }
 
   /** Challenges addressed to this page. */
