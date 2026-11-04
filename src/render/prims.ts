@@ -202,6 +202,124 @@ export function texturedTop(h: CanvasRenderingContext2D, cam: Camera, img: HTMLC
   }
 }
 
+/** How many art columns at each end count as the painted frame. */
+const END_BAND_PX = 10;
+/**
+ * Redraw one end of a table top (end 0 at x = 0, end 1 at x = L) with its outer
+ * END_BAND_PX art columns stretched inward until they are at least `minPx` tall
+ * on screen. Where perspective already shows them that big, nothing changes.
+ */
+function endBand(h: CanvasRenderingContext2D, cam: Camera, img: HTMLCanvasElement, L: number, W: number, xf: Xf, end: 0 | 1, minPx: number): void {
+  const band = (END_BAND_PX / img.width) * L;
+  const edgeX = end ? L : 0;
+  const P = (x: number, y: number) => project(cam, xf({ x, y, z: 0 }));
+  const thick = (inner: number) => {
+    let t = Infinity;
+    for (const y of [0, W / 2, W]) {
+      const a = P(edgeX, y);
+      const b = P(inner, y);
+      if (!a || !b) return 0;
+      t = Math.min(t, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+    return t;
+  };
+  const dir = end ? -1 : 1;
+  if (thick(edgeX + dir * band) >= minPx) return;
+  // Widen the band (in world units) until it reaches minPx, up to a quarter of the table.
+  let lo = band;
+  let hi = L / 4;
+  if (thick(edgeX + dir * hi) < minPx) lo = hi;
+  else
+    for (let k = 0; k < 20; k++) {
+      const m = (lo + hi) / 2;
+      if (thick(edgeX + dir * m) < minPx) lo = m;
+      else hi = m;
+    }
+  const w = hi;
+  const inner = edgeX + dir * w;
+  // Draw the art's outer columns onto [inner, edge] as thin slices (so perspective stays right).
+  const S = 6;
+  const src0 = end ? img.width - END_BAND_PX : 0;
+  for (let i = 0; i < S; i++) {
+    // Slice i runs from the inner side toward the edge.
+    const xa = inner + (edgeX - inner) * (i / S);
+    const xb = inner + (edgeX - inner) * ((i + 1) / S);
+    const tl = P(xa, 0);
+    const tr = P(xb, 0);
+    const bl = P(xa, W);
+    const br = P(xb, W);
+    if (!tl || !tr || !bl || !br) continue;
+    const sw = END_BAND_PX / S;
+    // Source columns, read from the inner side of the band toward the edge.
+    const su = end ? src0 + i * sw : END_BAND_PX - (i + 1) * sw;
+    h.save();
+    h.beginPath();
+    h.moveTo(tl.x, tl.y);
+    h.lineTo(tr.x, tr.y);
+    h.lineTo(br.x, br.y);
+    h.lineTo(bl.x, bl.y);
+    h.closePath();
+    h.clip();
+    if (end) {
+      h.setTransform((tr.x - tl.x) / sw, (tr.y - tl.y) / sw, (bl.x - tl.x) / img.height, (bl.y - tl.y) / img.height, tl.x, tl.y);
+      h.drawImage(img, su, 0, sw, img.height, 0, 0, sw, img.height);
+    } else {
+      // At x = 0 the art runs the other way: its column 0 is at the edge.
+      h.setTransform((tl.x - tr.x) / sw, (tl.y - tr.y) / sw, (br.x - tr.x) / img.height, (br.y - tr.y) / img.height, tr.x, tr.y);
+      h.drawImage(img, su, 0, sw, img.height, 0, 0, sw, img.height);
+    }
+    h.restore();
+  }
+}
+
+const topCache = new Map<string, HTMLCanvasElement>();
+/**
+ * texturedTop, drawn 3x finer and scaled down smoothly, so thin lines in the
+ * art (a table's painted border) survive where perspective squeezes them, at the
+ * far end and along the sides. A plain pass picks one art pixel per screen pixel
+ * there and skips right over them. The result is cached per table and camera.
+ */
+export function texturedTopFine(h: CanvasRenderingContext2D, cam: Camera, img: HTMLCanvasElement, L: number, W: number, xf: Xf, key: string, N = 48): void {
+  const cw = h.canvas.width;
+  const chh = h.canvas.height;
+  const SS = 3;
+  const id = `${key}|${cw}x${chh}|${cam.focal.toFixed(3)},${cam.cx},${cam.cy}|${[cam.eye, cam.f, cam.r].map((v) => `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`).join('|')}`;
+  let out = topCache.get(id);
+  if (!out) {
+    const big = document.createElement('canvas');
+    big.width = cw * SS;
+    big.height = chh * SS;
+    const bx = big.getContext('2d')!;
+    bx.imageSmoothingEnabled = false;
+    const camSS = { ...cam, focal: cam.focal * SS, cx: cam.cx * SS, cy: cam.cy * SS };
+    texturedTop(bx, camSS, img, L, W, xf, N * 2);
+    // Each end's painted frame (the art's outer columns) is kept at least ~6 screen
+    // pixels thick, so the far end shows its border like the near one does.
+    for (const end of [0, 1] as const) endBand(bx, camSS, img, L, W, xf, end, 6 * SS);
+    // Halve twice-ish in steps (3x -> 1.5x -> 1x) so the smoothing averages every art pixel.
+    const mid = document.createElement('canvas');
+    mid.width = Math.round(cw * 1.5);
+    mid.height = Math.round(chh * 1.5);
+    const mx = mid.getContext('2d')!;
+    mx.imageSmoothingEnabled = true;
+    mx.imageSmoothingQuality = 'high';
+    mx.drawImage(big, 0, 0, mid.width, mid.height);
+    out = document.createElement('canvas');
+    out.width = cw;
+    out.height = chh;
+    const ox = out.getContext('2d')!;
+    ox.imageSmoothingEnabled = true;
+    ox.imageSmoothingQuality = 'high';
+    ox.drawImage(mid, 0, 0, cw, chh);
+    if (topCache.size > 40) topCache.delete(topCache.keys().next().value!);
+    topCache.set(id, out);
+  }
+  h.save();
+  h.setTransform(1, 0, 0, 1, 0, 0);
+  h.drawImage(out, 0, 0);
+  h.restore();
+}
+
 /** A flat stripe painted on a table, `w` meters wide, from a to b (table-local, placed by `xf`). */
 export function stripe(h: CanvasRenderingContext2D, cam: Camera, a: { x: number; y: number }, b: { x: number; y: number }, w: number, color: string, xf: Xf = IDENTITY): void {
   const dx = b.x - a.x;

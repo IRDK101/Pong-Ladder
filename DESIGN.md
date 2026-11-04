@@ -939,3 +939,12 @@ Normal 6, Fast 8, Extreme 10, Masters 12); the notches between blend their
 neighbours evenly, named after the nearer level ("Slow +", "Normal −"). Click or drag
 on the bar, or use ◀ ▶; the ends stop instead of wrapping. The row shows the pace
 relative to Normal. Saved picks and old saves (named levels) both load.
+
+## Table borders at the far end
+
+At game resolution the far end of a table is squeezed by perspective, and a plain
+texture pass (one art pixel per screen pixel) skipped right over the thin painted
+frame there and along one side. Table tops are now drawn 3x finer and scaled down
+smoothly (`texturedTopFine`, cached per table and camera), and each end's outer
+art columns (its frame) are kept at least ~6 pixels thick on screen (`endBand`), so
+the far end shows the same border as the near end.
