@@ -51,14 +51,19 @@ account you'll sign in with.
 1. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
    (GitHub Pages on a private repository needs a paid GitHub plan. On a free plan,
    make the repository public. The Firebase config isn't secret.)
-2. Put the Firebase config in `firebase-web-config.json` at the top of the repository,
-   as JSON with quoted keys. It identifies your project and isn't secret; the
-   database rules protect the data. Alternatively, set it as a repository variable
-   named `FIREBASE_CONFIG` (Settings → Secrets and variables → Actions → Variables).
+2. Put the Firebase config in `firebase-web-config.json` at the top of the repository.
+   Paste it exactly as the Firebase console shows it: the whole
+   `const firebaseConfig = { … };` block is fine (comments, unquoted keys and the
+   `import` / `initializeApp` lines included), and so is plain JSON. The deploy turns it into
+   JSON and stops with a plain message if something is missing (most often `databaseURL`).
+   It identifies your project and isn't secret; the database rules protect the data.
+   Alternatively, set it as a repository variable named `FIREBASE_CONFIG`
+   (Settings → Secrets and variables → Actions → Variables).
 
-   ```json
-   {"apiKey":"…","authDomain":"…firebaseapp.com","databaseURL":"https://…firebaseio.com","projectId":"…","appId":"…"}
-   ```
+   Note: the config does **not** go in Realtime Database → Rules. That box takes
+   `database.rules.json` (step 2 above) and shows a parse error for anything else.
+
+   To check a config before pushing: `node scripts/firebase-config.mjs firebase-web-config.json`.
 
 3. **Actions → Deploy site → Run workflow** (it also runs on every push). When it
    finishes, the game is at **https://irdk101.github.io/Pong-Ladder/**.

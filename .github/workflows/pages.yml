@@ -38,6 +38,8 @@ jobs:
           CFG="$FIREBASE_CONFIG_VAR"
           if [ -z "$CFG" ] && [ -f firebase-web-config.json ]; then CFG="$(cat firebase-web-config.json)"; fi
           if [ -z "$CFG" ]; then echo "::warning::No Firebase config yet: the site builds without sign-in or online play."; fi
+          # Accepts plain JSON or the console's "const firebaseConfig = { … };" snippet as pasted.
+          if [ -n "$CFG" ]; then CFG="$(printf '%s' "$CFG" | node scripts/firebase-config.mjs)" || { echo "::error::The Firebase config could not be read (see the message above)."; exit 1; }; fi
           VITE_FIREBASE_CONFIG="$CFG" npm run build:site
         env:
           FIREBASE_CONFIG_VAR: ${{ vars.FIREBASE_CONFIG }}
