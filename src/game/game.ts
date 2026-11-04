@@ -98,6 +98,8 @@ export interface TeamInput {
    */
   q?: number | null;
   off?: number;
+  /** Online play: the game time on the guest's screen when it pressed hit (the host rewinds to it). */
+  at?: number;
 }
 
 /** The compact game state the host sends to the other device in online play. */
@@ -118,6 +120,31 @@ export interface NetState {
   pc: number;
   /** When each player last hit the ball (for the hit jolt). */
   hz?: Record<string, number>;
+  /** The guest's last input stamp, plus how long the host held it (the guest works out the round trip). */
+  echo?: number;
+}
+
+/** Everything update() changes, for rewinding a moment in online play. */
+interface Snap {
+  time: number;
+  engine: unknown;
+  cp: ReturnType<import('../core/rules').RulesEngine['checkpoint']>;
+  ball: ReturnType<BallPhysics['snapshot']>;
+  swung: Record<TeamId, boolean>;
+  bounced: Record<TeamId, boolean>;
+  tossing: boolean;
+  tossSwung: boolean;
+  tossCount: number;
+  feedback: Feedback | null;
+  messages: Message[];
+  cupFx: Game['cupFx'];
+  celebrations: Game['celebrations'];
+  hitTimes: Record<string, number>;
+  incomingSpin: IncomingSpin | null;
+  incomingPower: number | undefined;
+  resumeAt: number | null;
+  penaltyCursor: number;
+  heldSpin: Record<TeamId, SpinChoice | null>;
 }
 
 export const idleInput = (): TeamInput => ({ up: false, down: false, left: false, right: false, hit: false, style: 0, nav: 0 });
@@ -509,14 +536,16 @@ export class Game {
   netTick(realDt: number, own: TeamId, inp: TeamInput): void {
     const dt = realDt * this.cfg.physics.timeScale;
     this.time += dt;
-    if (this.ball.status === 'flying') this.ball.step(dt, []);
+    if (this.ball.status === 'flying') this.localStep(dt);
+    const k = Math.exp(-realDt * 14);
+    this.drawOffset = { x: this.drawOffset.x * k, y: this.drawOffset.y * k, z: this.drawOffset.z * k };
     const st = this.engine.peek();
     if (st.phase !== 'penalty') this.moveAim(realDt, { A: own === 'A' ? inp : idleInput(), B: own === 'B' ? inp : idleInput() }, own);
     this.selectedStyle[own] = inp.style;
   }
 
   /** The timing the player sees right now, for sending with a hit in online play. */
-  timingNow(team: TeamId): { q: number | null; off: number } | null {
+  timingNow(team: TeamId): { q: number | null; off: number; at: number } | null {
     const cue = this.timingCue(team);
     if (!cue) return null;
     const st = this.engine.peek();
@@ -525,10 +554,180 @@ export class Game {
     if (!p) return null;
     const style = this.styleFor(p, tossing ? 'serve' : 'hit', this.selectedStyle[team]);
     const ctx = this.swingContext(p, !tossing && st.rally?.cupAtRisk != null, tossing);
-    return { q: timingQuality(this.cfg, style, cue.offset, ctx), off: cue.offset };
+    return { q: timingQuality(this.cfg, style, cue.offset, ctx), off: cue.offset, at: +this.time.toFixed(4) };
+  }
+
+  // ------------------------------------------------------------ online: rewinding late hits
+
+  /**
+   * Host of an online match: keep the last half second of states, so a guest's
+   * hit that arrives late (network delay) is applied at the moment the guest
+   * pressed it, and the game replays forward from there.
+   */
+  rewindable = false;
+  private history: Snap[] = [];
+  private replaying = false;
+
+  private snap(): Snap {
+    return {
+      time: this.time,
+      engine: this.engine,
+      cp: this.engine.checkpoint(),
+      ball: this.ball.snapshot(),
+      swung: { ...this.swung },
+      bounced: { ...this.bounced },
+      tossing: this.tossing,
+      tossSwung: this.tossSwung,
+      tossCount: this.tossCount,
+      feedback: this.feedback,
+      messages: this.messages.slice(),
+      cupFx: this.cupFx.slice(),
+      celebrations: this.celebrations.slice(),
+      hitTimes: { ...this.hitTimes },
+      incomingSpin: this.incomingSpin,
+      incomingPower: this.incomingPower,
+      resumeAt: this.resumeAt,
+      penaltyCursor: this.penaltyCursor,
+      heldSpin: { ...this.heldSpin },
+    };
+  }
+
+  private restoreSnap(s: Snap): void {
+    this.time = s.time;
+    this.engine.rollback(s.cp);
+    this.ball.restoreSnapshot(s.ball);
+    this.swung = { ...s.swung };
+    this.bounced = { ...s.bounced };
+    this.tossing = s.tossing;
+    this.tossSwung = s.tossSwung;
+    this.tossCount = s.tossCount;
+    this.feedback = s.feedback;
+    this.messages = s.messages.slice();
+    this.cupFx = s.cupFx.slice();
+    this.celebrations = s.celebrations.slice();
+    this.hitTimes = { ...s.hitTimes };
+    this.incomingSpin = s.incomingSpin;
+    this.incomingPower = s.incomingPower;
+    this.resumeAt = s.resumeAt;
+    this.penaltyCursor = s.penaltyCursor;
+    this.heldSpin = { ...s.heldSpin };
+  }
+
+  /** Whether a timed hit by `team` would count right now (a rally return, or the swing at a toss). */
+  private hitWouldCount(team: TeamId): boolean {
+    const st = this.engine.peek();
+    if (st.phase === 'awaitServe') return this.resumeAt === null && this.tossing && !this.tossSwung && st.server.team === team;
+    return this.canSwing(team);
+  }
+
+  /** Apply a late hit at the time it was pressed, then replay up to now. False if it can't be placed. */
+  private rewindHit(team: TeamId, inp: TeamInput): boolean {
+    const at = inp.at!;
+    const eng = this.engine;
+    if (eng.peek().phase === 'gameOver') return false;
+    const hist = this.history.filter((h) => h.engine === eng);
+    let i = -1;
+    for (let k = 0; k < hist.length; k++) if (hist[k].time <= at + 1e-6) i = k;
+    if (i < 0) return false;
+    const target = this.time;
+    const present = this.snap();
+    this.replaying = true;
+    try {
+      for (let k = i; k < hist.length; k++) {
+        this.restoreSnap(hist[k]);
+        if (!this.hitWouldCount(team)) continue;
+        const press: TeamInput = { ...inp, at: undefined };
+        // Replay that frame exactly as it ran (same length), with the press in it.
+        const frame = (k + 1 < hist.length ? hist[k + 1].time : target) - hist[k].time;
+        this.update(frame / this.cfg.physics.timeScale, { A: team === 'A' ? press : idleInput(), B: team === 'B' ? press : idleInput() });
+        for (let guard = 0; this.time < target - 1e-6 && guard < 400; guard++) {
+          const step = Math.min(1 / 240, target - this.time);
+          this.update(step / this.cfg.physics.timeScale, { A: idleInput(), B: idleInput() });
+        }
+        this.time = target;
+        this.history = hist.slice(0, k);
+        return true;
+      }
+      this.restoreSnap(present);
+      return false;
+    } finally {
+      this.replaying = false;
+    }
+  }
+
+  // ------------------------------------------------------------ online: the guest's view
+
+  /** Guest: how far the drawn ball is from the simulated one; it eases to zero so corrections never jump. */
+  drawOffset: Vec3 = { x: 0, y: 0, z: 0 };
+
+  /** Where to draw the ball (smoothed on the guest's screen). */
+  ballShown(): Vec3 {
+    const o = this.drawOffset;
+    return { x: this.ball.pos.x + o.x, y: this.ball.pos.y + o.y, z: this.ball.pos.z + o.z };
+  }
+
+  /**
+   * Guest: take the host's state, then move it on by `ahead` seconds of real
+   * time (the network delay), so the ball is where the host has it now and not
+   * where it was. The drawn ball glides from where it was to the new spot.
+   */
+  applyNetAhead(n: NetState, own: TeamId, ahead: number): void {
+    // After a hit shown here at once (predictSwing), host updates sent before the host had the
+    // hit would put the ball back: skip them until the host's state includes the hit.
+    const hz = JSON.stringify(n.hz ?? {});
+    const predicting = this.predicted !== null;
+    if (this.predicted && hz === this.predicted.base && performance.now() - this.predicted.wall < 900) return;
+    this.predicted = null;
+    const before = this.ballShown();
+    const wasFlying = this.ball.status === 'flying';
+    const hitsBefore = JSON.stringify(this.hitTimes);
+    this.applyNet(n, own);
+    this.lastNetHz = hz;
+    const lead = Math.max(0, Math.min(0.35, ahead)) * this.cfg.physics.timeScale;
+    if (lead > 0) {
+      this.time += lead;
+      if (this.ball.status === 'flying') for (let t = 0; t < lead - 1e-6; t += 1 / 240) this.localStep(Math.min(1 / 240, lead - t));
+    }
+    const p = this.ball.pos;
+    const d = { x: before.x - p.x, y: before.y - p.y, z: before.z - p.z };
+    const sameFlight = wasFlying && this.ball.status === 'flying' && (predicting || hitsBefore === JSON.stringify(this.hitTimes));
+    this.drawOffset = sameFlight && Math.hypot(d.x, d.y, d.z) < (predicting ? 0.7 : 0.4) ? d : { x: 0, y: 0, z: 0 };
+  }
+
+  /** Guest: move the ball on here, noting bounces (so this device's hit window opens on time). */
+  private localStep(dt: number): void {
+    for (const e of this.ball.step(dt, this.cups)) if (e.type === 'bounce') this.bounced[e.x < this.cfg.table.length / 2 ? 'A' : 'B'] = true;
+  }
+
+  /** Guest: the host's hit times in the last state taken, and a hit shown here ahead of the host. */
+  private lastNetHz = '{}';
+  private predicted: { base: string; wall: number } | null = null;
+
+  /**
+   * Guest: show this device's own hit straight away (the ball leaves the paddle
+   * on the press) instead of after a round trip. The host's result replaces it
+   * when it arrives; the drawn ball glides over to it.
+   */
+  predictSwing(team: TeamId, inp: TeamInput): void {
+    if (!this.hitWouldCount(team) || inp.q === null || inp.q === undefined) return;
+    const n = this.messages.length;
+    const st = this.engine.peek();
+    if (st.phase === 'awaitServe') this.serveInput({ ...inp, hit: true }, 0);
+    else this.trySwing(team, inp.style, undefined, { ...inp, hit: true });
+    // The host sends the real calls; drop the ones made here.
+    this.messages.length = Math.min(this.messages.length, n);
+    this.predicted = { base: this.lastNetHz, wall: performance.now() };
   }
 
   update(realDt: number, inputs: Record<TeamId, TeamInput>): void {
+    if (this.rewindable && !this.replaying) {
+      for (const t of ['A', 'B'] as TeamId[]) {
+        const inp = inputs[t];
+        if (inp.hit && inp.at !== undefined && inp.q !== undefined && this.time - inp.at > 0.004 && this.rewindHit(t, inp)) inputs = { ...inputs, [t]: { ...inp, hit: false } };
+      }
+      this.history.push(this.snap());
+      while (this.history.length && this.history[0].time < this.time - 0.6) this.history.shift();
+    }
     const dt = realDt * this.cfg.physics.timeScale;
     this.time += dt;
     const st = this.engine.peek();

@@ -238,9 +238,10 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   // Ground shadow of the ball (on the table or the floor).
   const ball = game.ball;
   if (ball.status !== 'sunk') {
-    const onTop = ball.onTable(ball.pos.x, ball.pos.y) && ball.pos.z >= 0;
+    const bp = game.ballShown();
+    const onTop = ball.onTable(bp.x, bp.y) && bp.z >= 0;
     const surf = onTop ? 0.002 : floorZ + 0.002;
-    disc(onTop ? h : b, onTop ? ch : cam, { x: ball.pos.x, y: ball.pos.y, z: surf }, cfg.physics.ballRadius * (1 + Math.max(0, ball.pos.z - surf) * 0.4), theme.colors.shadow, 12);
+    disc(onTop ? h : b, onTop ? ch : cam, { x: bp.x, y: bp.y, z: surf }, cfg.physics.ballRadius * (1 + Math.max(0, bp.z - surf) * 0.4), theme.colors.shadow, 12);
   }
 
   // Aim: a path preview and a landing marker for each team that is about to hit.
@@ -258,7 +259,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     const shown = wob.dx || wob.dy ? { ...cup, x: cup.x + wob.dx, y: cup.y + wob.dy } : cup;
     items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(h, theme, cfg, ch, shown, cup === penaltyCup, game.time) });
   }
-  if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, ball.pos, ball.vel, ball.fx) });
+  if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, game.ballShown(), ball.vel, ball.fx) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
   if (ui) drawTimingRings(h, theme, game, ch);

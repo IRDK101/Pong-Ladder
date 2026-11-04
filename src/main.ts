@@ -345,11 +345,17 @@ function guestFrame(g: Game, dt: number): void {
   const net = o.link.net;
   if (net && net !== o.lastNet) {
     o.lastNet = net;
-    g.applyNet(net, 'B');
+    // Move the host's state on by the network delay, so the ball is where it is now on the host.
+    g.applyNetAhead(net, 'B', o.link.delay);
   }
   if (screen === 'playing') {
     const st = g.engine.peek();
-    if (inp.hit) o.link.event('hit', g.timingNow('B') ?? {});
+    if (inp.hit) {
+      const tm = g.timingNow('B');
+      o.link.event('hit', tm ?? {});
+      // Show the hit here at once; the host's result follows.
+      if (tm) g.predictSwing('B', { ...inp, q: tm.q, off: tm.off });
+    }
     if (st.phase === 'penalty' && st.penalty?.chooser === 'B' && inp.nav) o.link.event('nav', { d: inp.nav });
     g.netTick(dt, 'B', inp);
     o.link.sendInput({ up: inp.up, down: inp.down, left: inp.left, right: inp.right, style: inp.style, aim: { ...g.aim.B } }, performance.now(), inp.hit);
@@ -452,6 +458,15 @@ const onlineScreen = new OnlineScreen(overlay, {
     if (account.role === 'signedout') return 'Sign in (menu → Your profile) and make a profile. Once the moderator approves it you can play online, earn XP and get on the leaderboard.';
     if (account.role === 'viewonly') return 'You opened the game by a public link from outside the moderator’s claude.ai organization, so claude.ai lets you play offline only. Ask the moderator to invite your email, then open the game from that invite and make a profile.';
     return 'Sign in to claude.ai and open the game from your invite, then make a profile for the moderator to approve.';
+  },
+  characters: () => account.usable(),
+  tableArt: (d) => tableArt(theme, d as TableDesign).toDataURL(),
+  tableLocked: (d) => menu.tableLocked(d),
+  show: () => {
+    // A challenge was accepted: the setup screen takes over (a local match in progress is left).
+    if (online) return;
+    paused = false;
+    screen = 'panel';
   },
   start: (o) => startOnline(o),
   back: () => {
@@ -673,8 +688,10 @@ function frame(dt: number): void {
       const local = mergeInputs(keyboard.team('A'), keyboard.team('B'));
       const remote = online.link.hostInput(idleInput());
       if (online.link.input) g.aim.B = { ...online.link.input.aim };
+      g.rewindable = true;
       g.update(dt, { A: local, B: remote });
-      online.link.sendState(g.netState(), performance.now(), remote.hit);
+      const ph = g.engine.peek().phase;
+      online.link.sendState(g.netState(), performance.now(), remote.hit || local.hit, ph === 'rally' || ph === 'serveInFlight' || g.tossing);
     } else g.update(dt, debugInputs ? debugInputs(g) : liveInputs(g));
     if (g.engine.peek().phase === 'gameOver') {
       recordGame();

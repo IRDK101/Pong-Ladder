@@ -60,8 +60,50 @@ export interface LobbyCard {
   style: NameStyle;
   status: 'lobby' | 'playing';
   char: PackedChar | null;
-  invite: { to: string; id: string; settings: MatchSettings } | null;
+  /** A challenge (`re`: a rematch on the same terms, which skips the setup screen). */
+  invite: { to: string; id: string; settings: MatchSettings; re?: boolean } | null;
   answer: { to: string; id: string; ok: boolean } | null;
+  /** The match setup this player is in (after a challenge is accepted), or null. */
+  setup?: SetupCard | null;
+}
+
+/**
+ * One player's side of the setup screen. The challenger (host) sets the terms;
+ * each player picks their own character (their card's `char`). A Ready holds
+ * the signature of everything it agreed to (setupSig), so any later change to
+ * the terms or either character un-readies both.
+ */
+export interface SetupCard {
+  id: string;
+  /** The other player's peer label. */
+  with: string;
+  host: boolean;
+  /** Host only: the terms. */
+  terms?: MatchSettings;
+  /** The setupSig this player is ready for, or null. */
+  ready: string | null;
+  /** Host only: both were ready, the match is starting. */
+  go?: boolean;
+}
+
+/** A short signature of the terms and both characters (what a Ready agrees to). */
+export function setupSig(terms: MatchSettings, hostChar: string | null, guestChar: string | null): string {
+  const s = JSON.stringify([terms.design, terms.venue, terms.formation, terms.speed, terms.ski, hostChar, guestChar]);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+function cleanSettings(v: unknown): MatchSettings | undefined {
+  const t = v as Partial<MatchSettings> | null;
+  if (!t || typeof t.design !== 'string' || typeof t.venue !== 'string' || typeof t.speed !== 'number') return undefined;
+  return { design: t.design, venue: t.venue, formation: t.formation === 'shrub' ? 'shrub' : 'tree', speed: t.speed, ski: !!t.ski };
+}
+
+function cleanSetup(v: unknown): SetupCard | null {
+  const s = v as Partial<SetupCard> | null;
+  if (!s || typeof s.id !== 'string' || typeof s.with !== 'string') return null;
+  return { id: s.id, with: s.with, host: !!s.host, terms: cleanSettings(s.terms), ready: typeof s.ready === 'string' ? s.ready : null, go: !!s.go };
 }
 
 export interface LobbyPeer {
@@ -80,7 +122,9 @@ export interface GuestInput {
   style: 0 | 1 | 2;
   aim: { x: number; y: number };
   /** Hits (with the timing seen on the guest's screen) and penalty-cup steps, numbered. */
-  ev: { n: number; k: 'hit' | 'nav'; q?: number | null; off?: number; d?: -1 | 1 }[];
+  ev: { n: number; k: 'hit' | 'nav'; q?: number | null; off?: number; at?: number; d?: -1 | 1 }[];
+  /** The guest's clock when it sent this (echoed back so it can measure the round trip). */
+  ts?: number;
 }
 
 /** A character packed small enough for a presence card (hand-drawn pixels as a palette and one letter per pixel). */
@@ -134,6 +178,7 @@ export function cardOf(p: Pick<RoomPeer, "presence">): LobbyCard | null {
     char: (pr.char as PackedChar) ?? null,
     invite: pr.invite && typeof pr.invite.to === 'string' && typeof pr.invite.id === 'string' ? pr.invite : null,
     answer: pr.answer && typeof pr.answer.to === 'string' && typeof pr.answer.id === 'string' ? pr.answer : null,
+    setup: cleanSetup(pr.setup),
   };
 }
 
@@ -179,8 +224,8 @@ export class Lobby {
       .filter((p): p is LobbyPeer => !!p.card);
   }
 
-  open(card: Omit<LobbyCard, 'pz' | 'invite' | 'answer' | 'status'>): void {
-    this.me = { pz: 1, status: 'lobby', invite: null, answer: null, ...card };
+  open(card: Omit<LobbyCard, 'pz' | 'invite' | 'answer' | 'status' | 'setup'>): void {
+    this.me = { pz: 1, status: 'lobby', invite: null, answer: null, setup: null, ...card };
     this.send({ ...this.me });
     this.unsub?.();
     this.unsub = this.room.onPeers(
@@ -204,7 +249,7 @@ export class Lobby {
     this.unsub?.();
     this.unsub = null;
     this.me = null;
-    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null, ...MATCH_CLEAR }).catch(() => {});
+    void this.room.presence({ pz: null, name: null, level: null, style: null, status: null, char: null, invite: null, answer: null, setup: null, ...MATCH_CLEAR }).catch(() => {});
   }
 
   /** Challenges addressed to this page. */
@@ -251,6 +296,15 @@ export class MatchLink {
   private evN = 0;
   seen = false;
   private since = Date.now();
+  /** Host: when the guest's latest input arrived (performance.now()). */
+  private inputAt = 0;
+  private lastEcho = -1;
+  /** Guest: the smoothed round trip to the host and back, in ms (null until measured). */
+  rtt: number | null = null;
+  /** Guest: how far behind the host's updates are when they arrive, in seconds (half the round trip). */
+  get delay(): number {
+    return this.rtt === null ? 0.06 : this.rtt / 2000;
+  }
   /** Re-check the opponent (also catches a timeout when the room is quiet). */
   read: () => void = () => {};
 
@@ -271,7 +325,16 @@ export class MatchLink {
       this.seen = true;
       if (role === 'guest' && pr.net) this.net = pr.net;
       if (role === 'guest' && pr.final) this.final = { xp: Array.isArray(pr.final.xp) ? Object.fromEntries(pr.final.xp) : pr.final.xp };
-      if (role === 'host' && pr.inp) this.input = pr.inp;
+      if (role === 'host' && pr.inp && pr.inp !== this.input) {
+        this.input = pr.inp;
+        this.inputAt = performance.now();
+      }
+      if (role === 'guest' && pr.net && typeof pr.net.echo === 'number' && pr.net.echo !== this.lastEcho) {
+        // Round trip = now − (when we sent it + how long the host held it). Smoothed, and kept sane.
+        this.lastEcho = pr.net.echo;
+        const rtt = performance.now() - pr.net.echo;
+        if (rtt > 0 && rtt < 2000) this.rtt = this.rtt === null ? rtt : this.rtt * 0.8 + rtt * 0.2;
+      }
     };
     this.read = read;
     this.unsub = room.onPeers(
@@ -294,11 +357,15 @@ export class MatchLink {
     });
   }
 
-  /** Host: publish the game state, at most ~15 times a second. */
-  sendState(n: NetState, now: number, force = false): void {
-    if (!force && now - this.sentAt < 66) return;
+  /**
+   * Host: publish the game state: ~30 times a second while the ball is in play,
+   * ~10 otherwise (it barely changes then, and this keeps the data use down).
+   */
+  sendState(n: NetState, now: number, force = false, live = true): void {
+    if (!force && now - this.sentAt < (live ? 33 : 100)) return;
     this.sentAt = now;
-    this.put({ net: n });
+    const ts = this.input?.ts;
+    this.put({ net: typeof ts === 'number' ? { ...n, echo: +(ts + (now - this.inputAt)).toFixed(1) } : n });
   }
 
   /** Character ids aren't guaranteed to be presence keys, so XP travels as pairs. */
@@ -307,15 +374,15 @@ export class MatchLink {
   }
 
   /** Guest: queue a hit (with the timing seen here) or a penalty-cup step. */
-  event(k: 'hit' | 'nav', extra: { q?: number | null; off?: number; d?: -1 | 1 } = {}): void {
+  event(k: 'hit' | 'nav', extra: { q?: number | null; off?: number; at?: number; d?: -1 | 1 } = {}): void {
     this.evs = [...this.evs, { n: ++this.evN, k, ...extra }].slice(-6);
   }
 
-  /** Guest: publish keys, crosshair and recent events, at most ~20 times a second. */
-  sendInput(inp: Omit<GuestInput, 'ev'>, now: number, force = false): void {
-    if (!force && now - this.sentAt < 50) return;
+  /** Guest: publish keys, crosshair and recent events, ~30 times a second (hits go at once). */
+  sendInput(inp: Omit<GuestInput, 'ev' | 'ts'>, now: number, force = false): void {
+    if (!force && now - this.sentAt < 33) return;
     this.sentAt = now;
-    this.put({ inp: { ...inp, ev: this.evs } });
+    this.put({ inp: { ...inp, ev: this.evs, ts: +now.toFixed(1) } });
   }
 
   /** Host: the guest's TeamInput for this frame (new hits and steps fire once). */
@@ -331,6 +398,7 @@ export class MatchLink {
         inp.hit = true;
         if (e.q !== undefined) inp.q = e.q;
         if (typeof e.off === 'number') inp.off = e.off;
+        if (typeof e.at === 'number') inp.at = e.at;
       } else if (e.k === 'nav' && (e.d === 1 || e.d === -1)) inp.nav = e.d;
     }
     return inp;

@@ -74,6 +74,20 @@ export class BallPhysics {
     this.sinceBounce = Infinity;
   }
 
+  /** Everything about the ball, for rewinding online play. */
+  snapshot(): { pos: Vec3; vel: Vec3; status: BallStatus; sinceBounce: number; fx: BallEffects; touching: string[] } {
+    return { pos: { ...this.pos }, vel: { ...this.vel }, status: this.status, sinceBounce: this.sinceBounce, fx: this.fx, touching: [...this.touching] };
+  }
+
+  restoreSnapshot(s: ReturnType<BallPhysics['snapshot']>): void {
+    this.pos = { ...s.pos };
+    this.vel = { ...s.vel };
+    this.status = s.status;
+    this.sinceBounce = s.sinceBounce;
+    this.fx = s.fx;
+    this.touching = new Set(s.touching);
+  }
+
   onTable(x: number, y: number): boolean {
     const { length, width } = this.cfg.table;
     return x >= 0 && x <= length && y >= 0 && y <= width;

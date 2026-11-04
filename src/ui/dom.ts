@@ -222,6 +222,20 @@ export function injectStyles(theme: Theme): void {
   @keyframes burst-spin { to { transform: rotate(360deg); } }
   @keyframes burst-fade { from { opacity: 0; } to { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { #ui .loot-box.ready, #ui .loot-box.ready b, #ui .loot-reveal, #ui .loot-reveal .reveal-art, #ui .loot-reveal .burst { animation: none; } }
+  /* Online match setup. */
+  #ui .col { display: flex; flex-direction: column; }
+  #ui .setup-table { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+  #ui .setup-table .table-shot { width: 260px; max-width: 100%; aspect-ratio: 2 / 1; flex: none; }
+  #ui .setup-term { grid-template-columns: 110px minmax(0, 1fr); align-items: center; }
+  #ui .setup-term > b, #ui .setup-term > select, #ui .setup-term > .col { justify-self: start; }
+  #ui .setup-champ { display: flex; gap: 12px; align-items: center; min-height: 100px; }
+  #ui .setup-chars { max-height: 260px; overflow-y: auto; padding: 4px; }
+  #ui .team-col.ready { box-shadow: 0 0 0 2px ${c.good}, 0 0 18px rgba(120, 220, 120, 0.25); }
+  #ui .team-col.ready .team-head .ok { animation: vs-pulse 1.2s ease-in-out infinite; }
+  #ui .setup-ready { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 2px solid ${c.uiEdge}; background: #15110d; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.5); }
+  #ui .setup-ready.go { border-color: ${c.good}; }
+  #ui button.big { font-size: 17px; padding: 10px 28px; letter-spacing: 0.06em; }
+  #ui button.big.on { background: ${c.buttonActive}; }
   #ui .pickgrid { display: grid; gap: 10px; }
   #ui .pickgrid.tables { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   #ui .pickgrid.chars { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }

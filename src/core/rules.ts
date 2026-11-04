@@ -185,6 +185,16 @@ export class RulesEngine {
     this.s = structuredClone(state);
   }
 
+  /** A point to roll back to (online play rewinds a moment to apply a late hit). */
+  checkpoint(): { s: GameState; log: number } {
+    return { s: structuredClone(this.s), log: this._log.length };
+  }
+
+  rollback(cp: { s: GameState; log: number }): void {
+    this.s = structuredClone(cp.s);
+    this._log.length = Math.min(this._log.length, cp.log);
+  }
+
     /** Live, read-only view of the state (no copy). Do not mutate. */
   peek(): Readonly<GameState> {
     return this.s;
