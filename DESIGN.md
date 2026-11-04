@@ -948,3 +948,41 @@ frame there and along one side. Table tops are now drawn 3x finer and scaled dow
 smoothly (`texturedTopFine`, cached per table and camera), and each end's outer
 art columns (its frame) are kept at least ~6 pixels thick on screen (`endBand`), so
 the far end shows the same border as the near end.
+
+## Version 2.01
+
+**Update tracker.** `src/version.ts` holds `MAJOR` and `UPDATE`; the home screen
+shows `v2.01`. Each update adds 1 to `UPDATE` (+0.01), however many commits it
+took. (It used to count commits.)
+
+**Smoother online play.**
+- Guest: each host update is moved on by the measured network delay (the host
+  echoes the guest's send time, so the guest knows the round trip), the drawn
+  ball glides over corrections (`Game.drawOffset`), bounces are tracked locally
+  so the guest's hit window opens on time, and the guest's own hit is shown at
+  once (`predictSwing`) while host updates sent before the host had it are skipped.
+- Host: keeps the last 0.6 s of states (`Snap`, including the rules engine's
+  checkpoint and log length). A guest hit stamped with the time it was pressed is
+  applied at that moment and the game replays forward (`rewindHit`).
+- Updates go ~30 times a second while the ball is live, ~10 otherwise.
+
+**Match setup.** After a challenge is accepted, both players go to a setup
+screen. The challenger sets table, spot, cups, speed and ski collision; each
+player picks a character; the match starts when both press Ready. A Ready holds
+a signature of the terms and both characters (`setupSig`), so any change
+un-readies both. It travels in the lobby card's `setup` field. Rematches keep
+the agreed terms and skip the screen (`invite.re`).
+
+**End screen.** Victory (rays, confetti in the team color, a bouncing pixel
+title) or defeat (cold wash, rain, a dropping title), with stats per team: hits,
+sinks, cups hit, saves, accuracy (shots that landed on the table), perfect hits,
+misses and faults, and the longest rally. They come from replaying the game's
+rules log (`src/game/stats.ts`), so they're right after a rewind. The host sends
+them to the guest with the XP; a best-of-3 adds its games up.
+
+**Characters.** Faces have no white catch-lights or eye whites. Wide-set eyes
+shift half a pixel at full size. Mouths and beards are clipped inside the face.
+Glasses are thin rims drawn at full size. Hats flatten the hair under them. New
+realistic face shapes, body types and everyday hairstyles go on the end of each
+list (parts are stored by index, so existing characters keep their picks). The
+editor's thumbnails crop on the 16×24 grid scaled to the real sprite size.

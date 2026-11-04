@@ -1,9 +1,10 @@
-// The update number on the home screen: 1.00 plus 0.01 for every update
-// (commit) to the game, filled in at build time.
-declare const __UPDATE_COUNT__: number;
+// The update number in the corner of the home screen. Version 2 started with
+// the online setup screen and match stats (2.01); every update after that adds
+// 0.01. To publish an update, add 1 to UPDATE (one bump per update, however
+// many commits it took).
+export const MAJOR = 2;
+export const UPDATE = 1;
 
-const count = typeof __UPDATE_COUNT__ === 'number' ? __UPDATE_COUNT__ : 0;
-
-export function updateLabel(n: number = count): string {
-  return `v${(1 + n / 100).toFixed(2)}`;
+export function updateLabel(major: number = MAJOR, update: number = UPDATE): string {
+  return `v${major}.${String(update).padStart(2, '0')}`;
 }

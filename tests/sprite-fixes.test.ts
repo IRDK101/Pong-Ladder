@@ -1,6 +1,6 @@
 import { composeSprite, normalizeParts, PART_OPTIONS } from '../src/core/sprite';
 
-const P = PART_OPTIONS;
+const P = PART_OPTIONS as unknown as Record<keyof typeof PART_OPTIONS, readonly string[]>;
 const base = normalizeParts({ skin: 1, hairStyle: 1, hairColor: 0, shirtColor: 2, build: 1 });
 const at = (s: { w: number; pixels: string[] }, x: number, y: number) => s.pixels[y * s.w + x];
 const headRows = (s: { w: number; h: number; pixels: string[] }) => s.pixels.slice(0, 20 * s.w);
