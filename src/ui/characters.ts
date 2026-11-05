@@ -89,8 +89,10 @@ export class CharactersScreen {
   /** The characters this screen manages: everything for the owner (or offline); a player's own otherwise. */
   private mine(): Character[] {
     const all = this.store.characters.list();
-    if (!this.account.canSubmit) return all;
-    return all.filter((c) => !this.store.characters.isShared(c.id) || this.account.creators.get(c.id) === this.account.uid);
+    const own = !this.account.canSubmit ? all : all.filter((c) => !this.store.characters.isShared(c.id) || this.account.creators.get(c.id) === this.account.uid);
+    // Plus every collection character this player can play (the same list the picker uses).
+    const ids = new Set(own.map((c) => c.id));
+    return [...own, ...this.account.usable().filter((c) => !ids.has(c.id))];
   }
 
   /** Submission status and buttons on a player's own character. */
@@ -138,15 +140,6 @@ export class CharactersScreen {
         { class: 'row spread' },
         h('h1', {}, 'Characters'),
         h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.edit(newCharacter('')) }, 'New character'), h('button', { onclick: () => this.onClose() }, 'Back to menu')),
-      ),
-      h(
-        'p',
-        { class: 'dim' },
-        this.account.canSubmit
-          ? 'Characters you make are yours to play right away. Submit one and, once the moderator approves it, it joins the collection for everyone: other players unlock it from loot boxes, and you always have it. From then on only the moderator can change it. Levels and cosmetics are your own.'
-          : this.account.owner
-            ? 'Your friends, recreated. Everything you make here joins the shared collection: players start with a few and unlock the rest from loot boxes (see Collection). Review other players’ characters under Collection → Submissions. Levels and cosmetics are each player’s own.'
-            : 'Your friends, recreated. Drafts pick from these, and quick matches and the title-screen demo use random ones. Characters in the collection are made by the moderator and can’t be changed here; ones you make yourself you can edit.',
       ),
       note ? h('p', { class: 'ok' }, note) : null,
       chars.length
@@ -238,7 +231,6 @@ export class CharactersScreen {
             nameTag(c.name, c.master, nameColorOf(c)),
             badgeChips(c),
             levelBar(lvl),
-            h('p', { class: 'dim' }, 'Your level with this character comes from your games with it (wins, sinks, saves, aces, perfect hits) and unlocks cosmetics for your copy only. Its XP also counts towards your player level. Stats never change.'),
             statBars(c.stats),
           ),
         ),

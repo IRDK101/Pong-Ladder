@@ -543,6 +543,10 @@ export class Game {
     if (this.ball.status === 'flying') this.localStep(dt);
     const k = Math.exp(-realDt * 14);
     this.drawOffset = { x: this.drawOffset.x * k, y: this.drawOffset.y * k, z: this.drawOffset.z * k };
+    // Ease the lag in while the other player is about to hit, and out again otherwise (e.g. they miss).
+    const ts = this.cfg.physics.timeScale;
+    if (this.remoteToHit(own)) this.remoteLag = Math.min(this.lagCap, this.remoteLag + realDt * ts * 0.45);
+    else this.remoteLag = Math.max(0, this.remoteLag - realDt * ts * 0.8);
     const st = this.engine.peek();
     if (st.phase !== 'penalty') this.moveAim(realDt, { A: own === 'A' ? inp : idleInput(), B: own === 'B' ? inp : idleInput() }, own);
     this.selectedStyle[own] = inp.style;
@@ -664,10 +668,37 @@ export class Game {
   /** Guest: how far the drawn ball is from the simulated one; it eases to zero so corrections never jump. */
   drawOffset: Vec3 = { x: 0, y: 0, z: 0 };
 
+  /**
+   * Guest: how far behind (game seconds) the drawn ball runs while the other
+   * player is about to hit it. Their hit reaches this device a little late, so
+   * the ball eases back near their paddle instead of flying past it, and then
+   * leaves from the paddle when the hit arrives.
+   */
+  remoteLag = 0;
+
   /** Where to draw the ball (smoothed on the guest's screen). */
   ballShown(): Vec3 {
     const o = this.drawOffset;
+    const l = this.remoteLag;
+    const v = this.ball.vel;
+    if (l > 0 && this.ball.status === 'flying') {
+      const g = this.cfg.physics.gravity;
+      return { x: this.ball.pos.x + o.x - v.x * l, y: this.ball.pos.y + o.y - v.y * l, z: this.ball.pos.z + o.z - v.z * l - 0.5 * g * l * l };
+    }
     return { x: this.ball.pos.x + o.x, y: this.ball.pos.y + o.y, z: this.ball.pos.z + o.z };
+  }
+
+  /** Guest: the network delay to hide (game seconds), set from the link's estimate with each update. */
+  private lagCap = 0;
+
+  /** Guest: true while the other team is due to hit the ball (it has bounced their side, or they're tossing to serve). */
+  private remoteToHit(own: TeamId): boolean {
+    if (this.ball.status !== 'flying') return false;
+    const opp: TeamId = own === 'A' ? 'B' : 'A';
+    const st = this.engine.peek();
+    if (st.phase === 'awaitServe') return st.server.team === opp && this.tossing && !this.tossSwung;
+    if (st.phase !== 'rally' && st.phase !== 'serveInFlight') return false;
+    return !!st.rally && st.rally.target === opp && (this.bounced[opp] || st.rally.cupAtRisk !== null);
   }
 
   /**
@@ -680,10 +711,12 @@ export class Game {
     // hit would put the ball back: skip them until the host's state includes the hit.
     const hz = JSON.stringify(n.hz ?? {});
     const predicting = this.predicted !== null;
-    if (this.predicted && hz === this.predicted.base && performance.now() - this.predicted.wall < 900) return;
+    // Only for about a round trip, though: if the host turned the hit down, show what it has.
+    if (this.predicted && hz === this.predicted.base && this.time < this.predicted.until) return;
     this.predicted = null;
     const before = this.ballShown();
     const wasFlying = this.ball.status === 'flying';
+    const wasHeld = this.ball.status === 'held';
     const hitsBefore = JSON.stringify(this.hitTimes);
     const localTime = this.time;
     const localBounced = { ...this.bounced };
@@ -719,9 +752,21 @@ export class Game {
     const d = { x: before.x - p.x, y: before.y - p.y, z: before.z - p.z };
     // The drawn ball glides over the difference: within a flight, and also onto a new flight the
     // other player's hit started (the news arrives a little late) instead of jumping there.
+    // Within a flight the drawn ball keeps its lag; onto a new flight (or the start of a toss) it
+    // glides from wherever it was drawn, lag included.
+    const lagNow = sameFlight ? this.remoteLag : 0;
+    if (!sameFlight) this.remoteLag = 0;
+    const lv = this.ball.vel;
+    const g = this.cfg.physics.gravity;
+    if (lagNow > 0) {
+      d.x += lv.x * lagNow;
+      d.y += lv.y * lagNow;
+      d.z += lv.z * lagNow + 0.5 * g * lagNow * lagNow;
+    }
     const gap = Math.hypot(d.x, d.y, d.z);
-    const glide = wasFlying && this.ball.status === 'flying' && gap < (sameFlight ? (predicting ? 0.7 : 0.4) : 0.8);
+    const glide = this.ball.status === 'flying' && (wasFlying || wasHeld) && gap < 2.6;
     this.drawOffset = glide ? d : { x: 0, y: 0, z: 0 };
+    this.lagCap = Math.max(0, Math.min(0.2, ahead)) * ts;
   }
 
   /** Guest: the clock has been set from the host once (after that it's only nudged). */
@@ -736,7 +781,7 @@ export class Game {
 
   /** Guest: the host's hit times in the last state taken, and a hit shown here ahead of the host. */
   private lastNetHz = '{}';
-  private predicted: { base: string; wall: number } | null = null;
+  private predicted: { base: string; until: number } | null = null;
 
   /**
    * Guest: show this device's own hit straight away (the ball leaves the paddle
@@ -751,7 +796,8 @@ export class Game {
     else this.trySwing(team, inp.style, undefined, { ...inp, hit: true });
     // The host sends the real calls; drop the ones made here.
     this.messages.length = Math.min(this.messages.length, n);
-    this.predicted = { base: this.lastNetHz, wall: performance.now() };
+    // Wait about a round trip (twice the one-way delay) plus a margin for the host's answer.
+    this.predicted = { base: this.lastNetHz, until: this.time + 2 * this.lagCap + 0.25 * this.cfg.physics.timeScale };
   }
 
   update(realDt: number, inputs: Record<TeamId, TeamInput>): void {

@@ -1,6 +1,6 @@
 // Pre-game menu model (pure) and its canvas drawing.
 
-import { makeConfig, type GameConfig } from '../config';
+import { customSide, DEFAULT_CONTROL, makeConfig, type GameConfig, type Controller, type SpotKey } from '../config';
 import type { Theme } from '../theme';
 import type { View } from '../render/renderer';
 import type { Sprite } from '../core/character';
@@ -8,6 +8,7 @@ import type { NameStyle } from '../progress/nameStyles';
 import { drawStyledName } from './nameStyle';
 import { updateLabel } from '../version';
 import { panel } from '../render/hud';
+import { drawPixelType, INK } from '../render/pixelFont';
 import { pixelText } from '../render/pixelText';
 import type { TeamStats } from '../game/stats';
 import { VENUE_ORDER, VENUES } from '../render/basement';
@@ -112,6 +113,8 @@ const CHOICES: (Choice & { id: OptionId })[] = [
       { label: '2v2 same team vs CPU', apply: players('coop') },
       { label: '1v1 head-to-head', apply: players('versus', 1) },
       { label: '1v1 vs CPU', apply: players('coop', 1) },
+      { label: '2v2 custom line-up', apply: players('custom') },
+      { label: '1v1 custom line-up', apply: players('custom', 1) },
     ],
   },
   { id: 'cpu', label: 'CPU level', values: [{ label: 'Medium', apply: cpu('medium') }, { label: 'Hard', apply: cpu('hard') }, { label: 'Easy', apply: cpu('easy') }] },
@@ -251,14 +254,16 @@ export class Menu {
   tableLocked: (venue: string) => boolean = () => false;
   /** Which team the signed-in player is on in head-to-head (set in the character picker). */
   mySide: 'A' | 'B' = 'A';
+  /** Who plays each spot in a custom line-up (set from the Players screen). */
+  control: Record<SpotKey, Controller> = { ...DEFAULT_CONTROL };
   /** The "Players" row's value: the characters picked for the player's side. */
   playingAs: () => string = () => 'Random';
   /** The profile row: its label, a hint, and how many things wait there (moderator reviews). */
   accountInfo: () => { label: string; hint: string; alert: number } = () => ({ label: 'Your profile', hint: 'not signed in · this browser only', alert: 0 });
   /** The leaderboard row's hint (e.g. your rank). */
-  leaderboardHint: () => string = () => 'XP of every approved player';
+  leaderboardHint: () => string = () => '';
   /** The Online match row: who's in the lobby, and challenges waiting. */
-  onlineInfo: () => { hint: string; challenges: number } = () => ({ hint: '1v1 against a player on another device', challenges: 0 });
+  onlineInfo: () => { hint: string; challenges: number } = () => ({ hint: '', challenges: 0 });
   /** Starts on Quick match, so the hit key plays straight away. */
   cursor = this.rows().findIndex((r) => r.id === 'quick');
 
@@ -304,7 +309,7 @@ export class Menu {
     const mode = this.picks ? this.modeNow() : 'versus';
     return [
       opt('players'),
-      { ...opt('cpu'), dim: mode !== 'coop' },
+      { ...opt('cpu'), dim: mode === 'versus' },
       { id: 'playingAs', label: 'Players', value: this.playingAs(), action: 'pickCharacters', picker: true },
       opt('table'),
       opt('spot'),
@@ -523,6 +528,10 @@ export class Menu {
     const cfg = structuredClone(base);
     CHOICES.forEach((c, i) => c.values[this.pickOf(i)].apply(cfg));
     cfg.players.mySide = cfg.players.mode === 'coop' ? 'A' : this.mySide;
+    if (cfg.players.mode === 'custom') {
+      cfg.players.control = { ...this.control };
+      cfg.players.mySide = customSide(cfg);
+    }
     return cfg;
   }
 }
@@ -710,7 +719,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   const c = theme.colors;
   const m = theme.menu;
 
-  // Logo and subtitle.
+  // Logo.
   ctx.imageSmoothingEnabled = false;
   const lg = logo(theme);
   const nowT = performance.now();
@@ -727,18 +736,8 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = theme.fonts.label;
-  ctx.fillStyle = m.accent;
-  ctx.fillRect(X0, 182, 120, 3);
-  ctx.fillStyle = c.textDim;
-  ctx.fillText('ZETA PSI BASEMENT RULES  ·  2V2 OR 1V1', X0 + 132, 184);
 
-  const heading = (text: string, x: number, y: number) => {
-    ctx.textAlign = 'left';
-    ctx.font = theme.fonts.label;
-    ctx.fillStyle = m.accent;
-    ctx.fillText(text, x, y);
-  };
+  const heading = (text: string, x: number, y: number) => drawPixelType(ctx, text, x, y + 2, 2, INK.gold);
   // Panels: the same dark, 2px-bordered boxes as the in-game HUD, fitted around each group of rows.
   GROUPS.forEach((g, gi) => {
     const rs = g.ids.map((id) => RR[id]);
@@ -1028,19 +1027,21 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
       }
     } else {
       ctx.textAlign = 'left';
-      ctx.font = play ? theme.fonts.title : theme.fonts.bar;
-      ctx.fillStyle = on ? ink : play ? m.accentWarm : c.text;
-      ctx.fillText(`${on ? '▶ ' : ''}${row.label}`, r.x + 16, mid);
+      if (play) drawPixelType(ctx, `${on ? '▶ ' : ''}${row.label}`, r.x + 16, mid, 3, on ? INK.dark : INK.gold);
+      else {
+        ctx.font = theme.fonts.bar;
+        ctx.fillStyle = on ? ink : c.text;
+        ctx.fillText(`${on ? '▶ ' : ''}${row.label}`, r.x + 16, mid);
+      }
       ctx.font = theme.fonts.label;
       ctx.fillStyle = on ? ink : c.textDim;
       ctx.textAlign = 'right';
       const oi = row.id === 'online' ? menu.onlineInfo() : null;
       if (oi?.challenges) badge(ctx, theme, r.x + r.w - 80, mid + 1, oi.challenges === 1 ? 'CHALLENGE!' : `${oi.challenges} CHALLENGES`);
-      else if (play) ctx.fillText(row.id === 'draft' ? 'take turns drafting characters' : oi ? oi.hint : 'your picks, straight in', r.x + r.w - 14, mid);
+      else if (oi) ctx.fillText(oi.hint, r.x + r.w - 14, mid);
       if (row.id === 'leaderboard') ctx.fillText(menu.leaderboardHint(), r.x + r.w - 14, mid);
       if (row.id === 'characters') {
         if (ex.newRewards) badge(ctx, theme, r.x + r.w - 70, mid + 1, `${ex.newRewards} NEW REWARD${ex.newRewards === 1 ? '' : 'S'}`);
-        else ctx.fillText('make and edit, levels, cosmetics', r.x + r.w - 14, mid);
       }
       if (row.id === 'account') {
         const info = menu.accountInfo();
@@ -1098,11 +1099,11 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = m.accent;
-  ctx.fillText(on ? '▶ COLLECTION' : 'COLLECTION', r.x, r.y + 10);
+  drawPixelType(ctx, on ? '▶ COLLECTION' : 'COLLECTION', r.x, r.y + 11, 2, INK.gold);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
   ctx.textAlign = 'right';
-  ctx.fillText(ex.offline ? 'saved in this browser' : 'tables · characters · loot boxes', r.x + r.w, r.y + 10);
+  if (ex.offline) ctx.fillText('saved in this browser', r.x + r.w, r.y + 10);
   // Level and XP bar.
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.title;
@@ -1137,7 +1138,7 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   ctx.fillText(msg, r.x, r.y + 92);
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText(ex.openToAll ? (ex.progressNote ? ex.progressNote : 'Your XP and levels still count; loot boxes wait for later.') : ex.progressNote ? 'Everything is playable now; approved profiles level up and unlock more.' : ex.allAccess ? 'Players start with 4 characters and the plain table, and unlock the rest.' : alert ? 'Open them in the Collection: new tables and characters.' : 'Every player level gives a loot box: a table or a character.', r.x, r.y + 116);
+  if (ex.openToAll && ex.progressNote) ctx.fillText(ex.progressNote, r.x, r.y + 116);
   crate(ctx, theme, r.x + r.w - 54, r.y + 22, alert);
   if (alert) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.boxes));
   else if (ex.pending) badge(ctx, theme, r.x + r.w - 6, r.y + 26, String(ex.pending));
@@ -1425,10 +1426,11 @@ export const HELP: [string, string][] = [
   ['Spin', 'Once the rings appear, your marker flashes: your aim is locked. The direction you hold as you hit adds spin: forward = topspin, back = backspin, sideways = sidespin. Works on serves too. Spin on the ball you return pushes your shot (topspin long, backspin short, sidespin wide) unless you hit the opposite spin to cancel it; the same spin adds to yours.'],
   ['Serve', 'Hit to toss, then hit again as the rings meet. The ball must bounce once on your side, then land in the diagonal quarter. Two serves off the table cost half a cup. A serve that hits the other team\u2019s cups also costs half a cup, and they pick which one.'],
   ['Saves', 'When a ball hits your cup, either teammate can return it before it bounces twice. The window is shorter, so react quickly.'],
-  ['Cups', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
+  ['Cup hits', 'Hit a full cup: half. Hit a half cup: gone. Sink: gone, and the sinker gets served to again. Penalties never take your last half cup: the other team has to hit it off.'],
   ['Speed', 'The Speed bar runs from Relaxed (left) through Normal (the middle, the realistic pace) to Masters (right), with small steps in between: further right plays faster with smaller timing windows (saves included). Click or drag the bar, or use \u25c0 \u25b6.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
-  ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves.'],
+  ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves. Custom line-up: in Players, set each spot to P1 (WASD), P2 (arrows) or the CPU, in any mix (a CPU partner, three CPUs, or CPUs only to watch).'],
+  ['Cups', 'The Table row opens table and cups: pick a cup style (clear, red or blue party cup, wine glass) and a drink. It only changes how your screen looks.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],
   ['Players', 'The Players row picks your characters, and against the CPU also who the CPU plays as (any character, even locked ones). Spots left on Random get a new character each match.'],
 ];

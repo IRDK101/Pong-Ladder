@@ -9,6 +9,42 @@ export type MatchFormat = 'single' | 'bestOf3';
 export type PenaltyCupSelection = 'choose' | 'auto';
 /** The playable tables of the basement (see render/basement.ts). */
 export type Venue = 'saints' | 'spirits' | 'chain';
+/** Who plays a spot: the first human (WASD + Space), the second (arrows + Enter) or the CPU. */
+export type Controller = 'p1' | 'p2' | 'cpu';
+export type SpotKey = 'A-left' | 'A-right' | 'B-left' | 'B-right';
+/** A custom line-up's starting point: you and a CPU partner against a CPU and a second human. */
+export const DEFAULT_CONTROL: Record<SpotKey, Controller> = { 'A-left': 'p1', 'A-right': 'cpu', 'B-left': 'cpu', 'B-right': 'p2' };
+
+/** The spots a team plays from (just its left one in 1v1). */
+export function teamSpots(cfg: Pick<GameConfig, 'teamSize'>): ('left' | 'right')[] {
+  return cfg.teamSize === 1 ? ['left'] : ['left', 'right'];
+}
+
+/** Who plays a spot in this mode. */
+export function controllerOf(cfg: Pick<GameConfig, 'players' | 'teamSize'>, team: 'A' | 'B', side: 'left' | 'right'): Controller {
+  const m = cfg.players.mode;
+  if (m === 'versus') return team === 'A' ? 'p1' : 'p2';
+  if (m === 'coop') return team === 'B' ? 'cpu' : cfg.teamSize === 1 || side === 'left' ? 'p1' : 'p2';
+  const key: SpotKey = `${team}-${cfg.teamSize === 1 ? 'left' : side}`;
+  return cfg.players.control?.[key] ?? DEFAULT_CONTROL[key];
+}
+
+/** True when the CPU plays every spot on a team. */
+export function allCpu(cfg: Pick<GameConfig, 'players' | 'teamSize'>, team: 'A' | 'B'): boolean {
+  return teamSpots(cfg).every((s) => controllerOf(cfg, team, s) === 'cpu');
+}
+
+/** True when the CPU plays any spot on a team. */
+export function anyCpu(cfg: Pick<GameConfig, 'players' | 'teamSize'>, team: 'A' | 'B'): boolean {
+  return teamSpots(cfg).some((s) => controllerOf(cfg, team, s) === 'cpu');
+}
+
+/** A custom line-up's "you" team: where P1 plays (else P2), for XP and the win screen. */
+export function customSide(cfg: Pick<GameConfig, 'players' | 'teamSize'>): 'A' | 'B' {
+  for (const who of ['p1', 'p2'] as Controller[]) for (const t of ['A', 'B'] as const) if (teamSpots(cfg).some((s) => controllerOf(cfg, t, s) === who)) return t;
+  return 'A';
+}
+
 /** The painted top played on: the three original tables, plus the rest (render/designs.ts). */
 export type TableDesign = Venue | 'plain' | 'goofy' | 'gummy' | 'pitch' | 'larks' | 'deco' | 'retro' | 'scribble' | 'cans';
 
@@ -36,9 +72,12 @@ export interface GameConfig {
   skiCollision: boolean;
   /** Who picks first in the draft. */
   draftFirstPick: FirstPick;
-  /** Head-to-head (one human per team) or both humans on Team A against the CPU. */
-  /** mySide: which team the signed-in player is on (their XP and unlocks); always A against the CPU. */
-  players: { mode: 'versus' | 'coop'; cpu: Difficulty; mySide?: 'A' | 'B' };
+  /**
+   * Head-to-head (one human per team), both humans on Team A against the CPU,
+   * or a custom line-up (`control`: who plays each spot, P1 keys, P2 keys or the CPU).
+   * mySide: which team the signed-in player is on (their XP and unlocks); always A against the CPU.
+   */
+  players: { mode: 'versus' | 'coop' | 'custom'; cpu: Difficulty; mySide?: 'A' | 'B'; control?: Partial<Record<SpotKey, Controller>> };
   /** Players per team: 2 (the standard four-player game) or 1 (1v1: one player covers both halves of their end). */
   teamSize: 1 | 2;
   /** Which table in the basement the game is played at (visual only: every table plays by the same rules). */
@@ -246,8 +285,8 @@ export const defaultConfig: GameConfig = {
     reach: { comfortable: 0.75, max: 1.7 },
     spin: { top: 0.85, back: 0.8, side: 0.95 },
     clash: { depthPush: 0.2, sidePush: 0.15, timingRelief: 0.35, carry: 0.3 },
-    aimSpeed: 1.6,
-    fineAim: 0.3,
+    aimSpeed: 2.0,
+    fineAim: 0.25,
     tossSpeed: 2.4,
     tossHeight: 0.1,
     standOff: 0.25,

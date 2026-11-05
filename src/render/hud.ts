@@ -1,6 +1,7 @@
 // HUD: cup states, server, whose turn, miss counter, referee messages, match score.
 
 import type { Theme } from '../theme';
+import { allCpu, controllerOf, teamSpots } from '../config';
 import { diagonalOf } from '../core/table';
 import type { Cup, TeamId } from '../core/types';
 import type { Game } from '../game/game';
@@ -33,8 +34,8 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
   const teamW = Math.min(Math.max(230, cupsW), Math.floor((W - 3 * M) / 2));
   panel(ctx, theme, M, M, teamW, 76, c.teamA);
   panel(ctx, theme, W - M - teamW, M, teamW, 76, c.teamB);
-  drawTeamCups(ctx, theme, 'A', st.cups.A, M + 12, 'left', false, game.teamLine('A'), teamW - 24);
-  drawTeamCups(ctx, theme, 'B', st.cups.B, W - M - 12, 'right', game.cfg.players.mode === 'coop', game.teamLine('B'), teamW - 24);
+  drawTeamCups(ctx, theme, 'A', st.cups.A, M + 12, 'left', game.cfg.players.mode === 'custom' && allCpu(game.cfg, 'A'), game.teamLine('A'), teamW - 24);
+  drawTeamCups(ctx, theme, 'B', st.cups.B, W - M - 12, 'right', game.cfg.players.mode === 'coop' || (game.cfg.players.mode === 'custom' && allCpu(game.cfg, 'B')), game.teamLine('B'), teamW - 24);
 
   // --- Status pill, top center.
   let status: string;
@@ -109,7 +110,12 @@ export function renderHud(ctx: CanvasRenderingContext2D, theme: Theme, v: View, 
       ctx.textAlign = 'center';
       ctx.fillText(text, x0 + w / 2, v.height - M - 13);
     };
-    if (coop && game.solo) {
+    if (game.cfg.players.mode === 'custom') {
+      // Only the key sets someone is using.
+      const used = (who: 'p1' | 'p2') => (['A', 'B'] as TeamId[]).some((t) => teamSpots(game.cfg).some((sd) => controllerOf(game.cfg, t, sd) === who));
+      if (used('p1')) tag('P1: WASD · Space · L-Shift fine', M, 'left', c.teamA);
+      if (used('p2')) tag('P2: Arrows · Enter · R-Shift fine', W - M, 'right', c.teamB);
+    } else if (coop && game.solo) {
       tag('You: WASD or arrows · Space or Enter · Shift: fine aim', M, 'left', c.teamA);
       tag('CPU', W - M, 'right', c.teamB);
     } else {

@@ -4,6 +4,7 @@
 import type { Sprite } from '../core/character';
 import type { Theme } from '../theme';
 import { NAME_STYLE_CSS } from './nameStyle';
+import { canPixelType, INK, pixelType } from '../render/pixelFont';
 
 type Attrs = Record<string, string | number | boolean | EventListener | undefined>;
 type Child = Node | string | null | undefined | false;
@@ -84,7 +85,7 @@ export function injectStyles(theme: Theme): void {
   #ui .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
   #ui .cols { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; }
   @media (max-width: 760px) { #ui .cols { grid-template-columns: minmax(0, 1fr); } }
-  #ui .box { background: ${c.button}; border: 2px solid ${c.uiEdge}; border-radius: 0; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.35); padding: 12px; min-width: 0; }
+  #ui .box { background: ${c.button}; border: 3px solid #0b0806; border-radius: 0; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 -5px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.45); padding: 14px; min-width: 0; }
   #ui .card { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   #ui .card.pick { cursor: pointer; }
   #ui .card.pick:hover, #ui .card.pick:focus-visible { border-color: ${c.gold}; background: ${c.buttonActive}; }
@@ -124,7 +125,7 @@ export function injectStyles(theme: Theme): void {
   #ui .panel.fresh .pickgrid > button { animation: card-in 0.32s cubic-bezier(.2,.9,.3,1.25) both; animation-delay: calc(var(--i, 0) * 18ms); }
   @keyframes card-in { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
   #ui .pickcard.on { animation: picked 0.45s ease-out; }
-  @keyframes picked { 0% { box-shadow: 0 0 0 2px ${c.gold}, 0 0 0 0 rgba(255, 214, 110, 0.7); } 100% { box-shadow: 0 0 0 2px ${c.gold}, 0 0 0 12px rgba(255, 214, 110, 0); } }
+  @keyframes picked { 0% { box-shadow: inset 0 0 0 3px ${c.gold}, inset 0 0 0 0 rgba(255, 214, 110, 0.7); } 100% { box-shadow: inset 0 0 0 3px ${c.gold}, inset 0 0 0 12px rgba(255, 214, 110, 0); } }
   #ui .pickcard.taken { opacity: 0.6; }
   /* Players: the lineup at the table. */
   #ui .lineup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
@@ -238,6 +239,12 @@ export function injectStyles(theme: Theme): void {
   #ui button.big.on { background: ${c.buttonActive}; }
   #ui .pickgrid { display: grid; gap: 10px; }
   #ui .pickgrid.tables { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  #ui .spot-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  #ui .spot-wrap > .spot { width: 100%; }
+  #ui .ctl-row { justify-content: center; gap: 4px; flex-wrap: nowrap; }
+  #ui .ctl-row button { flex: 1; padding: 3px 4px 2px; }
+  #ui .pickgrid.cups { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  #ui canvas.cup-icon { width: 108px; height: 120px; image-rendering: pixelated; }
   #ui .pickgrid.chars { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
   #ui .pickcard { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px; min-width: 0; background: ${c.button}; }
   #ui .pickcard .name, #ui .pickcard .pickname { font-size: 13px; font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -282,9 +289,51 @@ export function injectStyles(theme: Theme): void {
   #ui .lobby-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
   #ui .invite { border-color: ${c.gold}; background: #3a321e; animation: reveal-in 0.4s both; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  /* Pixel look: chunky buttons with a hard bottom edge and notched corners, pixel headings. */
+  #ui { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.14) 0 2px, transparent 2px 4px); }
+  #ui .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #ui canvas.px-type { display: block; image-rendering: pixelated; max-width: 100%; height: auto; }
+  #ui h1[data-px] { border-bottom: none; padding-bottom: 8px; background: linear-gradient(${c.gold}, ${c.gold}) left bottom / 100% 4px no-repeat, linear-gradient(#0b0806, #0b0806) 4px calc(100% + 0px) / 100% 4px no-repeat; }
+  #ui h2[data-px] { line-height: 0; }
+  #ui button, #ui select {
+    border: 2px solid #0b0806; border-bottom-width: 5px; padding: 5px 12px 4px; font-weight: bold;
+    box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 3px 0 rgba(255,255,255,0.06);
+    clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+  }
+  #ui button:hover:not(:disabled) { box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 3px 0 rgba(255,255,255,0.1); }
+  #ui button:active:not(:disabled) { transform: translateY(3px); border-bottom-width: 2px; margin-bottom: 3px; box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 3px 0 rgba(0,0,0,0.3); }
+  #ui button.primary { border-color: #0b0806; box-shadow: inset 0 0 0 2px #fff1b8, inset 0 -3px 0 #c8902a; }
+  #ui button.primary:hover:not(:disabled) { box-shadow: inset 0 0 0 2px #fffaf0, inset 0 -3px 0 #c8902a; }
+  #ui button.on { border-color: #0b0806; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45); }
+  #ui button.danger { border-color: #0b0806; box-shadow: inset 0 0 0 2px ${c.bad}; }
+  #ui input[type=text], #ui textarea { border: 3px solid #0b0806; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 4px 0 rgba(0,0,0,0.35); }
+  #ui input[type=text]:focus, #ui textarea:focus { outline: none; box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 4px 0 rgba(0,0,0,0.35); }
+  #ui .spot.on, #ui .pickcard.on, #ui .slot.on, #ui .style-opt.on, #ui .spot.on:hover, #ui .pickcard.on:hover, #ui .slot.on:hover { box-shadow: inset 0 0 0 3px ${c.gold}; }
+  #ui .slot.cpu.on, #ui .slot.cpu.on:hover { box-shadow: inset 0 0 0 3px ${c.teamB}; }
   ${NAME_STYLE_CSS(c.gold)}
   `;
   document.head.append(h('style', { id: 'pong-ui-style' }, css));
+}
+
+/**
+ * Headings in pixel lettering (the game's own look): each h1/h2 that is plain
+ * text gets a crisp scaled-up pixel image, keeping the words for screen readers
+ * and for code that reads the heading text.
+ */
+export function pixelHeadings(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLElement>('h1, h2')) {
+    if (el.dataset.px || el.children.length) continue;
+    const text = (el.textContent ?? '').trim();
+    if (!text || !canPixelType(text)) continue;
+    const big = el.tagName === 'H1';
+    const scale = big ? 4 : 2;
+    const img = pixelType(text.toUpperCase(), big ? INK.cream : INK.gold);
+    const c = h('canvas', { class: 'px-type', width: img.width, height: img.height, 'aria-hidden': 'true' });
+    c.getContext('2d')!.drawImage(img, 0, 0);
+    c.style.width = `${img.width * scale}px`;
+    el.dataset.px = '1';
+    el.replaceChildren(c, h('span', { class: 'sr' }, text));
+  }
 }
 
 /** The overlay that holds whichever HTML screen is open. */
@@ -337,6 +386,7 @@ export class Overlay {
     this.lastTitle = title;
     const y = this.root.scrollTop;
     const focusId = keepScroll ? (document.activeElement as HTMLElement | null)?.id : undefined;
+    pixelHeadings(panel);
     this.root.replaceChildren(panel);
     this.root.hidden = false;
     this.root.scrollTop = keepScroll ? y : 0;

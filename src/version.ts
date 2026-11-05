@@ -3,7 +3,7 @@
 // 0.01. To publish an update, add 1 to UPDATE (one bump per update, however
 // many commits it took).
 export const MAJOR = 2;
-export const UPDATE = 4;
+export const UPDATE = 5;
 
 export function updateLabel(major: number = MAJOR, update: number = UPDATE): string {
   return `v${major}.${String(update).padStart(2, '0')}`;

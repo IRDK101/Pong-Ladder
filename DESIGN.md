@@ -1049,3 +1049,39 @@ checks it.
 - "SINK!" is pixel lettering like the hit callouts, with sparkles.
 - The passive abilities section is hidden for now (the code stays; see
   `passivesPanel`).
+
+## Version 2.05
+
+- **Characters tab** lists every character you can play (the same list the
+  Players picker uses), not only the ones you made, so a new account no longer
+  sees an empty screen.
+- **Online at fast speeds (guest).** Corrections always glide while the ball is
+  in flight (the old 0.8 m limit snapped the ball at Masters, where it covers
+  about a metre during the network delay), a toss glides out of the hand, and
+  while the other player is about to hit, the drawn ball eases up to one network
+  delay behind (`remoteLag`), so their hit leaves from the paddle instead of the
+  ball flying past it and jumping back. A predicted hit the host turns down is
+  shown for about a round trip of game time, not 900 ms of wall clock.
+  `tests/online-masters.test.ts`: at Masters the guest's big jumps are now about
+  the host's own (hits and bounces); before, about 100 more per game.
+- **Players move instead of jumping.** The player due to hit shuffles toward
+  where the ball will reach their end; a lone 1v1 player walks over to the half
+  they serve from (drawing only, `updateStances` in renderer3d).
+- **Far-end misses.** A ball below table height behind the table's top is drawn
+  before the table, so the table hides it; a ball that will come down off the
+  table before bouncing on the side it's headed for gets a red trail.
+- **Menus.** A 5×7 pixel font (`render/pixelFont.ts`) for headings and the big
+  Play buttons; HTML screens get chunky notched buttons with a hard bottom edge,
+  framed boxes with hard shadows, and pixel h1/h2 (`pixelHeadings`). Long
+  explanations and the logo subtitle are gone.
+- **Cups and drinks** (`render/cups.ts`): clear plastic, red and blue party
+  cups, a wine glass; water, lager, stout, red wine. Picked under Table and
+  cups, saved in the browser, and only change that screen's look.
+- **Custom line-up** (Mode: 2v2 / 1v1 custom line-up): each spot is P1 (WASD),
+  P2 (arrows) or the CPU (`controllerOf`). A CPU spot plays only on its turn;
+  CPU-only sides earn no XP.
+- Default aim speed 1.6 → 2.0 (fine aim 0.25 of it).
+- Body and face tweaks: the cheek shadow moved to the shaded side (it read as a
+  bruise), Muscular has thick arms and a V taper, Curvy rounds out below the
+  waist instead of a ledge, Dad bod is a belly over the belt, Wide jaw widens
+  gently at full size.

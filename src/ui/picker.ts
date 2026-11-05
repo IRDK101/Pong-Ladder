@@ -2,7 +2,7 @@
 // which characters the player plays as (in quick matches). Both are grids
 // of thumbnails, so a pick is one click (or arrows + Enter).
 
-import type { GameConfig, TableDesign } from '../config';
+import { controllerOf, customSide, DEFAULT_CONTROL, type Controller, type GameConfig, type SpotKey, type TableDesign } from '../config';
 import type { Character } from '../core/character';
 import { characterSprite } from '../core/sprite';
 import type { Account } from '../data/shared';
@@ -12,6 +12,8 @@ import { tableShot } from './collection';
 import { nameColorOf } from './characters';
 import { h, nameTag, spriteImage, type Overlay } from './dom';
 import type { PositionKey } from '../game/game';
+import type { Theme } from '../theme';
+import { CUP_STYLES, cupIcon, DRINKS, type CupLook } from '../render/cups';
 
 /** The player's saved picks (kept in this browser). */
 export interface Selection {
@@ -21,6 +23,8 @@ export interface Selection {
   mySide: 'A' | 'B';
   /** Against the CPU: character ids for the CPU team, left then right (null = random). */
   cpu?: (string | null)[];
+  /** Custom line-up: who plays each spot. */
+  control?: Record<SpotKey, Controller>;
 }
 
 export const SELECTION_KEY = 'dartmouth-pong/selection/v1';
@@ -37,6 +41,11 @@ export function loadSelection(raw: string | null): Selection {
     if (v && Array.isArray(v.chars)) s.chars = [0, 1].map((i) => (typeof v.chars![i] === 'string' ? (v.chars![i] as string) : null));
     if (v?.mySide === 'B') s.mySide = 'B';
     if (v && Array.isArray(v.cpu)) s.cpu = [0, 1].map((i) => (typeof v.cpu![i] === 'string' ? (v.cpu![i] as string) : null));
+    if (v && v.control && typeof v.control === 'object') {
+      const c = { ...DEFAULT_CONTROL };
+      for (const k of Object.keys(c) as SpotKey[]) if (['p1', 'p2', 'cpu'].includes((v.control as Record<string, string>)[k])) c[k] = (v.control as Record<string, Controller>)[k];
+      s.control = c;
+    }
   } catch {
     /* defaults */
   }
@@ -59,15 +68,47 @@ function gridKeys(grid: HTMLElement): void {
   });
 }
 
+/** What the cup pictures need from the game config and theme, and the cup look saved in this browser. */
+export interface CupLookOps {
+  theme: Theme;
+  cfg: GameConfig;
+  get: () => CupLook;
+  set: (l: CupLook) => void;
+}
+
 export class TablePicker {
   constructor(
     private overlay: Overlay,
     private account: Account,
     private choose: (d: TableDesign) => void,
     private back: () => void,
+    private cups: CupLookOps | null = null,
   ) {}
 
-  show(current: TableDesign): void {
+  /** The Cups and Drink rows: each card shows a cup in that look. */
+  private cupRows(current: TableDesign): HTMLElement[] {
+    const ops = this.cups;
+    if (!ops) return [];
+    const look = ops.get();
+    const card = (l: CupLook, name: string, on: boolean) => {
+      const icon = cupIcon(ops.theme, ops.cfg, l);
+      const img = h('canvas', { class: 'cup-icon', width: icon.width, height: icon.height });
+      img.getContext('2d')!.drawImage(icon, 0, 0);
+      return h(
+        'button',
+        { class: `pickcard${on ? ' on' : ''}`, onclick: () => (ops.set(l), this.show(current, true)) },
+        img,
+        h('span', { class: 'pickname' }, name),
+      );
+    };
+    const styles = h('div', { class: 'pickgrid cups' }, ...CUP_STYLES.map((st) => card({ ...look, style: st.id }, st.name, st.id === look.style)));
+    const drinks = h('div', { class: 'pickgrid cups' }, ...DRINKS.map((d) => card({ ...look, drink: d.id }, d.name, d.id === look.drink)));
+    gridKeys(styles);
+    gridKeys(drinks);
+    return [h('h2', {}, 'Cups'), styles, h('h2', {}, 'Drink'), drinks];
+  }
+
+  show(current: TableDesign, keepScroll = false): void {
     const a = this.account;
     const have = DESIGN_ORDER.filter((d) => a.tableUnlocked(d)).length;
     const grid = h(
@@ -89,12 +130,14 @@ export class TablePicker {
       h(
         'div',
         { class: 'panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, 'Pick a table'), h('button', { onclick: () => this.back() }, 'Back')),
-        h('p', { class: 'dim' }, `${have} of ${DESIGN_ORDER.length} unlocked. Locked tables come from loot boxes (Collection). Where the table stands is the Spot row.`),
+        h('div', { class: 'row spread' }, h('h1', {}, 'Table and cups'), h('button', { onclick: () => this.back() }, 'Done')),
+        h('div', { class: 'row spread' }, h('h2', {}, 'Table'), h('span', { class: 'dim' }, `${have} of ${DESIGN_ORDER.length} unlocked`)),
         grid,
+        ...this.cupRows(current),
       ),
+      keepScroll,
     );
-    (grid.querySelector('button.on') as HTMLButtonElement | null)?.focus();
+    if (!keepScroll) (grid.querySelector('button.on') as HTMLButtonElement | null)?.focus();
   }
 }
 
@@ -200,7 +243,11 @@ export class CharacterPicker {
     const list = cpuSide ? this.sel.cpu : this.sel.chars;
     const byId = new Map(a.everyone().map((c) => [c.id, c]));
     const solo = slots.length === 1;
+    const custom = cfg.players.mode === 'custom';
+    const teamOf = (side: 'mine' | 'cpu'): 'A' | 'B' => (side === 'mine' ? myTeam : myTeam === 'A' ? 'B' : 'A');
+    const CTL_LABEL: Record<Controller, string> = { p1: 'P1 · WASD', p2: 'P2 · arrows', cpu: 'CPU' };
     const roleOf = (side: 'mine' | 'cpu', i: number) => {
+      if (custom) return `${solo ? '' : i ? 'Right · ' : 'Left · '}${CTL_LABEL[controllerOf(cfg, teamOf(side), i ? 'right' : 'left')]}`;
       if (side === 'cpu') return vsCpu ? (solo ? 'CPU' : i ? 'CPU · right' : 'CPU · left') : solo ? 'Opponent' : i ? 'Right' : 'Left';
       if (solo) return 'You';
       return vsCpu ? (i ? 'You · right · arrows' : 'You · left · WASD') : i ? 'You · right' : 'You · left';
@@ -216,11 +263,22 @@ export class CharacterPicker {
         h('span', { class: 'spot-role' }, roleOf(side, i)),
         h('span', { class: 'spot-name' }, c ? c.name : 'Random'),
       );
-      return b;
+      if (!custom) return b;
+      // Custom line-up: who plays this spot.
+      const team = teamOf(side);
+      const now = controllerOf(cfg, team, i ? 'right' : 'left');
+      const ctl = h(
+        'div',
+        { class: 'chips ctl-row', role: 'group', 'aria-label': `Who plays ${team} ${i ? 'right' : 'left'}` },
+        ...(['p1', 'p2', 'cpu'] as Controller[]).map((who) =>
+          h('button', { class: `small${who === now ? ' on' : ''}`, onclick: () => this.setControl(team, i ? 'right' : 'left', who) }, who === 'cpu' ? 'CPU' : who.toUpperCase()),
+        ),
+      );
+      return h('div', { class: 'spot-wrap' }, b, ctl);
     };
     const teamCol = (team: 'A' | 'B', k0: number) => {
       const side: 'mine' | 'cpu' = team === myTeam ? 'mine' : 'cpu';
-      const title = side === 'mine' ? `Team ${team} · you` : vsCpu ? `Team ${team} · CPU` : `Team ${team}`;
+      const title = custom ? `Team ${team}` : side === 'mine' ? `Team ${team} · you` : vsCpu ? `Team ${team} · CPU` : `Team ${team}`;
       return h(
         'div',
         { class: `team-col team${team}${side === 'mine' ? ' mine' : ''}` },
@@ -279,20 +337,12 @@ export class CharacterPicker {
       s?.focus();
       s?.setSelectionRange(s.value.length, s.value.length);
     });
-    const locked = this.account.everyone().length - this.account.usable().length;
     const pickingFor = `${roleOf(this.side, this.slot)} · Team ${this.side === 'mine' ? myTeam : myTeam === 'A' ? 'B' : 'A'}`;
     this.overlay.show(
       h(
         'div',
         { class: 'panel players-panel' },
         h('div', { class: 'row spread' }, h('h1', {}, 'Players'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
-        h(
-          'p',
-          { class: 'dim' },
-          vsCpu
-            ? 'Pick a spot, then who plays it. The CPU can play as anyone, even characters you haven’t unlocked. Random spots get a new character each match.'
-            : `Pick a spot, then who plays it. Your team earns your XP; the other team is for whoever shares the keyboard. Random spots get a new character each match.${locked > 0 ? ` ${locked} characters are still locked: unlock them in the Collection.` : ''}`,
-        ),
         lineup,
         h('div', { class: 'row spread' }, h('h2', {}, `Choosing: ${pickingFor}`), usable.length > 8 ? search : null),
         grid,
@@ -304,6 +354,25 @@ export class CharacterPicker {
   }
 
   /** Head-to-head: make the other team yours. Every pick stays on its side of the table. */
+  /** Custom line-up: set who plays a spot. If "you" (P1) change teams, every pick stays on its side of the table. */
+  private setControl(team: 'A' | 'B', side: 'left' | 'right', who: Controller): void {
+    const before = customSide(this.cfg());
+    const control = { ...DEFAULT_CONTROL, ...this.sel.control };
+    control[`${team}-${side}` as SpotKey] = who;
+    if (this.cfg().teamSize === 1) control[`${team}-right` as SpotKey] = who;
+    this.sel.control = control;
+    this.save();
+    const after = customSide(this.cfg());
+    if (after !== before) {
+      const mine = this.sel.chars;
+      this.sel.chars = this.sel.cpu ?? [null, null];
+      this.sel.cpu = mine;
+      this.side = this.side === 'mine' ? 'cpu' : 'mine';
+      this.save();
+    }
+    this.show();
+  }
+
   private swapTeams(): void {
     const mine = this.sel.chars;
     this.sel.chars = this.sel.cpu ?? [null, null];

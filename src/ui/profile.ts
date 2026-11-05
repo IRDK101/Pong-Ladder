@@ -253,7 +253,7 @@ export class LeaderboardScreen {
       return;
     }
     this.headSig = headSig;
-    const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('div', { class: 'row' }, edit, h('button', { onclick: () => this.back() }, 'Back to menu'))), h('p', { class: 'dim' }, 'Total XP from every character each player has played. Updates live.'), note, table);
+    const panel = h('div', { class: 'panel' }, h('div', { class: 'row spread' }, h('h1', {}, 'Leaderboard'), h('div', { class: 'row' }, edit, h('button', { onclick: () => this.back() }, 'Back to menu'))), note, table);
     this.panel = panel;
     this.table = table;
     this.overlay.show(panel, true);

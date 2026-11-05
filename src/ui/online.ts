@@ -380,8 +380,8 @@ export class OnlineScreen {
       );
     };
     const action = send
-      ? h('div', { class: 'setup-ready' }, h('p', { class: 'dim' }, `Set the terms and pick your character, then send. ${st.name} sees the terms and picks their character to accept.`), h('div', { class: 'row' }, h('button', { onclick: () => ((this.setup = null), this.render()) }, 'Back'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.sendChallenge() }, 'Send challenge')))
-      : h('div', { class: 'setup-ready go' }, h('p', { class: 'dim' }, 'Pick your character, then accept: the match starts straight away.'), h('div', { class: 'row' }, h('button', { onclick: () => this.decline(st.peer, st.id) }, 'Decline'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.acceptChallenge() }, 'Accept and play')));
+      ? h('div', { class: 'setup-ready' }, h('div', { class: 'row' }, h('button', { onclick: () => ((this.setup = null), this.render()) }, 'Back'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.sendChallenge() }, 'Send challenge')))
+      : h('div', { class: 'setup-ready go' }, h('div', { class: 'row' }, h('button', { onclick: () => this.decline(st.peer, st.id) }, 'Decline'), h('button', { class: 'primary big', disabled: !this.chosen, onclick: () => this.acceptChallenge() }, 'Accept and play')));
     this.put(
       h(
         'div',
@@ -422,12 +422,10 @@ export class OnlineScreen {
     const myInv = lb.me?.invite ?? null;
     const others = lb.peers().filter((p) => !p.isMe);
     const incoming = lb.incoming();
-    const s = this.deps.settings();
     const meCard = h(
       'div',
       { class: 'box lobby-row' },
-      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'} (change it in Edit profile or Players)`))),
-      h('p', { class: 'dim', style: 'font-size:12px;max-width:420px' }, `Challenge someone to set the terms first (table, spot, cups and speed, starting from your menu settings: ${settingsLine(s)}) and pick your character. They see the terms, pick their character and accept, and the match starts. 1v1, single game.`),
+      h('div', { class: 'row' }, me.char ? spriteImage(characterSprite(me.char.sprite, me.char.cosmetics.spriteItem ?? null), 2) : null, h('div', {}, styledName(me.name, me.style), h('p', { class: 'dim', style: 'font-size:12px' }, `Level ${me.level} · playing as ${me.char?.name ?? '—'}`))),
     );
     const invites = incoming.map((p) =>
       h(
@@ -455,13 +453,12 @@ export class OnlineScreen {
               : h('button', { class: 'primary', disabled: p.card.status === 'playing' || !!myInv || !me.char, onclick: () => this.challenge(p) }, 'Challenge'),
           );
         })
-      : [h('div', { class: 'box' }, h('p', { class: 'dim' }, 'Nobody else has Online match open right now. Keep this screen open: when a friend opens it too, they show up here.'))];
+      : [h('div', { class: 'box' }, h('p', { class: 'dim' }, 'Nobody else is online right now.'))];
     this.put(
       h(
         'div',
         { class: 'panel' },
         panelHead,
-        h('p', { class: 'dim' }, 'Play a friend on another device: you each use your own keyboard. Games earn XP for approved profiles.'),
         this.note ? h('p', { class: 'ok' }, this.note) : null,
         lb.error ? h('p', { class: 'error' }, lb.error) : null,
         !lb.room.connected() ? h('p', { class: 'dim' }, 'Connecting to the live room… (if this stays, reload the page)') : null,

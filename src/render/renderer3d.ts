@@ -7,7 +7,9 @@
 // table and cups are flat-shaded projected polygons.
 
 import { pixelText } from './pixelText';
-import type { GameConfig } from '../config';
+import { cupLook, DRINK_INK, drawStyledCup } from './cups';
+import { controllerOf, type GameConfig } from '../config';
+import { leadSide } from '../game/controllers';
 import type { Sprite } from '../core/character';
 import type { BallEffects, Vec3 } from '../core/physics';
 import type { Cup, PlayerId, TeamId } from '../core/types';
@@ -15,7 +17,7 @@ import type { Game } from '../game/game';
 import type { Theme } from '../theme';
 import { project, teamCamera, type Camera } from './camera';
 import { drawBasement, drawTableAt } from './basement3d';
-import { disc, IDENTITY, line, ring, screenEllipse } from './prims';
+import { disc, IDENTITY, line, ring } from './prims';
 import { SPIN_LABELS } from '../game/shot';
 import type { View } from './renderer';
 
@@ -44,11 +46,63 @@ interface Viewport {
 const PERSON_HEIGHT = 1.45;
 
 /** Where a player is drawn standing: off their corner of the table (drawing only; play uses playerSpot). */
-function standSpot(game: Game, p: PlayerId): Vec3 {
+/** Where a player stands with nobody moving them: beside their lane, behind their end. */
+function homeSpot(game: Game, p: PlayerId): Vec3 {
   const spot = game.playerSpot(p);
   const W = game.cfg.table.width;
   const outward = spot.y < W / 2 ? -0.62 : 0.62;
   return { x: spot.x + (p.team === 'A' ? -0.3 : 0.3), y: spot.y + outward, z: -game.cfg.physics.tableHeight };
+}
+
+function standSpot(game: Game, p: PlayerId): Vec3 {
+  const home = homeSpot(game, p);
+  const y = stances.get(game)?.y[stanceKey(game, p)];
+  return y === undefined ? home : { ...home, y };
+}
+
+/**
+ * Players move instead of jumping (drawing only: play is unchanged). The player
+ * due to hit shuffles toward where the ball will reach their end and drifts back
+ * once it has gone; a lone 1v1 player walks over to the half they serve from.
+ * Eased in wall-clock time, so split screen and online mirrors move the same.
+ */
+const stances = new WeakMap<Game, { at: number; y: Record<string, number> }>();
+const STANCE_REACH = 0.5;
+/** In 1v1 the one player is shown as either teammate: keep one position per team. */
+const stanceKey = (game: Game, p: PlayerId) => (game.solo ? p.team : `${p.team}-${p.side}`);
+function updateStances(game: Game): void {
+  const now = performance.now() / 1000;
+  let s = stances.get(game);
+  if (!s) stances.set(game, (s = { at: now, y: {} }));
+  const dt = Math.min(0.1, Math.max(0, now - s.at));
+  s.at = now;
+  const L = game.cfg.table.length;
+  const ball = game.ball;
+  const bp = game.ballShown();
+  for (const p of game.shownPlayers()) {
+    const key = stanceKey(game, p);
+    const home = homeSpot(game, p).y;
+    const lane = game.playerSpot(p).y;
+    let shift = 0;
+    const active = game.activePlayer(p.team);
+    const end = p.team === 'A' ? 0 : L;
+    const coming = ball.status === 'flying' && (p.team === 'A' ? ball.vel.x < -0.05 : ball.vel.x > 0.05);
+    if (coming && active && active.side === p.side) {
+      const t = Math.max(0, (end - bp.x) / ball.vel.x);
+      const y = bp.y + ball.vel.y * Math.min(t, 1.5);
+      shift = Math.max(-STANCE_REACH, Math.min(STANCE_REACH, (y - lane) * 0.9));
+    }
+    const target = home + shift;
+    const cur = s.y[key];
+    if (cur === undefined || dt <= 0) {
+      if (cur === undefined) s.y[key] = target;
+      continue;
+    }
+    // Quick to chase the ball, slower to walk back; never faster than a brisk shuffle.
+    const rate = shift !== 0 ? 7 : 3;
+    const step = (target - cur) * (1 - Math.exp(-dt * rate));
+    s.y[key] = cur + Math.max(-3 * dt, Math.min(3 * dt, step));
+  }
 }
 
 const buffers = new Map<string, HTMLCanvasElement>();
@@ -203,6 +257,32 @@ export function pickCup3D(game: Game, cups: Cup[], sx: number, sy: number): Cup 
 
 // --------------------------------------------------------------- scene
 
+/** True when the table top stands between the camera and a ball below table height (so the table hides it). */
+function behindTableTop(cam: Camera, cfg: GameConfig, p: Vec3): boolean {
+  const top = p.z + cfg.physics.ballRadius * 2;
+  if (top >= 0 || cam.eye.z <= 0) return false;
+  const { length: L, width: W } = cfg.table;
+  const t = cam.eye.z / (cam.eye.z - top);
+  const x = cam.eye.x + (p.x - cam.eye.x) * t;
+  const y = cam.eye.y + (p.y - cam.eye.y) * t;
+  return x > 0.01 && x < L - 0.01 && y > 0.01 && y < W - 0.01;
+}
+
+/** True when a flying ball will come down off the table (or already has): where it meets table height, ignoring spin. */
+function headedOff(game: Game, p: Vec3, v: Vec3): boolean {
+  const { length: L, width: W } = game.cfg.table;
+  if (p.z < 0) return !game.ball.onTable(p.x, p.y);
+  // Only before it has bounced on the side it's going to (after that it's meant to fly off the end to be hit).
+  const rally = game.engine.peek().rally;
+  if (!rally || rally.targetBounces > 0 || rally.cupAtRisk) return false;
+  const g = game.cfg.physics.gravity;
+  const t = (v.z + Math.sqrt(v.z * v.z + 2 * g * Math.max(0, p.z))) / g;
+  const x = p.x + v.x * t;
+  const y = p.y + v.y * t;
+  const m = 0.03;
+  return x < -m || x > L + m || y < -m || y > W + m;
+}
+
 function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: CanvasRenderingContext2D, theme: Theme, game: Game, vp: Viewport, ui: boolean): void {
   const cfg = game.cfg;
   const cam = vp.cam;
@@ -210,6 +290,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
   const { length: L, width: W } = cfg.table;
   const floorZ = -cfg.physics.tableHeight;
   drawBasement(b, theme, cfg, cam, cfg.venue);
+  updateStances(game);
 
   // --- People standing behind the far end of the table go first, so the table hides their legs.
   const viewDepth = (p: Vec3) => (p.x - cam.eye.x) * cam.f.x + (p.y - cam.eye.y) * cam.f.y + (p.z - cam.eye.z) * cam.f.z;
@@ -221,6 +302,13 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     .filter(({ pos }) => viewDepth(pos) > farEnd)
     .sort((a, c) => viewDepth(c.pos) - viewDepth(a.pos));
   for (const { p, pos } of behindTable) drawPerson(b, theme, game, cam, p, pos, vp.team === p.team, isActive(p));
+
+  // A ball that has dropped below the top past an edge goes behind the table (drawn before it, so
+  // the table hides it, as it would in the room); a ball headed off the table gets a red trail.
+  const bs = game.ballShown();
+  const out = game.ball.status === 'flying' && headedOff(game, bs, game.ball.vel);
+  const hidden = game.ball.status !== 'sunk' && behindTableTop(cam, cfg, bs);
+  if (hidden) drawBall(b, theme, cfg, cam, bs, game.ball.vel, game.ball.fx, out);
 
   // --- Fine layer: the table, the ski, then cups and the ball.
   const ch = vp.camHi;
@@ -260,7 +348,7 @@ function drawScene(b: CanvasRenderingContext2D, h: CanvasRenderingContext2D, f: 
     const shown = wob.dx || wob.dy ? { ...cup, x: cup.x + wob.dx, y: cup.y + wob.dy } : cup;
     items.push({ depth: depthOf({ x: cup.x, y: cup.y, z: 0 }), draw: () => drawCup(h, theme, cfg, ch, shown, cup === penaltyCup, game.time) });
   }
-  if (ball.status !== 'sunk') items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, game.ballShown(), ball.vel, ball.fx) });
+  if (ball.status !== 'sunk' && !hidden) items.push({ depth: depthOf(ball.pos), draw: () => drawBall(h, theme, cfg, ch, game.ballShown(), ball.vel, ball.fx, out) });
   items.sort((a, c) => c.depth - a.depth);
   for (const it of items) it.draw();
   if (ui) drawTimingRings(h, theme, game, ch);
@@ -408,6 +496,7 @@ function drawTimingRings(b: CanvasRenderingContext2D, theme: Theme, game: Game, 
 function showsAim(game: Game, vp: Viewport, team: TeamId): boolean {
   if (!game.aiming(team)) return false;
   if (game.cfg.players.mode === 'coop' && team === 'B') return false; // the CPU's aim stays hidden
+  if (game.cfg.players.mode === 'custom' && controllerOf(game.cfg, team, leadSide(game, team)) === 'cpu') return false;
   // Online, each device shows only its own crosshair, like split screen.
   if (game.online) return vp.team === team;
   return lastViewports.length < 2 || vp.team === team;
@@ -475,6 +564,7 @@ function drawCupFx(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: C
   const H = cfg.physics.cupHeight;
   const r = cfg.cups.diameter / 2;
   const F = theme.fx;
+  const drink = DRINK_INK[cupLook().drink];
   for (const f of game.cupFx) {
     const t = game.time - f.time;
     if (f.kind === 'hit') {
@@ -508,7 +598,7 @@ function drawCupFx(h: CanvasRenderingContext2D, theme: Theme, game: Game, cam: C
       const p = project(cam, { x: f.x + Math.cos(a) * sp * t, y: f.y + Math.sin(a) * sp * t, z });
       if (!p) continue;
       const s = Math.max(1, Math.round(p.scale * 0.012));
-      h.fillStyle = i % 3 ? F.drop : F.dropLight;
+      h.fillStyle = i % 3 ? drink.drop : drink.dropLight;
       h.fillRect(Math.round(p.x), Math.round(p.y), s, s);
     }
     h.globalAlpha = 1;
@@ -756,96 +846,11 @@ function drawLabels(ctx: CanvasRenderingContext2D, theme: Theme, game: Game, vp:
   ctx.restore();
 }
 
-/**
- * A clear plastic cup: a faint glass body you can see the table through, the
- * water inside at its level (low in a half cup, so it reads through the
- * side), bright edge highlights, ridges and the rim.
- */
+/** A cup in the player's chosen look (render/cups.ts), with the penalty-pick ring when selected. */
 function drawCup(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, cup: Cup, selected: boolean, time: number): void {
-  const C = theme.cup;
   const r = cfg.cups.diameter / 2;
   const H = cfg.physics.cupHeight;
-  const rb = r * 0.72;
-  const radiusAt = (z: number) => rb + (r - rb) * (z / H);
-  const top = screenEllipse(cam, { x: cup.x, y: cup.y, z: H }, r);
-  const bot = screenEllipse(cam, { x: cup.x, y: cup.y, z: 0 }, rb);
-  if (!top || !bot) return;
-  const { length: L, width: W } = cfg.table;
-  // Soft shadow, cast away from the middle of the room.
-  const dx = cup.x - L / 2;
-  const dy = cup.y - W / 2;
-  const dl = Math.hypot(dx, dy) || 1;
-  const sh = screenEllipse(cam, { x: cup.x + (dx / dl) * 0.025, y: cup.y + (dy / dl) * 0.025, z: 0.001 }, r * 1.02);
-  if (sh) {
-    h.fillStyle = C.shadow;
-    h.beginPath();
-    h.ellipse(sh.x, sh.y, sh.rx, sh.ry, 0, 0, Math.PI * 2);
-    h.fill();
-  }
-  const taper = (a: { x: number; y: number; rx: number; ry: number }, b: { x: number; y: number; rx: number; ry: number }) => {
-    h.beginPath();
-    h.moveTo(a.x - a.rx, a.y);
-    h.lineTo(b.x - b.rx, b.y);
-    h.ellipse(b.x, b.y, b.rx, b.ry, 0, Math.PI, 0, true);
-    h.lineTo(a.x + a.rx, a.y);
-    h.ellipse(a.x, a.y, a.rx, a.ry, 0, 0, Math.PI, true);
-    h.closePath();
-  };
-  // Glass body.
-  h.fillStyle = C.glass;
-  taper(top, bot);
-  h.fill();
-  // Water column and its surface.
-  const zw = H * (cup.state === 'full' ? 0.62 : 0.28);
-  const wat = screenEllipse(cam, { x: cup.x, y: cup.y, z: zw }, radiusAt(zw) * 0.94);
-  if (wat) {
-    const wb = { ...bot, rx: bot.rx * 0.94, ry: bot.ry * 0.94 };
-    h.fillStyle = C.water;
-    taper(wat, wb);
-    h.fill();
-    h.fillStyle = C.waterTop;
-    h.beginPath();
-    h.ellipse(wat.x, wat.y, wat.rx, wat.ry, 0, 0, Math.PI * 2);
-    h.fill();
-    h.fillStyle = C.waterShine;
-    h.fillRect(Math.round(wat.x - wat.rx * 0.5), Math.round(wat.y - wat.ry * 0.3), Math.max(1, Math.round(wat.rx * 0.35)), 1);
-  }
-  // Edges: a bright lit side, a darker far side, a vertical shine, ridges.
-  h.lineWidth = 1;
-  h.strokeStyle = C.glassEdge;
-  h.beginPath();
-  h.moveTo(top.x - top.rx, top.y);
-  h.lineTo(bot.x - bot.rx, bot.y);
-  h.stroke();
-  h.strokeStyle = C.glassShade;
-  h.beginPath();
-  h.moveTo(top.x + top.rx, top.y);
-  h.lineTo(bot.x + bot.rx, bot.y);
-  h.stroke();
-  h.strokeStyle = C.glassEdge;
-  h.globalAlpha = 0.6;
-  h.beginPath();
-  h.moveTo(top.x - top.rx * 0.5, top.y + top.ry);
-  h.lineTo(bot.x - bot.rx * 0.5, bot.y + bot.ry * 0.6);
-  h.stroke();
-  h.globalAlpha = 1;
-  for (const z of [0.18, 0.82]) {
-    const e = screenEllipse(cam, { x: cup.x, y: cup.y, z: H * z }, radiusAt(H * z));
-    if (!e) continue;
-    h.strokeStyle = C.glassShade;
-    h.beginPath();
-    h.ellipse(e.x, e.y, e.rx, e.ry, 0, Math.PI, 0, true);
-    h.stroke();
-  }
-  h.strokeStyle = C.glassShade;
-  h.beginPath();
-  h.ellipse(bot.x, bot.y, bot.rx, bot.ry, 0, Math.PI, 0, true);
-  h.stroke();
-  // Rim.
-  h.strokeStyle = C.rim;
-  h.beginPath();
-  h.ellipse(top.x, top.y, top.rx, top.ry, 0, 0, Math.PI * 2);
-  h.stroke();
+  drawStyledCup(h, theme, cfg, cam, cup);
   if (selected) {
     const pulse = 0.5 + 0.5 * Math.sin(time * 10);
     ring(h, cam, { x: cup.x, y: cup.y, z: H + 0.005 }, r * (1.3 + pulse * 0.3), theme.colors.penaltyCursor, 2, 28);
@@ -853,10 +858,24 @@ function drawCup(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam
 }
 
 /** The ball: shaded sphere with an outline, a highlight and (when spinning) a colored streak. */
-function drawBall(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, pos: Vec3, vel: Vec3, fx: BallEffects): void {
+function drawBall(h: CanvasRenderingContext2D, theme: Theme, cfg: GameConfig, cam: Camera, pos: Vec3, vel: Vec3, fx: BallEffects, out = false): void {
   const c = project(cam, { ...pos, z: pos.z + cfg.physics.ballRadius });
   if (!c) return;
   const r = Math.max(1.5, cfg.physics.ballRadius * c.scale);
+  if (out) {
+    // Headed off the table: a fading red trail behind the ball.
+    for (let i = 5; i >= 1; i--) {
+      const k = i * 0.028;
+      const g = project(cam, { x: pos.x - vel.x * k, y: pos.y - vel.y * k, z: pos.z - vel.z * k + cfg.physics.ballRadius });
+      if (!g) continue;
+      h.globalAlpha = 0.85 - i * 0.14;
+      h.fillStyle = theme.fx.danger;
+      h.beginPath();
+      h.arc(g.x, g.y, Math.max(1.2, r * (1.05 - i * 0.1)), 0, Math.PI * 2);
+      h.fill();
+    }
+    h.globalAlpha = 1;
+  }
   const spin = fx.topspin > 0.05 ? theme.colors.spinTop : fx.topspin < -0.05 ? theme.colors.spinBack : Math.abs(fx.sideKick) > 0.01 ? theme.colors.spinSide : null;
   if (spin) {
     const tail = project(cam, { x: pos.x - vel.x * 0.06, y: pos.y - vel.y * 0.06, z: pos.z - vel.z * 0.06 + cfg.physics.ballRadius });

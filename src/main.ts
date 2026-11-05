@@ -1,6 +1,6 @@
 // App shell: menu → (draft) → match (one or more games) → win screen. Owns the DOM.
 
-import { makeConfig, type GameConfig, type TableDesign } from './config';
+import { allCpu, anyCpu, controllerOf, makeConfig, type Controller, type GameConfig, type TableDesign } from './config';
 import { tableArt } from './render/basement3d';
 import { gameStats, sumStats, type GameStats } from './game/stats';
 import { composeBase, composeSprite, PART_OPTIONS, randomParts } from './core/sprite';
@@ -8,7 +8,7 @@ import { theme } from './theme';
 import type { TeamId } from './core/types';
 import { Game, idleInput, POSITIONS, type Roster, type TeamInput } from './game/game';
 import { CpuController } from './game/ai';
-import { coopInput } from './game/controllers';
+import { coopInput, leadSide } from './game/controllers';
 import { cameraFrame, teamCamera } from './render/camera';
 import { pickCup3D, renderGame3D } from './render/renderer3d';
 import { isTyping, Keyboard } from './input/keyboard';
@@ -29,6 +29,7 @@ import { MatchLink, type MatchSettings } from './net/online';
 import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
 import { ProfileEditor } from './ui/profileEdit';
+import { cleanCupLook, cupLook, setCupLook } from './render/cups';
 import { CharacterPicker, loadSelection, mySlots, otherPinnedFor, otherSlots, pinnedFor, playersLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
@@ -102,6 +103,7 @@ const selection = loadSelection(kv.getItem(SELECTION_KEY));
 const saveSelection = () => {
   kv.setItem(SELECTION_KEY, JSON.stringify(selection));
   menu.mySide = selection.mySide;
+  if (selection.control) menu.control = { ...selection.control };
   account.saveSelection(selection);
   syncShowcase();
 };
@@ -130,17 +132,24 @@ function adoptSelection(): void {
 }
 menu.restoreDesign(selection.design);
 menu.mySide = selection.mySide;
+if (selection.control) menu.control = { ...selection.control };
+const CUP_LOOK_KEY = 'dartmouth-pong/cups/v1';
+try {
+  setCupLook(cleanCupLook(JSON.parse(kv.getItem(CUP_LOOK_KEY) ?? 'null')));
+} catch {
+  /* the default look */
+}
 menu.playingAs = () => playersLabel(menu.config(baseCfg));
 menu.leaderboardHint = () => {
   const board = account.leaderboard();
   const i = account.uid ? board.findIndex((r) => r.uid === account.uid) : -1;
   if (i >= 0) return `you're #${i + 1} of ${board.length}`;
-  return board.length ? `${board.length} player${board.length === 1 ? '' : 's'} ranked by XP` : 'XP of every approved player';
+  return board.length ? `${board.length} ranked` : '';
 };
 menu.onlineInfo = () => {
-  if (onlineScreen.blockedNow()) return { hint: 'approved profiles only', challenges: 0 };
+  if (onlineScreen.blockedNow()) return { hint: 'needs an approved profile', challenges: 0 };
   const s = onlineScreen.status();
-  return { hint: s.here ? `${s.here} player${s.here === 1 ? '' : 's'} online now` : 'nobody else online right now', challenges: s.challenges };
+  return { hint: s.here ? `${s.here} player${s.here === 1 ? '' : 's'} online now` : 'nobody online', challenges: s.challenges };
 };
 menu.accountInfo = () => {
   const who = account.me?.name || account.me?.email || '';
@@ -190,7 +199,8 @@ const overlay = new Overlay();
 type Screen = 'menu' | 'help' | 'panel' | 'playing' | 'gameEnd' | 'matchEnd';
 let screen: Screen = 'menu';
 let game: Game | null = null;
-let cpu: CpuController | null = null;
+/** The CPU playing for each team (in a custom line-up, for that team's CPU spots). */
+let cpus: Record<TeamId, CpuController | null> = { A: null, B: null };
 let record: MatchRecord | null = null;
 let menuNote = '';
 let gameOverAt = 0;
@@ -204,6 +214,11 @@ let lastStats: GameStats | null = null;
  */
 function youTeam(g: Game): TeamId | null {
   if (online) return online.role === 'host' ? 'A' : 'B';
+  if (g.cfg.players.mode === 'custom') {
+    // The one team with humans on it, if only one has any.
+    const humans = (['A', 'B'] as TeamId[]).filter((t) => !allCpu(g.cfg, t));
+    return humans.length === 1 ? humans[0] : null;
+  }
   return g.cfg.players.mode === 'coop' ? 'A' : null;
 }
 /** A local match is paused (Escape, or the window losing focus). Online, the same overlay asks before leaving, and the match runs on. */
@@ -259,9 +274,12 @@ function startMatch(cfg: GameConfig, roster: Roster): void {
   game = new Game(cfg, Math.random, roster);
   // Aim keys follow the screen each human is looking at.
   const frameFor = (team: 'A' | 'B') => cameraFrame(teamCamera(cfg, team, 16, 9));
-  if (cfg.view === 'split' && cfg.players.mode === 'versus') game.controlFrames = { A: frameFor('A'), B: frameFor('B') };
+  if (layoutFor(cfg) === 'split') game.controlFrames = { A: frameFor('A'), B: frameFor('B') };
   else game.controlFrames = { A: frameFor('A'), B: frameFor('A') };
-  cpu = cfg.players.mode === 'coop' ? new CpuController('B', cfg.players.cpu, Math.random) : null;
+  cpus = {
+    A: cfg.players.mode === 'custom' && anyCpu(cfg, 'A') ? new CpuController('A', cfg.players.cpu, Math.random) : null,
+    B: cfg.players.mode === 'coop' || (cfg.players.mode === 'custom' && anyCpu(cfg, 'B')) ? new CpuController('B', cfg.players.cpu, Math.random) : null,
+  };
   record = newMatchRecord(cfg);
   counted = {};
   xpNote = '';
@@ -315,7 +333,7 @@ function startOnline(o: OnlineStart): void {
     game.controlFrames = { A: cameraFrame(teamCamera(cfg, 'A', 16, 9)), B: cameraFrame(teamCamera(cfg, 'B', 16, 9)) };
     game.messages.push({ text: `Online vs ${o.otherName}: you are Team B. Waiting for the host…`, time: 0 });
     record = null;
-    cpu = null;
+    cpus = { A: null, B: null };
     counted = {};
     xpNote = '';
     screen = 'playing';
@@ -406,6 +424,11 @@ function recordGame(): void {
   }
   store.matches.save(record);
   const side = game.cfg.players.mode === 'coop' ? 'A' : (game.cfg.players.mySide ?? 'A');
+  // A line-up with no human on your side (CPUs only) earns nothing.
+  if (game.cfg.players.mode === 'custom' && allCpu(game.cfg, side)) {
+    xpNote = 'No XP: only CPUs played';
+    return;
+  }
   const before = Object.values(counted).reduce((a, b) => a + b, 0);
   const res = account.recordMatch(record, side, counted);
   const gained = Object.values(counted).reduce((a, b) => a + b, 0) - before;
@@ -424,9 +447,33 @@ function liveInputs(g: Game): Record<TeamId, TeamInput> {
   if (g.cfg.players.mode === 'coop') {
     // 1v1 against the CPU: one human, who can use either set of keys.
     const a = g.solo ? mergeInputs(keyboard.team('A'), keyboard.team('B')) : coopInput(g, 'A', keyboard.team('A'), keyboard.team('B'));
-    return { A: a, B: cpu ? cpu.input(g) : idleInput() };
+    return { A: a, B: cpus.B ? cpus.B.input(g) : idleInput() };
   }
+  if (g.cfg.players.mode === 'custom') return { A: customInput(g, 'A'), B: customInput(g, 'B') };
   return { A: keyboard.team('A'), B: keyboard.team('B') };
+}
+
+/**
+ * A custom line-up's team: each spot is P1's keys, P2's keys or the CPU. A CPU
+ * spot plays only while it's that teammate's turn (otherwise it stands still, so
+ * it never swings for the human next to it).
+ */
+function customInput(g: Game, team: TeamId): TeamInput {
+  const cfg = g.cfg;
+  const ai = cpus[team]?.input(g) ?? idleInput();
+  const keysOf = (who: Controller) => (who === 'p1' ? keyboard.team('A') : who === 'p2' ? keyboard.team('B') : null);
+  if (g.solo) return keysOf(controllerOf(cfg, team, 'left')) ?? ai;
+  const lead = leadSide(g, team);
+  const slot = (side: 'left' | 'right') => keysOf(controllerOf(cfg, team, side)) ?? (side === lead ? ai : idleInput());
+  if (allCpu(cfg, team)) return ai;
+  return coopInput(g, team, slot('left'), slot('right'));
+}
+
+/** True when the CPU makes this team's choices right now (its penalty pick, say). */
+function cpuLeads(g: Game, team: TeamId): boolean {
+  if (g.cfg.players.mode === 'coop') return team === 'B';
+  if (g.cfg.players.mode !== 'custom') return false;
+  return controllerOf(g.cfg, team, g.solo ? 'left' : leadSide(g, team)) === 'cpu';
 }
 
 /** Either of two key sets driving one player. */
@@ -444,7 +491,9 @@ function mergeInputs(a: TeamInput, b: TeamInput): TeamInput {
 }
 
 function layoutFor(cfg: GameConfig): 'behindA' | 'split' {
-  return cfg.view === 'split' && cfg.players.mode === 'versus' ? 'split' : 'behindA';
+  if (cfg.view !== 'split') return 'behindA';
+  if (cfg.players.mode === 'versus') return 'split';
+  return cfg.players.mode === 'custom' && !allCpu(cfg, 'A') && !allCpu(cfg, 'B') ? 'split' : 'behindA';
 }
 
 function anyPressed(codes: (keyof GameConfig['controls']['A'])[]): boolean {
@@ -582,6 +631,15 @@ const tablePicker = new TablePicker(
     toMenu();
   },
   () => toMenu(),
+  {
+    theme,
+    cfg: baseCfg,
+    get: () => cupLook(),
+    set: (l) => {
+      setCupLook(l);
+      kv.setItem(CUP_LOOK_KEY, JSON.stringify(cupLook()));
+    },
+  },
 );
 const characterPicker = new CharacterPicker(overlay, () => menu.config(baseCfg), account, selection, saveSelection, () => toMenu());
 
@@ -950,7 +1008,7 @@ canvas.addEventListener('click', (e) => {
   } else if (screen === 'playing' && game) {
     // Against the CPU, the human can't make the CPU's penalty choice for it.
     const pen = game.engine.peek().penalty;
-    if (game.cfg.players.mode === 'coop' && pen && pen.chooser === 'B') return;
+    if (pen && cpuLeads(game, pen.chooser)) return;
     const cup = pickCup3D(game, game.penaltyCups(), sx, sy);
     if (cup) game.chooseCup(cup.team, cup.id);
   }

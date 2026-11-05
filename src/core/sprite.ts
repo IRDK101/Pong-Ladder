@@ -145,9 +145,10 @@ function headRows(shape: string): [number, number][] {
     case 'Pointed chin':
       return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9], [7, 8]];
     case 'Wide jaw':
-      return [[6, 9], [5, 10], [5, 10], [5, 10], [4, 11], [4, 11], [5, 10]];
+      // The oval, with the jaw widened at full size (FACE_PROFILE).
+      return [[6, 9], [5, 10], [5, 10], [5, 10], [5, 10], [5, 10], [6, 9]];
     case 'Heart':
-      return [[5, 10], [4, 11], [4, 11], [5, 10], [6, 9], [6, 9], [7, 8]];
+      return [[5, 10], [4, 11], [5, 10], [5, 10], [6, 9], [6, 9], [7, 8]];
     case 'Diamond':
       return [[7, 8], [6, 9], [5, 10], [4, 11], [5, 10], [6, 9], [7, 8]];
     case 'Narrow':
@@ -401,27 +402,32 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
     c.set(tx0, belt, '');
     c.set(tx1, belt, '');
   } else if (build === 'Muscular') {
-    // Big shoulders and upper arms, a wide chest, a narrow waist.
-    c.rect(tx0 - 2, torsoTop + 1, tx0 - 2, torsoTop + 3, sleeve);
-    c.rect(tx1 + 2, torsoTop + 1, tx1 + 2, torsoTop + 3, sleeve);
-    c.rect(tx0 + 1, torsoTop + 2, tx1 - 1, torsoTop + 2, shade(shirt, 0.88)); // the chest line
-    for (const y of [belt - 1, belt]) {
+    // Thick arms all the way down (two pixels wide), broad shoulders, and a V taper to the waist.
+    const fore = longSleeve ? shade(shirt, 0.92) : skin;
+    c.rect(tx0 - 2, torsoTop + 1, tx0 - 2, torsoTop + 2, sleeve);
+    c.rect(tx1 + 2, torsoTop + 1, tx1 + 2, torsoTop + 2, sleeve);
+    c.rect(tx0 - 2, torsoTop + 3, tx0 - 2, armBot - 1, fore);
+    c.rect(tx1 + 2, torsoTop + 3, tx1 + 2, armBot - 1, fore);
+    for (const y of [belt - 2, belt - 1, belt]) c.set(tx0, y, '');
+    for (const y of [belt - 2, belt - 1, belt]) c.set(tx1, y, '');
+    c.set(tx0 + 1, belt, '');
+    c.set(tx1 - 1, belt, '');
+  } else if (build === 'Curvy') {
+    // An hourglass: a fuller chest, the waist pulled in, the hips rounding out again below the belt.
+    for (const y of [belt - 2, belt - 1]) {
       c.set(tx0, y, '');
       c.set(tx1, y, '');
     }
-  } else if (build === 'Curvy') {
-    // An hourglass: the waist pulls in, the hips flare out past the torso.
-    c.set(tx0, belt - 1, '');
-    c.set(tx1, belt - 1, '');
     c.rect(tx0, legTop, tx1, legTop + 1, pants);
-    c.set(tx0 - 1, legTop, pants);
-    c.set(tx1 + 1, legTop, pants);
   } else if (build === 'Dad bod') {
-    // Sloping shoulders, and a belly that rounds out over the belt, past the hands.
+    // Sloping shoulders, and a round belly that hangs over the belt.
     c.set(tx0, torsoTop, '');
     c.set(tx1, torsoTop, '');
-    c.rect(tx0 - 1, belt, tx1 + 1, belt, shirt);
+    c.set(tx0 - 1, torsoTop, '');
+    c.set(tx1 + 1, torsoTop, '');
+    c.rect(tx0, belt, tx1, belt, shirt);
     c.rect(tx0 + 1, legTop, tx1 - 1, legTop, shirt);
+    c.rect(tx0 + 2, legTop, tx1 - 2, legTop, shade(shirt, 0.8)); // its underside
   } else if (build === 'Big and tall') {
     // Broad all the way down, long legs.
     c.rect(tx0, belt, tx1, belt, shirt);
@@ -560,7 +566,7 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       if (eyes !== 'Squint' && eyes !== 'Closed' && !(eyes === 'Wink' && x > 8)) meta.eyes.push({ x, y: eyeY });
     }
     const cheek = rowAt(eyeY + 1);
-    if (cheek && c.get(cheek[0], eyeY + 1) === skin) c.set(cheek[0], eyeY + 1, shade(skin, 0.92)); // cheek shadow
+    if (cheek && c.get(cheek[1], eyeY + 1) === skin) c.set(cheek[1], eyeY + 1, shade(skin, 0.92)); // cheek shadow, on the side away from the light
     const mouth = P.mouth[parts.mouth];
     const my = eyeY + 2;
     const lip = shade(skin, 0.68);
@@ -1220,6 +1226,8 @@ export function epx(src: Sprite): Sprite {
 const FACE_PROFILE: Partial<Record<string, number[]>> = {
   // Widths at full size (oval): 8, 12 ×10, 8. Natural tapers smoothly below the cheeks.
   Natural: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, 0, 0],
+  // A jaw that widens gently below the cheeks, a broad chin.
+  'Wide jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 1],
   // Square: the jaw as wide as the cheeks, a flat chin.
   'Defined jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2],
   // Wide at the cheekbones, then a smooth V to the chin.
