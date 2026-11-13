@@ -89,7 +89,6 @@ export class CollectionScreen {
         { style: 'display:flex;flex-direction:column;gap:6px;flex:1;min-width:220px' },
         h('h2', {}, 'Player level'),
         levelBar(lvl),
-        h('p', { class: 'dim', style: 'font-size:12px' }, 'All the XP your characters earn adds up to your player level. Every level gives a loot box.'),
       ),
       h(
         'div',
@@ -111,7 +110,6 @@ export class CollectionScreen {
       'div',
       { class: 'panel' },
       h('div', { class: 'row spread' }, h('h1', {}, 'Collection'), h('button', { onclick: () => this.onClose() }, 'Back to menu')),
-      a.mode === 'local' ? h('p', { class: 'dim' }, 'Offline: your level and unlocks are saved in this browser. Open the published game signed in to keep them with your account.') : null,
       a.problem ? h('p', { class: 'error' }, a.problem) : null,
       this.note ? h('p', { class: 'ok' }, this.note) : null,
       head,
@@ -196,10 +194,9 @@ export class CollectionScreen {
       { style: 'display:flex;flex-direction:column;gap:10px' },
       shared.length
         ? h('p', { class: 'dim' }, `${open.length} of ${shared.length} characters unlocked.`)
-        : h('p', { class: 'dim' }, 'The shared collection is empty so far.'),
+        : null,
       shared.length ? h('div', { class: 'grid' }, ...[...shared].sort((x, y) => Number(a.canUse(y.id)) - Number(a.canUse(x.id))).map(card)) : null,
       own.length ? h('h2', {}, 'Made in this browser') : null,
-      own.length ? h('p', { class: 'dim' }, a.canSubmit ? 'Yours to play. Submit them from Characters to add them for everyone.' : 'Yours to play.') : null,
       own.length ? h('div', { class: 'grid' }, ...own.map(card)) : null,
     );
   }

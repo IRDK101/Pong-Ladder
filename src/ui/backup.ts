@@ -71,7 +71,7 @@ export function showBackup(overlay: Overlay, store: AppStore, onClose: () => voi
       'div',
       { class: 'panel' },
       h('div', { class: 'row spread' }, h('h1', {}, 'Back up and restore'), h('button', { onclick: onClose }, 'Back to menu')),
-      h('p', { class: 'dim' }, `This browser holds ${counts}. Signed-in players' levels and unlocks are also saved online; a backup moves everything else (characters you made here, players, match history) to another browser.`),
+      h('p', { class: 'dim' }, `This browser holds ${counts}.`),
       note ? status : null,
       h('div', { class: 'box', style: 'display:flex;flex-direction:column;gap:10px' }, h('h2', {}, 'Back up'), out, h('div', { class: 'row' }, h('button', { class: 'primary', onclick: copy }, 'Copy backup'), h('button', { onclick: download }, 'Download file')), note ? null : status),
       h(

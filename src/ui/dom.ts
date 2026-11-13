@@ -148,7 +148,7 @@ export function injectStyles(theme: Theme): void {
   #ui .spot .spot-name { font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ui .spot.on { border-color: ${c.gold}; background: #4a3f24; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
   #ui .spot.on .spot-role { color: ${c.gold}; }
-  #ui .team-head { min-height: 26px; }
+  #ui .team-head { min-height: 32px; }
   #ui .spot.on::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 240, 200, 0.22) 50%, transparent 70%); background-size: 250% 100%; animation: shine 1.8s linear infinite; pointer-events: none; }
   @keyframes shine { from { background-position: 150% 0; } to { background-position: -100% 0; } }
   #ui .vs-badge { align-self: center; font-weight: bold; font-size: 22px; color: ${c.gold}; text-shadow: 2px 2px 0 #000; animation: vs-pulse 2.4s ease-in-out infinite; }
@@ -243,6 +243,18 @@ export function injectStyles(theme: Theme): void {
   #ui .spot-wrap > .spot { width: 100%; }
   #ui .ctl-row { justify-content: center; gap: 4px; flex-wrap: nowrap; }
   #ui .ctl-row button { flex: 1; padding: 3px 4px 2px; }
+  /* Tidy-ups: the title bar stays in reach while a long screen scrolls; cards keep their buttons on one line at the bottom. */
+  #ui .panel > h1 { align-self: flex-start; }
+  #ui .panel > .row.spread:first-child { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 0; padding: 14px 16px 10px; background: linear-gradient(rgba(13, 10, 8, 0.96) 80%, rgba(13, 10, 8, 0)); }
+  #ui .pause-card > .row.spread:first-child { position: static; }
+  #ui .card > .row:last-child, #ui .card > .card-actions { margin-top: auto; }
+  #ui .card-actions { display: flex; flex-wrap: nowrap; gap: 6px; width: 100%; }
+  #ui .card-actions > button { flex: 1; padding: 4px 6px 3px; font-size: 13px; white-space: nowrap; }
+  #ui .card-actions > .dim { align-self: center; }
+  #ui .grid > .card { height: 100%; }
+  #ui .stat-tile { justify-content: space-between; }
+  #ui .stat-tile .dim { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ui .empty { border-style: dashed; text-align: center; color: ${c.textDim}; padding: 22px 14px; }
   #ui .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   #ui .pickgrid.cups { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   #ui canvas.cup-icon { width: 108px; height: 120px; image-rendering: pixelated; }

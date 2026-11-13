@@ -150,16 +150,16 @@ export class CharactersScreen {
               characterCard(c, prog.characterLevel(c.id).level, [
                 h(
                   'div',
-                  { class: 'row' },
+                  { class: 'card-actions' },
                   h('button', { class: this.account.newRewards(c.id) ? 'primary' : '', onclick: () => this.showProfile(c.id) }, this.account.newRewards(c.id) ? `Profile · ${this.account.newRewards(c.id)} new` : 'Profile'),
                   h('button', { title: 'Start a new character from this one', onclick: () => this.copy(c) }, 'Copy'),
-                  this.canEdit(c.id) ? h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit') : h('span', { class: 'dim', style: 'font-size:12px', title: 'Only the moderator can change characters in the collection' }, '🔒 Moderator only'),
+                  this.canEdit(c.id) ? h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit') : h('span', { class: 'dim', style: 'font-size:12px', title: 'Only the moderator can change characters in the collection' }, '🔒'),
                 ),
                 this.submitTools(c),
               ].filter((x): x is HTMLElement => !!x)),
             ),
           )
-        : h('div', { class: 'box' }, h('p', {}, 'No characters yet. Create your first one with “New character”.')),
+        : h('div', { class: 'box empty' }, h('p', {}, 'No characters yet')),
     );
     this.listPanel = panel;
     this.overlay.show(panel, true);

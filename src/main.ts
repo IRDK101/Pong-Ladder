@@ -939,7 +939,7 @@ function showPause(): void {
       'div',
       { class: 'panel pause-card' },
       h('h1', {}, online ? 'Leave the match?' : 'Paused'),
-      h('p', { class: 'dim' }, online ? 'The match is still going for the other player.' : 'Space / Enter: resume · R: restart · M: sound · F: full screen · Esc: quit'),
+      h('p', { class: 'dim' }, online ? 'The match is still going for the other player.' : 'Space: resume · R: restart · Esc: quit'),
       h('div', { class: 'row', style: 'justify-content:center' }, ...buttons),
     ),
   );

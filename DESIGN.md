@@ -1104,3 +1104,12 @@ Quality-of-life pass.
   character to every spot; the home row shows a custom line-up at a glance
   ("P1+CPU vs CPU+P2").
 - **Characters**: "Copy" starts a new character from any you can see.
+
+## Version 2.07
+
+Menu tidy-up: each screen's title bar (with Done / Back) stays on screen while
+it scrolls; character cards keep Profile / Copy / Edit on one line at the
+bottom; the Players columns line up; profile tiles have short one-line labels;
+empty states are a single dashed box; leftover explanatory lines are gone
+(Collection, Leaderboard, Back up); More rows that open a screen show a small
+arrow.

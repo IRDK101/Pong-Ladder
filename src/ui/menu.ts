@@ -1051,6 +1051,9 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
         if (info.alert) badge(ctx, theme, r.x + r.w - 60, mid + 1, `${info.alert} TO REVIEW`);
         else ctx.fillText(info.hint, r.x + r.w - 14, mid);
       }
+      // Rows with nothing to say on the right get a small arrow: they open a screen.
+      const quiet = (row.id === 'characters' && !ex.newRewards) || (row.id === 'leaderboard' && !menu.leaderboardHint()) || row.id === 'help' || row.id === 'settings' || row.id === 'backup';
+      if (quiet && !play) drawPixelType(ctx, '▶', r.x + r.w - 14, mid, 1, on ? INK.dark : INK.gold, 'right');
     }
   }
 

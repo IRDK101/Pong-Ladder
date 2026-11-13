@@ -95,10 +95,10 @@ export class ProfileScreen {
       h(
         'div',
         { class: 'tiles' },
-        stat('Loot boxes to open', a.allUnlocked() ? `${a.boxes()} (saved)` : a.boxes()),
-        stat('Tables unlocked', `${DESIGN_ORDER.filter((d) => a.tableUnlocked(d)).length} / ${DESIGN_ORDER.length}`),
-        stat('Characters unlocked', shared.length ? `${unlocked} / ${shared.length}` : '—'),
-        stat('Characters you made', own),
+        stat('Loot boxes', a.allUnlocked() ? `${a.boxes()} (saved)` : a.boxes()),
+        stat('Tables', `${DESIGN_ORDER.filter((d) => a.tableUnlocked(d)).length} / ${DESIGN_ORDER.length}`),
+        stat('Characters', shared.length ? `${unlocked} / ${shared.length}` : '—'),
+        stat('Made by you', own),
         a.role === 'player' ? stat('Submitted', subs.length ? `${subs.filter((s) => s.status === 'approved').length} approved · ${subs.filter((s) => s.status === 'pending').length} waiting` : 'none yet') : null,
         stat('New rewards', a.newRewards()),
       ),
@@ -108,7 +108,6 @@ export class ProfileScreen {
         { class: 'box', style: 'display:flex;flex-direction:column;gap:6px' },
         h('h2', {}, 'What is saved where'),
         h('p', { class: 'dim', style: 'font-size:13px' }, a.role === 'guest' || a.role === 'viewonly' ? 'Everything is in this browser only, and games don’t earn XP.' : 'With your account (any device): level and XP, loot boxes and unlocks, each character’s level and cosmetics, the characters you made, your home-screen picks. XP only counts once your profile is approved.'),
-        h('p', { class: 'dim', style: 'font-size:13px' }, 'In this browser only: the match history behind career stats. Back up / restore moves it.'),
       ),
     );
     this.panel = panel;
@@ -238,11 +237,13 @@ export class LeaderboardScreen {
             ),
           ),
         )
-      : h('div', { class: 'box' }, h('p', {}, a.mode === 'online' || a.profiles.size ? 'No approved profiles yet.' : 'The leaderboard is online: open the game signed in to claude.ai to see it.'));
+      : h('div', { class: 'box empty' }, h('p', {}, a.mode === 'online' || a.profiles.size ? 'No approved profiles yet' : 'Sign in to see the leaderboard'));
     const note =
       a.role === 'player' || a.role === 'moderator'
         ? null
-        : h('div', { class: 'box row spread' }, h('span', { class: 'dim' }, a.role === 'pending' ? 'Your profile is waiting for approval: you’ll show up here once it’s approved.' : 'Make a profile to earn XP and get on the board.'), a.role === 'unregistered' || a.role === 'pending' ? h('button', { class: 'primary', onclick: () => this.openProfile() }, 'Your profile') : null);
+        : a.mode !== 'online' && !a.profiles.size
+          ? null
+          : h('div', { class: 'box row spread' }, h('span', { class: 'dim' }, a.role === 'pending' ? 'Your profile is waiting for approval: you’ll show up here once it’s approved.' : 'Make a profile to earn XP and get on the board.'), a.role === 'unregistered' || a.role === 'pending' ? h('button', { class: 'primary', onclick: () => this.openProfile() }, 'Your profile') : null);
     const edit = a.myProfile && (a.role === 'player' || a.role === 'moderator') ? h('button', { onclick: () => this.openEdit() }, 'Edit how you appear') : null;
     this.sig = sig;
     // Live updates (other players' XP changing while they play) swap just the table, in place:
