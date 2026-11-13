@@ -77,7 +77,7 @@ export function injectStyles(theme: Theme): void {
   #ui * { box-sizing: border-box; }
   #ui .panel { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
   #ui h1 { font-size: 28px; margin: 4px 0 0; letter-spacing: 0.04em; text-wrap: balance; color: ${c.text}; border-bottom: 3px solid ${c.gold}; padding-bottom: 6px; display: inline-block; }
-  #ui h2 { font-size: 14px; margin: 0; color: ${c.gold}; letter-spacing: 0.08em; text-transform: uppercase; }
+  #ui h2 { font-size: 14px; margin: 0; color: ${c.teal}; letter-spacing: 0.08em; text-transform: uppercase; }
   #ui p { margin: 0; }
   #ui .dim { color: ${c.textDim}; }
   #ui .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -85,7 +85,7 @@ export function injectStyles(theme: Theme): void {
   #ui .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
   #ui .cols { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; }
   @media (max-width: 760px) { #ui .cols { grid-template-columns: minmax(0, 1fr); } }
-  #ui .box { background: ${c.button}; border: 3px solid #0b0806; border-radius: 0; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 -5px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.45); padding: 14px; min-width: 0; }
+  #ui .box { background: ${c.button}; border: 3px solid ${c.ink}; border-radius: 0; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 -5px 0 rgba(0,0,0,0.3), 4px 4px 0 rgba(0,0,0,0.45); padding: 14px; min-width: 0; }
   #ui .card { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   #ui .card.pick { cursor: pointer; }
   #ui .card.pick:hover, #ui .card.pick:focus-visible { border-color: ${c.gold}; background: ${c.buttonActive}; }
@@ -109,7 +109,7 @@ export function injectStyles(theme: Theme): void {
   #ui button.primary:hover { background: ${theme.menu.accentWarm}; }
   #ui button.danger { border-color: ${c.bad}; color: ${c.bad}; }
   #ui button:disabled { opacity: 0.4; cursor: default; }
-  #ui button.on { background: ${c.activeRing}; color: ${c.activeText}; border-color: ${c.activeRing}; font-weight: bold; }
+  #ui button.on { background: ${c.teal}; color: ${c.ink}; border-color: ${c.teal}; font-weight: bold; }
   /* Motion: buttons lift on hover and press in, panels and their contents slide in. */
   #ui button { transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, background-color 0.12s, border-color 0.12s; }
   #ui button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 3px 0 rgba(0,0,0,0.45); }
@@ -146,7 +146,7 @@ export function injectStyles(theme: Theme): void {
   #ui .spot:hover .spot-art canvas { transform: translateY(-4px) scale(1.04); }
   #ui .spot .spot-role { font-size: 11px; color: ${c.textDim}; letter-spacing: 0.04em; }
   #ui .spot .spot-name { font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #ui .spot.on { border-color: ${c.gold}; background: #4a3f24; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
+  #ui .spot.on { border-color: ${c.gold}; background: ${c.picked}; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
   #ui .spot.on .spot-role { color: ${c.gold}; }
   #ui .team-head { min-height: 32px; }
   #ui .spot.on::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255, 240, 200, 0.22) 50%, transparent 70%); background-size: 250% 100%; animation: shine 1.8s linear infinite; pointer-events: none; }
@@ -179,17 +179,17 @@ export function injectStyles(theme: Theme): void {
   #ui .cols2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   @media (max-width: 760px) { #ui .cols2 { grid-template-columns: minmax(0, 1fr); } }
   #ui .sprite-stage { display: flex; justify-content: center; gap: 22px; padding: 14px 8px 8px; border-radius: 4px;
-    background: radial-gradient(ellipse at 50% 85%, #6a311f 0 38%, #3a2416 70%); border: 1px solid ${c.uiEdge}; }
+    background: linear-gradient(#3d6f8a 0 58%, #8a5a3a 58% 62%, #6a4129 62%); border: 3px solid ${c.ink}; box-shadow: inset 0 0 0 2px ${c.uiEdge}; }
   #ui .tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-  #ui .tabs button.on { background: ${c.gold}; color: ${c.background}; border-color: ${c.gold}; font-weight: bold; }
+  #ui .tabs button.on { background: ${c.teal}; color: ${c.ink}; border-color: ${c.teal}; font-weight: bold; }
   #ui .part { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid ${c.uiEdge}; }
   #ui .part-label { color: ${c.gold}; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: bold; }
   #ui .thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
   #ui .thumb { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 4px 3px; min-width: 70px;
     background: #4a3f34; border: 1px solid ${c.uiEdge}; border-radius: 3px; }
   #ui .thumb span { font-size: 10px; color: ${c.text}; white-space: nowrap; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
-  #ui .thumb:hover { border-color: ${c.gold}; background: #5a4d3e; }
-  #ui .thumb.on { border: 2px solid ${c.gold}; background: #6a5a3a; padding: 4px 3px 2px; }
+  #ui .thumb:hover { border-color: ${c.gold}; background: ${c.buttonActive}; }
+  #ui .thumb.on { border: 2px solid ${c.gold}; background: ${c.picked}; padding: 4px 3px 2px; }
   #ui .grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
   #ui .card.locked { opacity: 0.6; border-style: dashed; }
   #ui .card.locked .table-shot { filter: grayscale(1) brightness(0.45); }
@@ -233,7 +233,7 @@ export function injectStyles(theme: Theme): void {
   #ui .setup-chars { max-height: 260px; overflow-y: auto; padding: 4px; }
   #ui .team-col.ready { box-shadow: 0 0 0 2px ${c.good}, 0 0 18px rgba(120, 220, 120, 0.25); }
   #ui .team-col.ready .team-head .ok { animation: vs-pulse 1.2s ease-in-out infinite; }
-  #ui .setup-ready { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 2px solid ${c.uiEdge}; background: #15110d; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.5); }
+  #ui .setup-ready { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 2px solid ${c.uiEdge}; background: #2a1f42; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.5); }
   #ui .setup-ready.go { border-color: ${c.good}; }
   #ui button.big { font-size: 17px; padding: 10px 28px; letter-spacing: 0.06em; }
   #ui button.big.on { background: ${c.buttonActive}; }
@@ -243,9 +243,22 @@ export function injectStyles(theme: Theme): void {
   #ui .spot-wrap > .spot { width: 100%; }
   #ui .ctl-row { justify-content: center; gap: 4px; flex-wrap: nowrap; }
   #ui .ctl-row button { flex: 1; padding: 3px 4px 2px; }
+  /* The character designer: the character's card on the left stays put; tabs on the right. */
+  #ui .panel.designer { max-width: 1120px; }
+  #ui .designer-cols { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+  #ui .designer-card { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 12px; }
+  #ui .designer-card .sprite-stage { align-items: flex-end; gap: 14px; padding: 16px 8px 10px; }
+  #ui .designer-card input[type=text] { width: 100%; font-size: 16px; }
+  #ui .designer-save { display: flex; flex-direction: column; gap: 8px; }
+  #ui .designer-save > button { width: 100%; }
+  #ui .designer-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  #ui .designer-body { display: flex; flex-direction: column; gap: 12px; }
+  #ui .big-tabs { gap: 6px; }
+  #ui .big-tabs button { font-size: 16px; padding: 8px 20px 6px; }
+  @media (max-width: 820px) { #ui .designer-cols { grid-template-columns: minmax(0, 1fr); } #ui .designer-card { position: static; } }
   /* Tidy-ups: the title bar stays in reach while a long screen scrolls; cards keep their buttons on one line at the bottom. */
   #ui .panel > h1 { align-self: flex-start; }
-  #ui .panel > .row.spread:first-child { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 0; padding: 14px 16px 10px; background: linear-gradient(rgba(13, 10, 8, 0.96) 80%, rgba(13, 10, 8, 0)); }
+  #ui .panel > .row.spread:first-child { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 0; padding: 14px 16px 10px; background: linear-gradient(rgba(30, 20, 46, 0.97) 80%, rgba(30, 20, 46, 0)); }
   #ui .pause-card > .row.spread:first-child { position: static; }
   #ui .card > .row:last-child, #ui .card > .card-actions { margin-top: auto; }
   #ui .card-actions { display: flex; flex-wrap: nowrap; gap: 6px; width: 100%; }
@@ -261,17 +274,17 @@ export function injectStyles(theme: Theme): void {
   #ui .pickgrid.chars { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
   #ui .pickcard { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px; min-width: 0; background: ${c.button}; }
   #ui .pickcard .name, #ui .pickcard .pickname { font-size: 13px; font-weight: bold; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #ui .pickcard.on { border-color: ${c.gold}; background: #4a3f24; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
+  #ui .pickcard.on { border-color: ${c.gold}; background: ${c.picked}; box-shadow: 0 0 0 2px ${c.gold}; color: ${c.text}; font-weight: normal; }
   #ui .pickcard.locked { opacity: 0.5; }
   #ui .pickcard.locked .table-shot { filter: grayscale(1) brightness(0.45); }
   #ui .pickcard:hover:not(:disabled) { border-color: ${c.gold}; }
   #ui .slots { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
   #ui .slot { display: flex; gap: 10px; align-items: center; min-width: 190px; padding: 6px 12px; text-align: left; }
-  #ui .slot.on { border-color: ${c.gold}; box-shadow: 0 0 0 2px ${c.gold}; background: #4a3f24; color: ${c.text}; font-weight: normal; }
+  #ui .slot.on { border-color: ${c.gold}; box-shadow: 0 0 0 2px ${c.gold}; background: ${c.picked}; color: ${c.text}; font-weight: normal; }
   #ui .slot-random { display: grid; place-items: center; width: 34px; height: 46px; border: 2px dashed ${c.uiEdge}; color: ${c.gold}; font-weight: bold; font-size: 20px; }
   #ui .slot-random.big { width: 48px; height: 66px; font-size: 28px; }
   #ui .slot.cpu { border-color: ${c.teamB}; }
-  #ui .slot.cpu.on { box-shadow: 0 0 0 2px ${c.teamB}; background: #1f2a44; }
+  #ui .slot.cpu.on { box-shadow: 0 0 0 2px ${c.teamB}; background: #2a3f6e; }
   #ui .pause-card { max-width: 460px; margin: 18vh auto 0; align-items: center; text-align: center; padding: 22px; border: 2px solid ${c.gold}; background: rgba(10, 9, 8, 0.88); }
   #ui .pause-card h1 { border-bottom: none; }
   #ui .passive-slot { display: flex; align-items: center; min-height: 44px; padding: 8px 10px; border: 2px dashed ${c.uiEdge}; }
@@ -296,30 +309,30 @@ export function injectStyles(theme: Theme): void {
   #ui .board-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 70px 100px; gap: 10px; align-items: center; padding: 8px 12px; background: ${c.button}; border: 2px solid ${c.uiEdge}; font-variant-numeric: tabular-nums; }
   #ui .board-row > span:nth-child(n+3) { text-align: right; }
   #ui .board-row.head { background: transparent; border-color: transparent; color: ${c.gold}; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-  #ui .board-row.me { border-color: ${c.gold}; background: #3a321e; }
+  #ui .board-row.me { border-color: ${c.gold}; background: #4a3a2a; }
   #ui .board-row.top1 .rank, #ui .board-row.top2 .rank, #ui .board-row.top3 .rank { font-size: 20px; }
   #ui .board-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ui .lobby-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
-  #ui .invite { border-color: ${c.gold}; background: #3a321e; animation: reveal-in 0.4s both; }
+  #ui .invite { border-color: ${c.gold}; background: #4a3a2a; animation: reveal-in 0.4s both; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   /* Pixel look: chunky buttons with a hard bottom edge and notched corners, pixel headings. */
   #ui { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.14) 0 2px, transparent 2px 4px); }
   #ui .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   #ui canvas.px-type { display: block; image-rendering: pixelated; max-width: 100%; height: auto; }
-  #ui h1[data-px] { border-bottom: none; padding-bottom: 8px; background: linear-gradient(${c.gold}, ${c.gold}) left bottom / 100% 4px no-repeat, linear-gradient(#0b0806, #0b0806) 4px calc(100% + 0px) / 100% 4px no-repeat; }
+  #ui h1[data-px] { border-bottom: none; padding-bottom: 8px; background: linear-gradient(${c.gold}, ${c.gold}) left bottom / 100% 4px no-repeat, linear-gradient(${c.ink}, ${c.ink}) 4px calc(100% + 0px) / 100% 4px no-repeat; }
   #ui h2[data-px] { line-height: 0; }
   #ui button, #ui select {
-    border: 2px solid #0b0806; border-bottom-width: 5px; padding: 5px 12px 4px; font-weight: bold;
+    border: 2px solid ${c.ink}; border-bottom-width: 5px; padding: 5px 12px 4px; font-weight: bold;
     box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 3px 0 rgba(255,255,255,0.06);
     clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
   }
   #ui button:hover:not(:disabled) { box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 3px 0 rgba(255,255,255,0.1); }
   #ui button:active:not(:disabled) { transform: translateY(3px); border-bottom-width: 2px; margin-bottom: 3px; box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 3px 0 rgba(0,0,0,0.3); }
-  #ui button.primary { border-color: #0b0806; box-shadow: inset 0 0 0 2px #fff1b8, inset 0 -3px 0 #c8902a; }
+  #ui button.primary { border-color: ${c.ink}; box-shadow: inset 0 0 0 2px #fff1b8, inset 0 -3px 0 #c8902a; }
   #ui button.primary:hover:not(:disabled) { box-shadow: inset 0 0 0 2px #fffaf0, inset 0 -3px 0 #c8902a; }
-  #ui button.on { border-color: #0b0806; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45); }
-  #ui button.danger { border-color: #0b0806; box-shadow: inset 0 0 0 2px ${c.bad}; }
-  #ui input[type=text], #ui textarea { border: 3px solid #0b0806; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 4px 0 rgba(0,0,0,0.35); }
+  #ui button.on { border-color: ${c.ink}; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45); }
+  #ui button.danger { border-color: ${c.ink}; box-shadow: inset 0 0 0 2px ${c.bad}; }
+  #ui input[type=text], #ui textarea { border: 3px solid ${c.ink}; box-shadow: inset 0 0 0 2px ${c.uiEdge}, inset 0 4px 0 rgba(0,0,0,0.35); }
   #ui input[type=text]:focus, #ui textarea:focus { outline: none; box-shadow: inset 0 0 0 2px ${c.gold}, inset 0 4px 0 rgba(0,0,0,0.35); }
   #ui .spot.on, #ui .pickcard.on, #ui .slot.on, #ui .style-opt.on, #ui .spot.on:hover, #ui .pickcard.on:hover, #ui .slot.on:hover { box-shadow: inset 0 0 0 3px ${c.gold}; }
   #ui .slot.cpu.on, #ui .slot.cpu.on:hover { box-shadow: inset 0 0 0 3px ${c.teamB}; }
@@ -340,7 +353,7 @@ export function pixelHeadings(root: HTMLElement): void {
     if (!text || !canPixelType(text)) continue;
     const big = el.tagName === 'H1';
     const scale = big ? 4 : 2;
-    const img = pixelType(text.toUpperCase(), big ? INK.cream : INK.gold);
+    const img = pixelType(text.toUpperCase(), big ? INK.cream : INK.teal);
     const c = h('canvas', { class: 'px-type', width: img.width, height: img.height, 'aria-hidden': 'true' });
     c.getContext('2d')!.drawImage(img, 0, 0);
     c.style.width = `${img.width * scale}px`;

@@ -1113,3 +1113,25 @@ bottom; the Players columns line up; profile tiles have short one-line labels;
 empty states are a single dashed box; leftover explanatory lines are gone
 (Collection, Leaderboard, Back up); More rows that open a screen show a small
 arrow.
+
+## Version 2.08
+
+Visual overhaul, still pixel art.
+
+- **Palette**: plum panels and cream text in place of near-black, with gold
+  (primary actions, the logo), teal (what is selected, section headings) and
+  coral accents (`theme.colors.teal / coral / ink / picked`). Each stat has its
+  own bar color. The HUD panels and team titles follow (team names in the pixel
+  font).
+- **Character designer**: the character's card (large front and back preview,
+  name, stats at a glance, Save) stays on the left; Look / Stats / Hit styles
+  are tabs on the right, with the part groups inside Look. No long scroll.
+- **Faces at full size** (`paintFace` in core/sprite.ts): eyes, brows and
+  mouths are drawn on the 32×48 sprite instead of the 16×24 grid, so every
+  option has its own shape (before, Dots / Big / Squint / Tired were the same
+  block, and most mouths a smudge). Mustaches, the goatee, soul patch and
+  mutton chops are drawn there too; ears were added.
+- **Hairlines at full size** (`styleHair`): Slicked back, Ivy league, Quiff,
+  Bun, Side part, Fade and Crew cut each get their own hairline.
+- Face shapes: Wide jaw, Defined jaw and High cheekbones no longer have
+  one-pixel spikes.

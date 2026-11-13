@@ -24,6 +24,9 @@ export function badgeChips(c: Character): HTMLElement | null {
   return h('div', { class: 'chips' }, ...c.cosmetics.badges.map((b) => h('span', { class: 'badge reward' }, BADGE_LABELS[b] ?? b)));
 }
 
+/** Each stat has its own color, so a character's strengths read at a glance. */
+export const STAT_COLORS: Record<keyof Stats, string> = { accuracy: '#4fd6c4', power: '#ff8a6b', spin: '#ff7fc0', serve: '#ffd166', saves: '#7fb2ff' };
+
 /** Stat bars, for select and profile screens only (never in the HUD). */
 export function statBars(stats: Stats): HTMLElement {
   return h(
@@ -37,6 +40,7 @@ export function statBars(stats: Stats): HTMLElement {
         h('span', { class: 'bar' }, (() => {
           const i = h('i');
           i.style.width = `${(stats[k] / STAT_MAX) * 100}%`;
+          i.style.background = STAT_COLORS[k];
           return i;
         })()),
         h('span', {}, String(stats[k])),
@@ -305,8 +309,8 @@ type SpriteMode = 'parts' | 'draw' | 'upload';
 
 /** Which part of the figure each part's thumbnails show (rows y0..y1), at what scale, and from which side. */
 const THUMB_REGION: Record<PartKey, { y0: number; y1: number; scale: number; back?: boolean; x0?: number; x1?: number }> = {
-  build: { y0: 0, y1: 23, scale: 2 },
-  skin: { y0: 0, y1: 23, scale: 2 },
+  build: { y0: 0, y1: 23, scale: 3 },
+  skin: { y0: 0, y1: 23, scale: 3 },
   // Face parts: just the head (no shoulders or paddle), bigger.
   faceShape: { y0: 0, y1: 9, scale: 4, x0: 2, x1: 13 },
   eyes: { y0: 1, y1: 8, scale: 4, x0: 3, x1: 12 },
@@ -344,6 +348,12 @@ class CharacterEditor {
   private shown = false;
   /** Which group of parts the Look tabs show. */
   private group = 0;
+  /** The designer's main tab. */
+  private tab: 'look' | 'stats' | 'styles' = 'look';
+  /** The stat bars on the character's card (kept in step with the sliders). */
+  private cardStats: HTMLElement | null = null;
+  /** Editing a saved character (not making a new one). */
+  private existing: boolean;
   private errors: string[] = [];
 
   constructor(
@@ -352,6 +362,7 @@ class CharacterEditor {
     private actions: { save: (c: Character) => void; cancel: () => void; remove: (() => void) | null },
   ) {
     this.mode = c.sprite.pixels ? 'draw' : 'parts';
+    this.existing = !!actions.remove;
     // Older characters predate some parts: fill them in so every control has a value.
     c.sprite.parts = normalizeParts(c.sprite.parts);
   }
@@ -363,34 +374,45 @@ class CharacterEditor {
     const preview = h(
       'div',
       { class: 'sprite-stage' },
-      view('Front', spriteImage(characterSprite(c.sprite), 6)),
-      view('Back', spriteImage(characterBackSprite(c.sprite), 6)),
+      view('Front', spriteImage(characterSprite(c.sprite), 8)),
+      view('Back', spriteImage(characterBackSprite(c.sprite), 5)),
     );
     const modeTabs = h(
       'div',
-      { class: 'row' },
+      { class: 'chips', role: 'group', 'aria-label': 'How to make the look' },
       ...(['parts', 'draw', 'upload'] as SpriteMode[]).map((m) =>
-        h('button', { class: this.mode === m ? 'on' : '', onclick: () => ((this.mode = m), this.render()) }, { parts: 'Pick parts', draw: 'Pixel editor', upload: 'Upload image' }[m]),
+        h('button', { class: `small${this.mode === m ? ' on' : ''}`, onclick: () => ((this.mode = m), this.render()) }, { parts: 'Pick parts', draw: 'Pixel editor', upload: 'Upload image' }[m]),
       ),
     );
     const spriteTools = this.mode === 'parts' ? this.partsPanel() : this.mode === 'draw' ? this.drawPanel() : this.uploadPanel();
+    const TABS: [typeof this.tab, string][] = [['look', 'Look'], ['stats', 'Stats'], ['styles', 'Hit styles']];
+    const body =
+      this.tab === 'look'
+        ? h('div', { class: 'box designer-body' }, h('div', { class: 'row spread' }, h('h2', {}, 'Look'), modeTabs), spriteTools)
+        : this.tab === 'stats'
+          ? this.statsPanel()
+          : this.stylesPanel();
+    this.cardStats = h('div', { class: 'card-stats' }, statBars(c.stats));
 
     const panel = h(
       'div',
-      { class: 'panel' },
-      h('div', { class: 'row spread' }, h('h1', {}, c.name.trim() ? `Edit ${c.name}` : 'New character'), h('button', { onclick: () => this.actions.cancel() }, 'Cancel')),
-      // The look, full width: the preview stays pinned beside the options, so every change shows at once.
+      { class: 'panel designer' },
+      h('div', { class: 'row spread' }, h('h1', {}, this.existing ? 'Edit character' : 'New character'), h('button', { onclick: () => this.actions.cancel() }, 'Cancel')),
       h(
         'div',
-        { class: 'box look' },
-        h('div', { class: 'look-preview' }, h('h2', {}, 'Look'), preview, modeTabs),
-        h('div', { class: 'look-tools' }, spriteTools),
-      ),
-      h(
-        'div',
-        { class: 'cols2' },
-        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.identityPanel(), this.statsPanel()),
-        h('div', { style: 'display:flex;flex-direction:column;gap:14px;min-width:0' }, this.stylesPanel(), this.footer()),
+        { class: 'designer-cols' },
+        // The character's card stays on screen: preview, name, stats at a glance, save.
+        h('div', { class: 'box designer-card' }, preview, this.identityPanel(), this.cardStats, this.footer()),
+        h(
+          'div',
+          { class: 'designer-main' },
+          h(
+            'div',
+            { class: 'tabs big-tabs', role: 'tablist' },
+            ...TABS.map(([id, label]) => h('button', { class: id === this.tab ? 'on' : '', role: 'tab', 'aria-selected': id === this.tab ? 'true' : 'false', onclick: () => ((this.tab = id), this.render()) }, label)),
+          ),
+          body,
+        ),
       ),
     );
     // Re-rendering after a change keeps the scroll position (the first show starts at the top).
@@ -402,12 +424,11 @@ class CharacterEditor {
     const c = this.c;
     return h(
       'div',
-      { class: 'box', style: 'display:flex;flex-direction:column;gap:10px' },
-      h('h2', {}, 'Who'),
+      { style: 'display:flex;flex-direction:column;gap:8px' },
       h(
         'label',
         { style: 'display:flex;flex-direction:column;gap:4px' },
-        h('span', { class: 'dim' }, 'Name'),
+        h('span', { class: 'dim', style: 'font-size:12px' }, 'Name'),
         h('input', {
           id: 'char-name',
           type: 'text',
@@ -421,10 +442,8 @@ class CharacterEditor {
         'label',
         { class: 'check' },
         h('input', { id: 'char-master', type: 'checkbox', checked: c.master, onchange: (e: Event) => ((c.master = (e.target as HTMLInputElement).checked), this.render()) }),
-        h('span', {}, 'Master '),
-        h('span', { class: 'dim' }, '(a title: badge and glowing name, no gameplay effect)'),
+        h('span', { title: 'A title: a star and a glowing name. No effect on play.' }, 'Master ', nameTag('title', c.master)),
       ),
-      h('p', {}, 'Shows as ', nameTag(c.name.trim() || 'Name', c.master)),
     );
   }
 
@@ -454,6 +473,7 @@ class CharacterEditor {
               oninput: (e: Event) => {
                 c.stats[k] = Number((e.target as HTMLInputElement).value);
                 val.textContent = String(c.stats[k]);
+                this.cardStats?.replaceChildren(statBars(c.stats));
               },
             }),
             val,
@@ -574,12 +594,11 @@ class CharacterEditor {
       errs,
       h(
         'div',
-        { class: 'row spread' },
-        del ?? h('span'),
+        { class: 'designer-save' },
         h(
           'button',
           {
-            class: 'primary',
+            class: 'primary big',
             onclick: () => {
               this.c.name = this.c.name.trim();
               this.errors = validateCharacter(this.c);
@@ -589,6 +608,7 @@ class CharacterEditor {
           },
           'Save character',
         ),
+        del,
       ),
     );
   }

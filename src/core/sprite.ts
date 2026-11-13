@@ -182,6 +182,11 @@ interface FaceMeta {
   wideEyes: boolean;
   /** Glasses, drawn at full size around the eyes. */
   glasses: 'square' | 'round' | null;
+  /** The hair style and whether a hat is on (hairlines are refined at full size). */
+  hairStyle?: string;
+  hat?: boolean;
+  /** Eyes and mouth, drawn at full size: which ones, the mouth's grid row, and the brow and beard colors. */
+  features?: { eyes: string; mouth: string; facialHair: string; mouthRow: number; brow: string; beard: string };
 }
 
 /**
@@ -207,6 +212,8 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   const shoe = SHOES[parts.shoes];
   const front = facing === 'front';
   meta.colors = { skin, hair, shirt, pants };
+  meta.hairStyle = P.hairStyle[parts.hairStyle];
+  meta.hat = P.headwear[parts.headwear] !== 'None';
 
   // ---- Body type: torso half-width, how far everything drops (stocky is shorter), torso and leg rows.
   const half = { Slim: 2, Average: 3, Broad: 4, Stocky: 4, Heavy: 4, Lanky: 2, Athletic: 3, Petite: 2, Tall: 3, Toned: 3, Muscular: 4, Curvy: 3, 'Dad bod': 4, 'Big and tall': 4 }[build];
@@ -500,130 +507,21 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
   const eyeY = hy + 3;
   // Facial features stay inside the face: `inside` clips a row to its skin, one pixel in from the edge.
   const rowAt = (y: number): [number, number] | null => (y >= hy && y <= chin ? rows[y - hy] : null);
-  const inner = (x: number, y: number) => {
-    const r = rowAt(y);
-    return !!r && x > r[0] && x < r[1];
-  };
   const onFace = (x: number, y: number) => {
     const r = rowAt(y);
     return !!r && x >= r[0] && x <= r[1];
-  };
-  const fset = (x: number, y: number, col: string) => inner(x, y) && c.set(x, y, col);
-  const frect = (x0: number, y0: number, x1: number, y1: number, col: string) => {
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fset(x, y, col);
   };
   if (front) {
     const eyes = P.eyes[parts.eyes];
     // Eyes sit one pixel in from the edge of the face; wide-set ones move out half a pixel at full size.
     const ex = [6, 9];
     meta.wideEyes = eyes === 'Wide-set';
-    const brow = shade(hair, 0.9);
-    for (const x of ex) {
-      switch (eyes) {
-        case 'Big':
-          // Taller eyes (no brow line).
-          c.set(x, eyeY - 1, OUTLINE);
-          c.set(x, eyeY, OUTLINE);
-          break;
-        case 'Sleepy':
-          c.set(x, eyeY, OUTLINE);
-          c.set(x, eyeY - 1, shade(skin, 0.75)); // heavy lids
-          break;
-        case 'Lashes':
-          c.set(x, eyeY, OUTLINE);
-          c.set(x + (x < 8 ? -1 : 1), eyeY - 1, OUTLINE);
-          break;
-        case 'Squint':
-          c.set(x, eyeY, shade(skin, 0.55));
-          break;
-        case 'Angry':
-          // Brows slanting down toward the nose.
-          c.set(x, eyeY, OUTLINE);
-          c.set(x + (x < 8 ? 1 : -1), eyeY - 1, brow);
-          c.set(x - (x < 8 ? 1 : -1), eyeY - 2, brow);
-          break;
-        case 'Wink':
-          c.set(x, eyeY, x < 8 ? OUTLINE : shade(skin, 0.5));
-          break;
-        case 'Closed':
-          c.set(x, eyeY, shade(skin, 0.45));
-          c.set(x + (x < 8 ? -1 : 1), eyeY - 1, shade(skin, 0.6));
-          break;
-        case 'Tired':
-          c.set(x, eyeY, OUTLINE);
-          c.set(x, eyeY + 1, shade(skin, 0.74));
-          break;
-        case 'Blue':
-          c.set(x, eyeY, '#2f6fc8');
-          break;
-        case 'Green':
-          c.set(x, eyeY, '#2f8a4a');
-          break;
-        default:
-          c.set(x, eyeY, OUTLINE);
-      }
-      if (eyes !== 'Lashes' && eyes !== 'Big' && eyes !== 'Sleepy' && eyes !== 'Angry' && eyes !== 'Closed') c.set(x, eyeY - 1, brow);
-      if (eyes !== 'Squint' && eyes !== 'Closed' && !(eyes === 'Wink' && x > 8)) meta.eyes.push({ x, y: eyeY });
-    }
+    // Eyes and mouth are drawn at full size (finishHigh), where there is room to tell them apart.
+    meta.features = { eyes, mouth: P.mouth[parts.mouth], facialHair: P.facialHair[parts.facialHair], mouthRow: eyeY + 2, brow: shade(hair, 0.8), beard: shade(hair, 0.95) };
+    for (const x of ex) if (eyes !== 'Squint' && eyes !== 'Closed' && !(eyes === 'Wink' && x > 8)) meta.eyes.push({ x, y: eyeY });
     const cheek = rowAt(eyeY + 1);
     if (cheek && c.get(cheek[1], eyeY + 1) === skin) c.set(cheek[1], eyeY + 1, shade(skin, 0.92)); // cheek shadow, on the side away from the light
-    const mouth = P.mouth[parts.mouth];
     const my = eyeY + 2;
-    const lip = shade(skin, 0.68);
-    // The mouth is drawn through fset/frect, so it never spills past the edge of a narrow chin.
-    const mc = { set: fset, rect: frect };
-    switch (mouth) {
-      case 'Smile':
-        // Corners up, middle down.
-        mc.set(6, my - 1, lip);
-        mc.rect(7, my, 8, my, shade(skin, 0.6));
-        mc.set(9, my - 1, lip);
-        break;
-      case 'Grin':
-        mc.rect(6, my, 9, my, WHITE);
-        mc.set(6, my, lip);
-        mc.set(9, my, lip);
-        break;
-      case 'Smirk':
-        mc.rect(7, my, 8, my, lip);
-        mc.set(9, my - 1, lip);
-        break;
-      case 'Surprised':
-        mc.set(7, my, OUTLINE);
-        mc.set(8, my, OUTLINE);
-        break;
-      case 'Flat':
-        mc.rect(6, my, 9, my, lip);
-        break;
-      case 'Laugh':
-        mc.rect(6, my, 9, my, '#5a1e1e');
-        mc.rect(7, my, 8, my, WHITE);
-        if (my + 1 <= chin) mc.rect(7, my + 1, 8, my + 1, '#c84a4a');
-        break;
-      case 'Tongue out':
-        mc.rect(7, my, 8, my, lip);
-        if (my + 1 <= chin) mc.set(8, my + 1, '#e86a8a');
-        break;
-      case 'Frown':
-        mc.rect(7, my, 8, my, shade(skin, 0.6));
-        if (my + 1 <= chin) {
-          mc.set(6, my + 1, lip);
-          mc.set(9, my + 1, lip);
-        }
-        break;
-      case 'Gap tooth':
-        mc.rect(6, my, 9, my, WHITE);
-        mc.set(6, my, lip);
-        mc.set(9, my, lip);
-        mc.set(8, my, shade(skin, 0.4));
-        break;
-      case 'Whistle':
-        mc.set(8, my, OUTLINE);
-        mc.set(9, my - 1, shade(skin, 0.8));
-        break;
-      default:
-        mc.rect(7, my, 8, my, lip);
-    }
     // Facial hair.
     const fh = P.facialHair[parts.facialHair];
     const beard = shade(hair, 0.95);
@@ -631,18 +529,8 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
       case 'Stubble':
         for (let y = my; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin && (x + y) % 2 === 0) c.set(x, y, shade(skin, 0.78));
         break;
-      case 'Mustache':
-        c.rect(7, my - 1, 8, my - 1, beard);
-        c.set(6, my - 1, shade(beard, 1.15)); // tapered ends
-        c.set(9, my - 1, shade(beard, 1.15));
-        break;
-      case 'Goatee':
-        c.rect(7, my - 1, 8, my - 1, beard);
-        for (let y = my + 1; y <= chin; y++) for (const x of [7, 8]) if (onFace(x, y)) c.set(x, y, beard);
-        break;
       case 'Full beard':
         for (let y = my - 1; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin || c.get(x, y) === shade(skin, 0.92)) c.set(x, y, beard);
-        c.rect(7, my, 8, my, lip);
         for (let y = eyeY + 1; y < my; y++) {
           c.set(rows[y - hy][0], y, beard);
           c.set(rows[y - hy][1], y, beard);
@@ -656,30 +544,10 @@ function composeFlat(raw: SpriteParts, facing: 'front' | 'back'): { flat: Sprite
         }
         c.rect(rows[rows.length - 1][0], chin, rows[rows.length - 1][1], chin, beard);
         break;
-      case 'Soul patch':
-        c.set(7, my + 1 <= chin ? my + 1 : chin, beard);
-        break;
-      case 'Handlebar':
-        c.rect(6, my - 1, 9, my - 1, beard);
-        if (onFace(5, my)) c.set(5, my, beard);
-        if (onFace(10, my)) c.set(10, my, beard);
-        break;
-      case 'Mutton chops':
-        for (let y = eyeY; y < chin; y++) {
-          const [l, r] = rows[y - hy];
-          c.rect(l, y, l + 1, y, beard);
-          c.rect(r - 1, y, r, y, beard);
-        }
-        c.rect(6, my - 1, 9, my - 1, beard);
-        break;
       case 'Long beard':
         for (let y = my - 1; y <= chin; y++) for (let x = hl; x <= hr; x++) if (c.get(x, y) === skin || c.get(x, y) === shade(skin, 0.92)) c.set(x, y, beard);
-        c.rect(7, my, 8, my, lip);
         c.rect(6, chin + 1, 9, chin + 2, beard);
         c.rect(7, chin + 3, 8, chin + 3, shade(beard, 0.85));
-        break;
-      case 'Pencil mustache':
-        c.rect(7, my - 1, 8, my - 1, shade(beard, 0.8));
         break;
     }
   }
@@ -1227,11 +1095,11 @@ const FACE_PROFILE: Partial<Record<string, number[]>> = {
   // Widths at full size (oval): 8, 12 ×10, 8. Natural tapers smoothly below the cheeks.
   Natural: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, 0, 0],
   // A jaw that widens gently below the cheeks, a broad chin.
-  'Wide jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 1],
+  'Wide jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1],
   // Square: the jaw as wide as the cheeks, a flat chin.
-  'Defined jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2],
+  'Defined jaw': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
   // Wide at the cheekbones, then a smooth V to the chin.
-  'High cheekbones': [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, -1, -1, -1, -1],
+  'High cheekbones': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, -2, -2],
   // Fuller and rounder: a wider crown, full cheeks, a soft wide chin.
   'Soft round': [1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
   // Longer and narrower.
@@ -1272,11 +1140,326 @@ function shadeOf(col: string, base: string): boolean {
   return false;
 }
 
+/**
+ * Hairlines at full size, for the short styles that look alike on the small
+ * grid: each gets its own hairline or outline (a widow's peak, a part, a
+ * quiff, a bun). Works on the figure before shading, so it is shaded and
+ * outlined like the rest.
+ */
+function styleHair(src: string[], w: number, meta: FaceMeta): void {
+  const hair = meta.colors.hair;
+  const skin = meta.colors.skin;
+  if (!meta.hairStyle || meta.hat || !hair || hair === skin) return;
+  const limit = meta.rows.eye * 2 - 3; // never down onto the brows
+  const at = (x: number, y: number) => (y >= 0 ? src[y * w + x] : '');
+  /** The lowest hair pixel of a column that has skin right under it (the hairline), or -1. */
+  const line = (x: number) => {
+    for (let y = limit; y >= 0; y--) if (at(x, y) === hair && at(x, y + 1) === skin) return y;
+    return -1;
+  };
+  const carve = (xs: number[], n: number) => {
+    for (const x of xs) {
+      const y = line(x);
+      if (y < 0) continue;
+      for (let k = 0; k < n && at(x, y - k) === hair && at(x, y - k - 1) === hair; k++) src[(y - k) * w + x] = skin;
+    }
+  };
+  const grow = (xs: number[], n: number) => {
+    for (const x of xs) {
+      const y = line(x);
+      if (y < 0) continue;
+      for (let k = 1; k <= n && y + k <= limit && at(x, y + k) === skin; k++) src[(y + k) * w + x] = hair;
+    }
+  };
+  const bump = (xs: number[], n: number) => {
+    for (const x of xs) {
+      let y = 0;
+      while (y < limit && at(x, y) !== hair) y++;
+      if (at(x, y) !== hair) continue;
+      for (let k = 1; k <= n && y - k >= 0 && !at(x, y - k); k++) src[(y - k) * w + x] = hair;
+    }
+  };
+  switch (meta.hairStyle) {
+    case 'Slicked back':
+      // A high hairline with a widow's peak.
+      carve([10, 11, 20, 21], 2);
+      carve([12, 13, 18, 19], 1);
+      grow([15, 16], 1);
+      break;
+    case 'Ivy league':
+      // A side part, the fringe swept across and up.
+      carve([12], 3);
+      carve([10, 11], 1);
+      grow([17, 18, 19, 20], 1);
+      bump([16, 17, 18, 19], 1);
+      break;
+    case 'Quiff':
+      // Swept up at the front: tall on one side, cut high on the other.
+      bump([11, 12, 13, 14, 15, 16, 17], 1);
+      carve([17, 18, 19, 20, 21], 2);
+      carve([15, 16], 1);
+      break;
+    case 'Bun':
+      // Pulled back tight: a high, rounded hairline, the bun just showing over the top.
+      carve([10, 11, 20, 21], 3);
+      carve([12, 13, 14, 15, 16, 17, 18, 19], 1);
+      bump([14, 15, 16, 17], 1);
+      break;
+    case 'Side part':
+      grow([10, 11, 12, 13, 14, 15], 1);
+      carve([18], 3);
+      break;
+    case 'Fade':
+      // Shaved sides: the hair sits on top only.
+      carve([10, 21], 4);
+      carve([11, 20], 2);
+      break;
+    case 'Crew cut':
+      grow([12, 13, 14, 15, 16, 17, 18, 19], 1);
+      break;
+  }
+}
+
+/**
+ * Eyes, brows and mouth at full size. Each eye has a 2-pixel-wide spot with a
+ * row above and below to work with, and the mouth is up to 6 wide and 2 tall,
+ * which is enough for every option to have its own shape. Features only go on
+ * skin (or a beard, for the mouth), so hair, hats and shades still cover them.
+ */
+function paintFace(px: string[], src: string[], w: number, meta: FaceMeta): void {
+  const f = meta.features!;
+  const skin = meta.colors.skin;
+  const DARK = OUTLINE;
+  const onSkin = (x: number, y: number) => {
+    const c = src[y * w + x];
+    return !!c && (c === skin || shadeOf(c, skin));
+  };
+  const beards = [f.beard, shade(f.beard, 1.15), shade(f.beard, 0.8), shade(f.beard, 0.85)];
+  const onChin = (x: number, y: number) => onSkin(x, y) || beards.includes(src[y * w + x]) || px[y * w + x] === f.beard;
+  const eye = (x: number, y: number, col: string) => onSkin(x, y) && (px[y * w + x] = col);
+  const lipAt = (x: number, y: number, col: string) => onChin(x, y) && (px[y * w + x] = col);
+  const ey = meta.rows.eye * 2;
+  const lid = shade(skin, 0.66);
+  const wide = f.eyes === 'Wide-set' ? 1 : 0;
+  // Each eye: `i` is the column nearer the nose, `o` the outer one, `oo` one further out.
+  for (const side of [-1, 1] as const) {
+    const i = (side < 0 ? 13 : 18) + side * wide;
+    const o = i + side;
+    const oo = o + side;
+    const closed = () => {
+      // A happy shut eye: a curve with its ends turned up.
+      eye(i - side, ey, DARK);
+      eye(i, ey + 1, DARK);
+      eye(o, ey + 1, DARK);
+      eye(oo, ey, DARK);
+    };
+    let brow: [number, number][] = [[i, ey - 2], [o, ey - 2], [oo, ey - 2]];
+    switch (f.eyes) {
+      case 'Big':
+        for (const y of [ey - 1, ey, ey + 1]) (eye(i, y, DARK), eye(o, y, DARK));
+        brow = brow.map(([x, y]) => [x, y - 1]);
+        break;
+      case 'Sleepy':
+        // Heavy lids over half an eye.
+        for (const x of [i, o, oo]) eye(x, ey, lid);
+        eye(i, ey + 1, DARK);
+        eye(o, ey + 1, DARK);
+        break;
+      case 'Lashes':
+        eye(i, ey, DARK);
+        eye(o, ey, DARK);
+        eye(i, ey + 1, DARK);
+        eye(o, ey + 1, DARK);
+        eye(oo, ey - 1, DARK);
+        eye(oo, ey, DARK);
+        // A thin arched brow.
+        brow = [[i, ey - 2], [o, ey - 3], [oo, ey - 3]];
+        break;
+      case 'Squint':
+        for (const x of [i, o, oo]) eye(x, ey + 1, DARK);
+        brow = brow.map(([x, y]) => [x, y + 1]);
+        break;
+      case 'Angry':
+        eye(i, ey, DARK);
+        eye(o, ey, DARK);
+        eye(i, ey + 1, DARK);
+        eye(o, ey + 1, DARK);
+        // Brows slanting down to the nose.
+        brow = [[i - side, ey - 1], [i, ey - 1], [o, ey - 2], [oo, ey - 2]];
+        break;
+      case 'Wink':
+        if (side > 0) closed();
+        else for (const y of [ey, ey + 1]) (eye(i, y, DARK), eye(o, y, DARK));
+        break;
+      case 'Closed':
+        closed();
+        break;
+      case 'Tired':
+        eye(i, ey, lid);
+        eye(o, ey, lid);
+        eye(i, ey + 1, DARK);
+        eye(o, ey + 1, DARK);
+        // Bags under the eyes.
+        eye(i, ey + 2, shade(skin, 0.8));
+        eye(o, ey + 2, shade(skin, 0.8));
+        eye(oo, ey + 2, shade(skin, 0.8));
+        brow = [[i, ey - 2], [o, ey - 2], [oo, ey - 1]];
+        break;
+      case 'Blue':
+      case 'Green': {
+        // A colored iris under a dark lash line.
+        const iris = f.eyes === 'Blue' ? '#3f8fe8' : '#3fae5e';
+        eye(i, ey, DARK);
+        eye(o, ey, DARK);
+        eye(i, ey + 1, iris);
+        eye(o, ey + 1, iris);
+        break;
+      }
+      default:
+        // Dots (and wide-set): a plain 2×2 eye.
+        for (const y of [ey, ey + 1]) (eye(i, y, DARK), eye(o, y, DARK));
+    }
+    for (const [x, y] of brow) eye(x, y, f.brow);
+  }
+  // Ears: a pixel of skin either side at eye level, where nothing (hair, a hat) is in the way.
+  for (const y of [ey, ey + 1]) {
+    let l = 0;
+    while (l < w && !src[y * w + l]) l++;
+    let r = w - 1;
+    while (r >= 0 && !src[y * w + r]) r--;
+    if (l > 0 && l < w / 2 && onSkin(l, y)) px[y * w + l - 1] = shade(skin, 0.82);
+    if (r < w - 1 && r >= w / 2 && onSkin(r, y)) px[y * w + r + 1] = shade(skin, 0.7);
+  }
+  const m0 = f.mouthRow * 2;
+  const m1 = m0 + 1;
+  // Facial hair that needs fine shapes (the fuller beards are drawn with the flat figure).
+  const B = f.beard;
+  const hairAt = (x: number, y: number, col = B) => onSkin(x, y) && (px[y * w + x] = col);
+  const hline = (x0: number, x1: number, y: number, col = B) => {
+    for (let x = x0; x <= x1; x++) hairAt(x, y, col);
+  };
+  switch (f.facialHair) {
+    case 'Mustache':
+      hline(13, 18, m0 - 1);
+      hairAt(12, m0);
+      hairAt(19, m0);
+      break;
+    case 'Pencil mustache':
+      hline(14, 17, m0 - 1, shade(B, 0.85));
+      break;
+    case 'Handlebar':
+      // Thick in the middle, drooping past the mouth, tips flicked up.
+      hline(12, 19, m0 - 1);
+      hairAt(11, m0);
+      hairAt(20, m0);
+      hairAt(12, m0);
+      hairAt(19, m0);
+      hairAt(10, m0 - 1);
+      hairAt(21, m0 - 1);
+      break;
+    case 'Goatee':
+      hline(14, 17, m0 - 1);
+      for (const y of [m0, m1]) (hairAt(13, y), hairAt(18, y));
+      for (let y = m1 + 1; y <= meta.rows.chin * 2 + 1; y++) hline(13, 18, y);
+      break;
+    case 'Soul patch':
+      hline(15, 16, m1 + 1);
+      hline(15, 16, m1 + 2);
+      break;
+    case 'Mutton chops':
+      // Sideburns that widen along the jaw; the chin stays bare.
+      for (let y = ey - 1; y <= m1 + 1; y++) {
+        let l = 0;
+        while (l < w && !src[y * w + l]) l++;
+        let r = w - 1;
+        while (r >= 0 && !src[y * w + r]) r--;
+        const n = y >= m0 - 1 ? 3 : 2;
+        for (let k = 0; k < n; k++) (hairAt(l + k, y), hairAt(r - k, y));
+      }
+      break;
+  }
+  // The mouth: columns 13..18 at most, two rows.
+  const lip = shade(skin, 0.6);
+  const lipSoft = shade(skin, 0.78);
+  const INSIDE = '#4a1c1c';
+  const TEETH = '#f6f1e6';
+  const line = (x0: number, x1: number, y: number, col: string) => {
+    for (let x = x0; x <= x1; x++) lipAt(x, y, col);
+  };
+  switch (f.mouth) {
+    case 'Smile':
+      lipAt(13, m0, lip);
+      line(14, 17, m1, lip);
+      lipAt(18, m0, lip);
+      break;
+    case 'Grin':
+      lipAt(13, m0, lip);
+      line(14, 17, m0, TEETH);
+      lipAt(18, m0, lip);
+      line(14, 17, m1, lip);
+      break;
+    case 'Smirk':
+      line(14, 16, m1, lip);
+      lipAt(17, m0, lip);
+      lipAt(18, m0 - 1, lip);
+      break;
+    case 'Surprised':
+      line(15, 16, m0, INSIDE);
+      line(15, 16, m1, INSIDE);
+      lipAt(14, m0, lipSoft);
+      lipAt(17, m0, lipSoft);
+      lipAt(14, m1, lipSoft);
+      lipAt(17, m1, lipSoft);
+      break;
+    case 'Flat':
+      line(13, 18, m0, lip);
+      break;
+    case 'Laugh':
+      line(13, 18, m0, INSIDE);
+      line(14, 17, m0, TEETH);
+      line(14, 17, m1, INSIDE);
+      line(15, 16, m1, '#d9566a');
+      break;
+    case 'Tongue out':
+      lipAt(13, m0, lip);
+      line(14, 17, m0, lip);
+      lipAt(18, m0, lip);
+      line(15, 16, m1, '#f07a98');
+      line(15, 16, m1 + 1, '#d9566a');
+      break;
+    case 'Frown':
+      lipAt(13, m1, lip);
+      line(14, 17, m0, lip);
+      lipAt(18, m1, lip);
+      break;
+    case 'Gap tooth':
+      lipAt(13, m0, lip);
+      line(14, 17, m0, TEETH);
+      lipAt(18, m0, lip);
+      lipAt(16, m0, INSIDE);
+      line(14, 17, m1, lip);
+      break;
+    case 'Whistle':
+      // A small puckered "o", off to one side.
+      line(16, 17, m0 - 1, lipSoft);
+      lipAt(15, m0, lipSoft);
+      line(16, 17, m0, INSIDE);
+      lipAt(18, m0, lipSoft);
+      line(16, 17, m1, lipSoft);
+      break;
+    default:
+      // Neutral: a short closed mouth with a soft lower lip.
+      line(14, 17, m0, lip);
+      line(15, 16, m1, shade(skin, 1.07));
+  }
+}
+
 function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
   const big = epx(flat);
   const { w, h } = big;
   const src = big.pixels;
   if (meta.front || meta.face) reshapeHead(src, w, meta);
+  if (meta.front) styleHair(src, w, meta);
   // Wide-set eyes: each pupil moves half a grid pixel outward (one pixel at this size).
   if (meta.front && meta.wideEyes && meta.colors.skin)
     for (const e of meta.eyes) {
@@ -1375,6 +1558,7 @@ function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
       else if (edge(-1, 0) && get(x - 1, y) !== OUTLINE) set(x, y, shade(col, 1.14));
       else if (edge(0, -1) && get(x, y - 1) !== OUTLINE) set(x, y, shade(col, 1.08));
     }
+  if (meta.front && meta.features && C.skin) paintFace(px, src, w, meta);
   // Glasses: a thin rim around each eye with a faint lens tint, a bridge and the arms to the temples.
   if (meta.front && meta.glasses) {
     const frame = meta.glasses === 'square' ? '#2b2b30' : '#b8912f';
@@ -1411,7 +1595,8 @@ function finishHigh(flat: Sprite, meta: FaceMeta): Sprite {
   const out = px.slice();
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
-      if (get(x, y)) continue;
+      // (Ears are added outside the flat figure: leave them be.)
+      if (get(x, y) || px[y * w + x]) continue;
       for (const [dx, dy] of [
         [1, 0],
         [-1, 0],

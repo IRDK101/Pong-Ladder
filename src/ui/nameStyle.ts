@@ -37,7 +37,7 @@ export const NAME_STYLE_CSS = (gold: string) => `
   @media (prefers-reduced-motion: reduce) { #ui .sn-shine, #ui .sn-pulse, #ui .sn-grad { animation: none !important; } }
   #ui .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
   #ui .style-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 10px; text-align: left; min-width: 0; }
-  #ui .style-opt.on { border-color: ${gold}; box-shadow: 0 0 0 2px ${gold}; background: #4a3f24; color: inherit; }
+  #ui .style-opt.on { border-color: ${gold}; box-shadow: 0 0 0 2px ${gold}; background: #5a4590; color: inherit; }
   #ui .style-opt:disabled { opacity: 0.45; }
   #ui .style-opt small { font-size: 11px; opacity: 0.75; font-weight: normal; }
   #ui .style-bar { display: inline-block; width: 100%; height: 12px; border: 1px solid #0008; }

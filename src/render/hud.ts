@@ -1,6 +1,7 @@
 // HUD: cup states, server, whose turn, miss counter, referee messages, match score.
 
 import type { Theme } from '../theme';
+import { drawPixelType } from './pixelFont';
 import { allCpu, controllerOf, teamSpots } from '../config';
 import { diagonalOf } from '../core/table';
 import type { Cup, TeamId } from '../core/types';
@@ -130,9 +131,9 @@ function drawTeamCups(ctx: CanvasRenderingContext2D, theme: Theme, team: TeamId,
   const live = cups.filter((k) => k.state !== 'removed').length;
   ctx.textBaseline = 'middle';
   ctx.textAlign = align;
-  ctx.font = theme.fonts.title;
-  ctx.fillStyle = teamColor(theme, team);
-  ctx.fillText(`${cpuTeam ? 'CPU' : `TEAM ${team}`}  ${live}`, x, 29);
+  // The team's name and cups left, in the game's pixel lettering.
+  const ink = { top: team === 'A' ? '#ffd9d2' : '#dbe8ff', bottom: teamColor(theme, team), outline: theme.colors.ink, shadow: 'rgba(0,0,0,0.6)' };
+  drawPixelType(ctx, `${cpuTeam ? 'CPU' : `TEAM ${team}`}  ${live}`, x, 29, 2, ink, align === 'left' ? 'left' : 'right');
   if (names) {
     ctx.font = theme.fonts.label;
     ctx.fillStyle = c.textDim;
