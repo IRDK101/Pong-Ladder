@@ -30,6 +30,8 @@ import { matchXp } from './progress/unlocks';
 import { participantFrom } from './ui/prematch';
 import { ProfileEditor } from './ui/profileEdit';
 import { cleanCupLook, cupLook, setCupLook } from './render/cups';
+import { GameSounds, setVolume, sfx, unlockAudio, VOLUMES } from './audio';
+import { AIM_PACE, cleanPrefs, DEFAULT_PREFS, PREFS_KEY, SettingsScreen, toggleFullscreen, type Prefs } from './ui/settings';
 import { CharacterPicker, loadSelection, mySlots, otherPinnedFor, otherSlots, pinnedFor, playersLabel, SELECTION_KEY, TablePicker } from './ui/picker';
 import { showBackup } from './ui/backup';
 import { hasTrackedPlayers, showSummary } from './ui/summary';
@@ -621,6 +623,47 @@ function showHelp(): void {
   );
 }
 
+// Settings saved in this browser: sound, aim speed.
+const BASE_AIM_SPEED = baseCfg.hitting.aimSpeed;
+let prefs: Prefs = { ...DEFAULT_PREFS };
+try {
+  prefs = cleanPrefs(JSON.parse(kv.getItem(PREFS_KEY) ?? 'null'));
+} catch {
+  /* the defaults */
+}
+function applyPrefs(): void {
+  kv.setItem(PREFS_KEY, JSON.stringify(prefs));
+  setVolume(VOLUMES[prefs.volume]);
+  baseCfg.hitting.aimSpeed = BASE_AIM_SPEED * AIM_PACE[prefs.aim];
+  // A match in progress takes the new aim speed too.
+  if (game) game.cfg.hitting.aimSpeed = baseCfg.hitting.aimSpeed;
+}
+applyPrefs();
+const settingsScreen = new SettingsScreen(overlay, prefs, applyPrefs, () => (paused && screen === 'playing' ? showPause() : toMenu()));
+const sounds = new GameSounds();
+// Sound needs a first key press or click; M mutes, F switches full screen.
+let unmuteTo = prefs.volume || DEFAULT_PREFS.volume;
+window.addEventListener('pointerdown', unlockAudio, true);
+window.addEventListener(
+  'keydown',
+  (e) => {
+    unlockAudio();
+    if (isTyping(e.target) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.code === 'KeyM') {
+      if (prefs.volume) unmuteTo = prefs.volume;
+      prefs.volume = prefs.volume ? 0 : unmuteTo;
+      applyPrefs();
+      flash(prefs.volume ? 'Sound on' : 'Sound off');
+      if (prefs.volume) sfx.select();
+    } else if (e.code === 'KeyF') toggleFullscreen();
+  },
+  true,
+);
+// Buttons on the HTML screens click.
+overlay.root.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.select();
+});
+
 const tablePicker = new TablePicker(
   overlay,
   account,
@@ -672,6 +715,8 @@ function runMenuAction(action: MenuAction): void {
       return openPanel(() => characterPicker.show());
     case 'characters':
       return openPanel(() => characters.showList());
+    case 'settings':
+      return openPanel(() => settingsScreen.show());
     case 'backup':
       return openPanel(() => showBackup(overlay, store, () => toMenu()));
     case 'help':
@@ -714,6 +759,7 @@ function frame(dt: number): void {
       const role = (['A', 'B'] as TeamId[])
         .map((t) => (Object.keys(baseCfg.controls[t]) as (keyof GameConfig['controls']['A'])[]).find((k) => baseCfg.controls[t][k] === code))
         .find(Boolean);
+      if (role === 'up' || role === 'down' || role === 'left' || role === 'right') sfx.move();
       if (role === 'up') menu.move(-1, 0);
       else if (role === 'down') menu.move(1, 0);
       else if (role === 'left' || role === 'right') {
@@ -724,7 +770,7 @@ function frame(dt: number): void {
           saveSelection();
         }
       }
-      else if (role === 'hit') runMenuAction(menu.activate());
+      else if (role === 'hit') (sfx.select(), runMenuAction(menu.activate()));
     }
     if (screen !== 'menu') return;
     drawBackdrop(dt);
@@ -733,6 +779,7 @@ function frame(dt: number): void {
   }
 
   const g = game!;
+  sounds.watch(g, youTeam(g));
   online?.link.read();
   // On the end screen the match is over: if they leave, say so there and let the player go back when ready.
   if (online?.link.gone && screen === 'gameEnd') online.left = true;
@@ -884,6 +931,7 @@ function showPause(): void {
     : [
         h('button', { class: 'primary', onclick: resume }, 'Resume'),
         h('button', { onclick: () => lastMatch && startMatch(structuredClone(lastMatch.cfg), lastMatch.roster) }, 'Restart this match'),
+        h('button', { onclick: () => settingsScreen.show() }, 'Settings'),
         h('button', { class: 'danger', onclick: quit }, 'Quit to the menu'),
       ];
   overlay.show(
@@ -891,7 +939,7 @@ function showPause(): void {
       'div',
       { class: 'panel pause-card' },
       h('h1', {}, online ? 'Leave the match?' : 'Paused'),
-      h('p', { class: 'dim' }, online ? 'The match is still going for the other player.' : 'Space / Enter: resume · R: restart · Esc: quit to the menu'),
+      h('p', { class: 'dim' }, online ? 'The match is still going for the other player.' : 'Space / Enter: resume · R: restart · M: sound · F: full screen · Esc: quit'),
       h('div', { class: 'row', style: 'justify-content:center' }, ...buttons),
     ),
   );
@@ -1004,7 +1052,7 @@ canvas.addEventListener('click', (e) => {
     const mx = (sx - L.ox) / L.s;
     const my = (sy - L.oy) / L.s;
     const i = menuRowAt(mx, my, L.portrait);
-    if (i >= 0) runMenuAction(menu.click(i, mx, L.portrait));
+    if (i >= 0) (sfx.select(), runMenuAction(menu.click(i, mx, L.portrait)));
   } else if (screen === 'playing' && game) {
     // Against the CPU, the human can't make the CPU's penalty choice for it.
     const pen = game.engine.peek().penalty;
@@ -1014,6 +1062,49 @@ canvas.addEventListener('click', (e) => {
   }
 });
 
+/** A short note over the game (sound on/off and the like), and the connection's ping while online. */
+let flashNote: { text: string; at: number } | null = null;
+function flash(text: string): void {
+  flashNote = { text, at: performance.now() };
+}
+function drawToasts(): void {
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  if (online && screen === 'playing' && online.link.rtt !== null) {
+    const ms = Math.round(online.link.rtt);
+    const col = ms < 120 ? theme.colors.good : ms < 250 ? theme.colors.gold : theme.colors.bad;
+    ctx.font = theme.fonts.small;
+    ctx.textAlign = 'left';
+    const label = `PING ${ms} ms`;
+    const w = ctx.measureText(label).width + 26;
+    ctx.fillStyle = 'rgba(10, 9, 8, 0.72)';
+    ctx.fillRect(12, 96, w, 18);
+    ctx.fillStyle = col;
+    ctx.fillRect(18, 102, 6, 6);
+    ctx.fillStyle = theme.colors.textDim;
+    ctx.fillText(label, 30, 105.5);
+  }
+  if (flashNote) {
+    const t = (performance.now() - flashNote.at) / 1000;
+    if (t > 1.4) flashNote = null;
+    else {
+      ctx.globalAlpha = Math.min(1, (1.4 - t) * 3);
+      ctx.font = theme.fonts.bar;
+      ctx.textAlign = 'center';
+      const w = ctx.measureText(flashNote.text).width + 28;
+      const x = view.width / 2;
+      ctx.fillStyle = 'rgba(10, 9, 8, 0.85)';
+      ctx.fillRect(x - w / 2, 120, w, 30);
+      ctx.strokeStyle = theme.colors.gold;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - w / 2 + 1, 121, w - 2, 28);
+      ctx.fillStyle = theme.colors.text;
+      ctx.fillText(flashNote.text, x, 135.5);
+    }
+  }
+  ctx.restore();
+}
+
 let last = performance.now();
 function loop(now: number): void {
   const dt = Math.min((now - last) / 1000, 1 / 30);
@@ -1021,6 +1112,7 @@ function loop(now: number): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
   frame(dt);
+  drawToasts();
   keyboard.endFrame();
   requestAnimationFrame(loop);
 }

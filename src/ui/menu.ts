@@ -102,7 +102,7 @@ const cpu = (d: GameConfig['players']['cpu']) => (cfg: GameConfig) => {
 };
 
 type OptionId = 'players' | 'cpu' | 'view' | 'table' | 'spot' | 'formation' | 'match' | 'speed' | 'ski';
-export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'online' | 'characters' | 'account' | 'leaderboard' | 'help' | 'backup';
+export type RowId = OptionId | 'playingAs' | 'collection' | 'quick' | 'draft' | 'online' | 'characters' | 'account' | 'leaderboard' | 'help' | 'settings' | 'backup';
 
 const CHOICES: (Choice & { id: OptionId })[] = [
   {
@@ -130,7 +130,7 @@ const CHOICES: (Choice & { id: OptionId })[] = [
 const TABLE_ROW = CHOICES.findIndex((c) => c.id === 'table');
 const choiceIndex = (id: RowId) => CHOICES.findIndex((c) => c.id === id);
 
-export type MenuAction = 'draft' | 'quick' | 'online' | 'leaderboard' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'help' | 'backup' | null;
+export type MenuAction = 'draft' | 'quick' | 'online' | 'leaderboard' | 'pickTable' | 'pickCharacters' | 'collection' | 'characters' | 'account' | 'help' | 'settings' | 'backup' | null;
 
 export interface MenuRow {
   id: RowId;
@@ -170,11 +170,12 @@ const RECTS: Record<RowId, { x: number; y: number; w: number; h: number }> = {
   quick: { x: RX, y: 228, w: RW, h: 44 },
   draft: { x: RX, y: 277, w: RW, h: 44 },
   online: { x: RX, y: 326, w: RW, h: 44 },
-  characters: { x: RX, y: 412, w: RW, h: 31 },
-  account: { x: RX, y: 448, w: RW, h: 31 },
-  leaderboard: { x: RX, y: 484, w: RW, h: 31 },
-  help: { x: RX, y: 520, w: RW, h: 31 },
-  backup: { x: RX, y: 556, w: RW, h: 31 },
+  characters: { x: RX, y: 412, w: RW, h: 26 },
+  account: { x: RX, y: 442, w: RW, h: 26 },
+  leaderboard: { x: RX, y: 472, w: RW, h: 26 },
+  help: { x: RX, y: 502, w: RW, h: 26 },
+  settings: { x: RX, y: 532, w: RW, h: 26 },
+  backup: { x: RX, y: 562, w: RW, h: 26 },
 };
 
 // Portrait (phones): one column on a 560-wide design — progress, play, match, rules, more.
@@ -196,11 +197,12 @@ const PORTRAIT: Record<RowId, { x: number; y: number; w: number; h: number }> = 
   view: { x: PX, y: 838, w: PCELL, h: 29 },
   ski: { x: PX + PCELL + 8, y: 838, w: PCELL, h: 29 },
   speed: { x: PX, y: 872, w: PW, h: 46 },
-  characters: { x: PX, y: 960, w: PW, h: 33 },
-  account: { x: PX, y: 1000, w: PW, h: 33 },
-  leaderboard: { x: PX, y: 1040, w: PW, h: 33 },
-  help: { x: PX, y: 1080, w: PW, h: 33 },
-  backup: { x: PX, y: 1120, w: PW, h: 33 },
+  characters: { x: PX, y: 960, w: PW, h: 29 },
+  account: { x: PX, y: 993, w: PW, h: 29 },
+  leaderboard: { x: PX, y: 1026, w: PW, h: 29 },
+  help: { x: PX, y: 1059, w: PW, h: 29 },
+  settings: { x: PX, y: 1092, w: PW, h: 29 },
+  backup: { x: PX, y: 1125, w: PW, h: 29 },
 };
 
 /** Narrow screens get the portrait layout. */
@@ -223,7 +225,7 @@ const GROUPS: { title: string; ids: RowId[] }[] = [
   { title: 'MATCH', ids: ['players', 'cpu', 'playingAs', 'table', 'spot'] },
   { title: 'HOUSE RULES', ids: ['formation', 'match', 'view', 'ski', 'speed'] },
   { title: 'PLAY', ids: ['quick', 'draft', 'online'] },
-  { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'help', 'backup'] },
+  { title: 'MORE', ids: ['characters', 'account', 'leaderboard', 'help', 'settings', 'backup'] },
 ];
 
 export class Menu {
@@ -326,6 +328,7 @@ export class Menu {
       { id: 'account', label: this.accountInfo().label, action: 'account' },
       { id: 'leaderboard', label: 'Leaderboard', action: 'leaderboard' },
       { id: 'help', label: 'How to play', action: 'help' },
+      { id: 'settings', label: 'Settings', action: 'settings' },
       { id: 'backup', label: 'Back up / restore', action: 'backup' },
     ];
   }
@@ -1079,7 +1082,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
   ctx.textAlign = 'left';
   ctx.font = theme.fonts.label;
   ctx.fillStyle = c.textDim;
-  ctx.fillText('arrows move · ←→ change · hit key selects · mouse too', x, y + 11);
+  ctx.fillText('arrows move · ←→ change · hit key selects · M sound · F full screen', x, y + 11);
   if (note) {
     ctx.font = theme.fonts.hud;
     ctx.fillStyle = m.accent;
@@ -1430,6 +1433,7 @@ export const HELP: [string, string][] = [
   ['Speed', 'The Speed bar runs from Relaxed (left) through Normal (the middle, the realistic pace) to Masters (right), with small steps in between: further right plays faster with smaller timing windows (saves included). Click or drag the bar, or use \u25c0 \u25b6.'],
   ['Turns', 'Teammates alternate hits. The yellow tag and floor ring show who is up.'],
   ['Modes', '2v2 head-to-head (split screen gives each team its own camera), or 2v2 same team vs the CPU (WASD = left teammate, arrows = right). 1v1: one player a side makes every hit and serves from alternating halves. Custom line-up: in Players, set each spot to P1 (WASD), P2 (arrows) or the CPU, in any mix (a CPU partner, three CPUs, or CPUs only to watch).'],
+  ['Settings', 'Sound volume (M mutes at any time), how fast the aim marker moves, and full screen (F). Also on the pause card.'],
   ['Cups', 'The Table row opens table and cups: pick a cup style (clear, red or blue party cup, wine glass) and a drink. It only changes how your screen looks.'],
   ['Unlocks', 'Character XP adds up to your player level. Each level gives a loot box (Collection) with a new table or character. On a shared keyboard, Players sets your team, which earns the XP.'],
   ['Players', 'The Players row picks your characters, and against the CPU also who the CPU plays as (any character, even locked ones). Spots left on Random get a new character each match.'],

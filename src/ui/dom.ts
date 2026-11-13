@@ -243,6 +243,7 @@ export function injectStyles(theme: Theme): void {
   #ui .spot-wrap > .spot { width: 100%; }
   #ui .ctl-row { justify-content: center; gap: 4px; flex-wrap: nowrap; }
   #ui .ctl-row button { flex: 1; padding: 3px 4px 2px; }
+  #ui .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   #ui .pickgrid.cups { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   #ui canvas.cup-icon { width: 108px; height: 120px; image-rendering: pixelated; }
   #ui .pickgrid.chars { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }

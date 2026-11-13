@@ -1085,3 +1085,22 @@ checks it.
   bruise), Muscular has thick arms and a V taper, Curvy rounds out below the
   waist instead of a ledge, Dad bod is a belly over the belt, Wide jaw widens
   gently at full size.
+
+## Version 2.06
+
+Quality-of-life pass.
+
+- **Sound** (`src/audio.ts`): effects synthesized with Web Audio (no files) for
+  hits (brighter with better timing), whiffs, table bounces, cup hits, sinks,
+  faults, menu moves and a win/lose sting. `GameSounds.watch` diffs the game
+  state each frame, so local games and online mirrors sound the same and the
+  game code knows nothing about audio. M mutes.
+- **Settings** (More → Settings, also on the pause card; `ui/settings.ts`,
+  saved under `dartmouth-pong/prefs/v1`): sound volume, aim speed
+  (slow / normal / fast, a multiplier on `hitting.aimSpeed`), full screen (F).
+- **Ping** shown under the team panel during online matches (green / gold /
+  red), from the link's round-trip estimate.
+- **Players screen**: "All random" clears every pick, "Shuffle" deals a random
+  character to every spot; the home row shows a custom line-up at a glance
+  ("P1+CPU vs CPU+P2").
+- **Characters**: "Copy" starts a new character from any you can see.

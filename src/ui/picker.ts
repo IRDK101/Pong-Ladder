@@ -202,6 +202,12 @@ export function playingAsLabel(cfg: GameConfig, sel: Selection, usable: Characte
 
 /** The Players row's value: which team is yours. */
 export function playersLabel(cfg: GameConfig): string {
+  if (cfg.players.mode === 'custom') {
+    // The line-up at a glance: "P1 + CPU vs CPU + P2".
+    const NAME = { p1: 'P1', p2: 'P2', cpu: 'CPU' } as const;
+    const team = (t: 'A' | 'B') => (cfg.teamSize === 1 ? ['left' as const] : ['left' as const, 'right' as const]).map((sd) => NAME[controllerOf(cfg, t, sd)]).join('+');
+    return `${team('A')} vs ${team('B')}`;
+  }
   return cfg.players.mode === 'coop' ? 'You vs CPU' : `You: Team ${cfg.players.mySide ?? 'A'}`;
 }
 
@@ -342,7 +348,18 @@ export class CharacterPicker {
       h(
         'div',
         { class: 'panel players-panel' },
-        h('div', { class: 'row spread' }, h('h1', {}, 'Players'), h('button', { class: 'primary', onclick: () => this.back() }, 'Done')),
+        h(
+          'div',
+          { class: 'row spread' },
+          h('h1', {}, 'Players'),
+          h(
+            'div',
+            { class: 'row' },
+            h('button', { title: 'Every spot gets a new random character each match', onclick: () => this.allRandom() }, 'All random'),
+            h('button', { title: 'Pick a random character for every spot now', disabled: a.usable().length === 0, onclick: () => this.shuffle() }, 'Shuffle'),
+            h('button', { class: 'primary', onclick: () => this.back() }, 'Done'),
+          ),
+        ),
         lineup,
         h('div', { class: 'row spread' }, h('h2', {}, `Choosing: ${pickingFor}`), usable.length > 8 ? search : null),
         grid,
@@ -370,6 +387,29 @@ export class CharacterPicker {
       this.side = this.side === 'mine' ? 'cpu' : 'mine';
       this.save();
     }
+    this.show();
+  }
+
+  /** Clear every pick: each spot draws a new character each match. */
+  private allRandom(): void {
+    this.sel.chars = [null, null];
+    this.sel.cpu = [null, null];
+    this.save();
+    this.show();
+  }
+
+  /** Deal a different random character to every spot (yours from your unlocked ones). */
+  private shuffle(): void {
+    const cfg = this.cfg();
+    const n = mySlots(cfg).length;
+    const mix = <T,>(list: T[]) => list.map((x) => [Math.random(), x] as const).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+    const mine = mix(this.account.usable()).slice(0, n);
+    const taken = new Set(mine.map((c) => c.id));
+    const pool = cfg.players.mode === 'coop' ? this.account.everyone() : this.account.usable();
+    const theirs = mix(pool.filter((c) => !taken.has(c.id))).slice(0, n);
+    this.sel.chars = [0, 1].map((i) => mine[i]?.id ?? null);
+    this.sel.cpu = [0, 1].map((i) => theirs[i]?.id ?? null);
+    this.save();
     this.show();
   }
 

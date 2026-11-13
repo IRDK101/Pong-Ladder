@@ -152,6 +152,7 @@ export class CharactersScreen {
                   'div',
                   { class: 'row' },
                   h('button', { class: this.account.newRewards(c.id) ? 'primary' : '', onclick: () => this.showProfile(c.id) }, this.account.newRewards(c.id) ? `Profile · ${this.account.newRewards(c.id)} new` : 'Profile'),
+                  h('button', { title: 'Start a new character from this one', onclick: () => this.copy(c) }, 'Copy'),
                   this.canEdit(c.id) ? h('button', { onclick: () => this.edit(structuredClone(c)) }, 'Edit') : h('span', { class: 'dim', style: 'font-size:12px', title: 'Only the moderator can change characters in the collection' }, '🔒 Moderator only'),
                 ),
                 this.submitTools(c),
@@ -268,6 +269,16 @@ export class CharactersScreen {
   /** Only the moderator edits characters in the shared collection; players edit only the ones they made that aren't in it. */
   private canEdit(id: string): boolean {
     return this.account.owner || !this.store.characters.isShared(id);
+  }
+
+  /** Start a new character of your own from an existing one (opens the editor; nothing is saved until you save). */
+  private copy(c: Character): void {
+    const fresh = newCharacter('');
+    const base = c.name.replace(/ \d+$/, '');
+    const taken = new Set(this.store.characters.list().map((x) => x.name));
+    let name = '';
+    for (let n = 2; n < 100 && (!name || taken.has(name)); n++) name = `${base.slice(0, NAME_MAX - 1 - String(n).length)} ${n}`;
+    this.edit({ ...structuredClone(c), id: fresh.id, name, master: false, level: 1, cosmetics: fresh.cosmetics, createdAt: fresh.createdAt, updatedAt: fresh.updatedAt });
   }
 
   edit(c: Character): void {
