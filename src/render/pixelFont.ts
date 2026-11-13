@@ -92,10 +92,10 @@ export interface PixelInk {
 }
 
 export const INK = {
-  gold: { top: '#fff1b8', bottom: '#ffc23a', outline: '#150f24', shadow: 'rgba(0,0,0,0.6)' },
-  teal: { top: '#c9fff4', bottom: '#4fd6c4', outline: '#150f24', shadow: 'rgba(0,0,0,0.6)' },
-  coral: { top: '#ffd9c9', bottom: '#ff8a6b', outline: '#150f24', shadow: 'rgba(0,0,0,0.6)' },
-  cream: { top: '#fffaf0', bottom: '#f3dcae', outline: '#150f24', shadow: 'rgba(0,0,0,0.6)' },
+  gold: { top: '#fff1b8', bottom: '#ffc23a', outline: '#1a1006', shadow: 'rgba(0,0,0,0.6)' },
+  teal: { top: '#c9fff4', bottom: '#4fd6c4', outline: '#1a1006', shadow: 'rgba(0,0,0,0.6)' },
+  coral: { top: '#ffd9c9', bottom: '#ff8a6b', outline: '#1a1006', shadow: 'rgba(0,0,0,0.6)' },
+  cream: { top: '#fffaf0', bottom: '#f3dcae', outline: '#1a1006', shadow: 'rgba(0,0,0,0.6)' },
   dark: { top: '#2a1c08', bottom: '#4a3210', outline: null, shadow: 'rgba(255,255,255,0.25)' },
 } satisfies Record<string, PixelInk>;
 

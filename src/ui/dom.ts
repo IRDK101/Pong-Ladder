@@ -233,7 +233,7 @@ export function injectStyles(theme: Theme): void {
   #ui .setup-chars { max-height: 260px; overflow-y: auto; padding: 4px; }
   #ui .team-col.ready { box-shadow: 0 0 0 2px ${c.good}, 0 0 18px rgba(120, 220, 120, 0.25); }
   #ui .team-col.ready .team-head .ok { animation: vs-pulse 1.2s ease-in-out infinite; }
-  #ui .setup-ready { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 2px solid ${c.uiEdge}; background: #2a1f42; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.5); }
+  #ui .setup-ready { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 2px solid ${c.uiEdge}; background: #15110d; position: sticky; bottom: 0; z-index: 2; box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.5); }
   #ui .setup-ready.go { border-color: ${c.good}; }
   #ui button.big { font-size: 17px; padding: 10px 28px; letter-spacing: 0.06em; }
   #ui button.big.on { background: ${c.buttonActive}; }
@@ -258,7 +258,7 @@ export function injectStyles(theme: Theme): void {
   @media (max-width: 820px) { #ui .designer-cols { grid-template-columns: minmax(0, 1fr); } #ui .designer-card { position: static; } }
   /* Tidy-ups: the title bar stays in reach while a long screen scrolls; cards keep their buttons on one line at the bottom. */
   #ui .panel > h1 { align-self: flex-start; }
-  #ui .panel > .row.spread:first-child { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 0; padding: 14px 16px 10px; background: linear-gradient(rgba(30, 20, 46, 0.97) 80%, rgba(30, 20, 46, 0)); }
+  #ui .panel > .row.spread:first-child { position: sticky; top: -16px; z-index: 4; margin: -16px -16px 0; padding: 14px 16px 10px; background: linear-gradient(rgba(13, 10, 8, 0.96) 80%, rgba(13, 10, 8, 0)); }
   #ui .pause-card > .row.spread:first-child { position: static; }
   #ui .card > .row:last-child, #ui .card > .card-actions { margin-top: auto; }
   #ui .card-actions { display: flex; flex-wrap: nowrap; gap: 6px; width: 100%; }
@@ -284,7 +284,7 @@ export function injectStyles(theme: Theme): void {
   #ui .slot-random { display: grid; place-items: center; width: 34px; height: 46px; border: 2px dashed ${c.uiEdge}; color: ${c.gold}; font-weight: bold; font-size: 20px; }
   #ui .slot-random.big { width: 48px; height: 66px; font-size: 28px; }
   #ui .slot.cpu { border-color: ${c.teamB}; }
-  #ui .slot.cpu.on { box-shadow: 0 0 0 2px ${c.teamB}; background: #2a3f6e; }
+  #ui .slot.cpu.on { box-shadow: 0 0 0 2px ${c.teamB}; background: #1f2a44; }
   #ui .pause-card { max-width: 460px; margin: 18vh auto 0; align-items: center; text-align: center; padding: 22px; border: 2px solid ${c.gold}; background: rgba(10, 9, 8, 0.88); }
   #ui .pause-card h1 { border-bottom: none; }
   #ui .passive-slot { display: flex; align-items: center; min-height: 44px; padding: 8px 10px; border: 2px dashed ${c.uiEdge}; }
@@ -309,11 +309,11 @@ export function injectStyles(theme: Theme): void {
   #ui .board-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 70px 100px; gap: 10px; align-items: center; padding: 8px 12px; background: ${c.button}; border: 2px solid ${c.uiEdge}; font-variant-numeric: tabular-nums; }
   #ui .board-row > span:nth-child(n+3) { text-align: right; }
   #ui .board-row.head { background: transparent; border-color: transparent; color: ${c.gold}; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-  #ui .board-row.me { border-color: ${c.gold}; background: #4a3a2a; }
+  #ui .board-row.me { border-color: ${c.gold}; background: #3a321e; }
   #ui .board-row.top1 .rank, #ui .board-row.top2 .rank, #ui .board-row.top3 .rank { font-size: 20px; }
   #ui .board-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ui .lobby-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
-  #ui .invite { border-color: ${c.gold}; background: #4a3a2a; animation: reveal-in 0.4s both; }
+  #ui .invite { border-color: ${c.gold}; background: #3a321e; animation: reveal-in 0.4s both; }
   #ui label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   /* Pixel look: chunky buttons with a hard bottom edge and notched corners, pixel headings. */
   #ui { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.14) 0 2px, transparent 2px 4px); }

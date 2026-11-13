@@ -679,7 +679,7 @@ function badge(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number
   const t = pulse ? (Math.sin(performance.now() / 260) + 1) / 2 : 0;
   ctx.fillStyle = `rgba(255, 90, 70, ${0.25 + 0.35 * t})`;
   ctx.fillRect(x - w / 2 - 3, y - 14, w + 6, 28);
-  ctx.fillStyle = '#150f24';
+  ctx.fillStyle = '#0d0b09';
   ctx.fillRect(x - w / 2 - 1, y - 12, w + 2, 24);
   ctx.fillStyle = theme.colors.bad;
   ctx.fillRect(x - w / 2, y - 11, w, 22);
@@ -693,7 +693,7 @@ function badge(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number
 function crate(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number, ready: boolean): void {
   const gold = theme.menu.accent;
   const lift = ready ? Math.max(0, Math.sin(performance.now() / 300)) * 4 : 0;
-  ctx.fillStyle = '#150f24';
+  ctx.fillStyle = '#0d0b09';
   ctx.fillRect(x - 2, y + 12, 52, 34);
   ctx.fillStyle = '#3a2416';
   ctx.fillRect(x, y + 14, 48, 30);
@@ -706,7 +706,7 @@ function crate(ctx: CanvasRenderingContext2D, theme: Theme, x: number, y: number
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('Ζ', x + 24, y + 30);
-  ctx.fillStyle = '#150f24';
+  ctx.fillStyle = '#0d0b09';
   ctx.fillRect(x - 4, y + 1 - lift, 56, 14);
   ctx.fillStyle = gold;
   ctx.fillRect(x - 2, y + 3 - lift, 52, 10);
@@ -1023,7 +1023,7 @@ function drawMenuBody(ctx: CanvasRenderingContext2D, theme: Theme, menu: Menu, n
         const ax = r.x + 80;
         const aw = Math.min(76, r.w - tw - 110);
         if (aw > 30) {
-          ctx.fillStyle = '#150f24';
+          ctx.fillStyle = '#0d0b09';
           ctx.fillRect(ax - 2, r.y + 5, aw + 4, aw / 2 + 4);
           ctx.drawImage(ex.tableArt, ax, r.y + 7, aw, aw / 2);
         }
@@ -1125,9 +1125,9 @@ function drawCollectionCard(ctx: CanvasRenderingContext2D, theme: Theme, r: { x:
   const bx = r.x;
   const by = r.y + 58;
   const bw = r.w - 92;
-  ctx.fillStyle = '#150f24';
+  ctx.fillStyle = '#0d0b09';
   ctx.fillRect(bx, by, bw, 10);
-  ctx.fillStyle = '#4a3a70';
+  ctx.fillStyle = '#2e2820';
   ctx.fillRect(bx + 1, by + 1, bw - 2, 8);
   ctx.fillStyle = m.accent;
   ctx.fillRect(bx + 1, by + 1, Math.round((bw - 2) * Math.min(1, ex.xpInto / Math.max(1, ex.xpSpan))), 8);

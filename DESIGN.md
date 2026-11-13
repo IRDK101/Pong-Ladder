@@ -1135,3 +1135,9 @@ Visual overhaul, still pixel art.
   Bun, Side part, Fade and Crew cut each get their own hairline.
 - Face shapes: Wide jaw, Defined jaw and High cheekbones no longer have
   one-pixel spikes.
+
+## Version 2.09
+
+The plum base from 2.08 is gone: panels, buttons and the HUD are back to the
+original near-black with dim-gold edges. The bright accents stay (gold, teal
+for selection and headings, coral, the per-stat bar colors).

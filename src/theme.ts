@@ -15,7 +15,7 @@ export const theme = {
     water: '#7fc8f8',
     waterHalf: '#5aa9dc',
     text: '#fff4dc',
-    textDim: '#c3b6d9',
+    textDim: '#b3a58d',
     teamA: '#ff6a5c',
     teamB: '#6aa0ff',
     ball: '#fffaf0',
@@ -26,7 +26,7 @@ export const theme = {
     penaltyCursor: '#ffe066',
     hudPanel: 'rgba(20, 14, 10, 0.85)',
     /** Lighter HUD bars over the 3D views, so the room shows through. */
-    hudPanel3d: 'rgba(38, 28, 60, 0.84)',
+    hudPanel3d: 'rgba(10, 9, 8, 0.72)',
     good: '#7fe08c',
     /** Aim markers: lighter team colors that read on the wood. */
     aimA: '#d63a28',
@@ -34,19 +34,19 @@ export const theme = {
     /** The aim marker flashes this color once a shot is locked in. */
     lockFlash: '#ffffff',
     bad: '#ff7b6b',
-    overlay: 'rgba(30, 20, 46, 0.8)',
+    overlay: 'rgba(8, 7, 6, 0.86)',
     /** UI chrome (menus, HTML screens, HUD): black panels with dim-gold edges and gold accents, like the basement's painted header bands. */
-    button: '#35294f',
-    buttonActive: '#4c3b72',
-    uiEdge: '#7a65b5',
-    uiField: '#241b38',
+    button: '#1d1b19',
+    buttonActive: '#3b3324',
+    uiEdge: '#5c4d28',
+    uiField: '#121110',
     gold: '#ffd166',
     /** Accents: teal for what is selected and section headings, coral for warm highlights, and the dark ink of pixel outlines. */
     teal: '#4fd6c4',
     coral: '#ff8a6b',
-    ink: '#150f24',
+    ink: '#0b0806',
     /** A selected card's fill. */
-    picked: '#5a4590',
+    picked: '#4a3f24',
     master: '#ffd76a',
     /** Colors of the streak behind a spinning ball. */
     spinTop: '#ff9a3c',
@@ -303,14 +303,14 @@ export const theme = {
     logoShadow: '#0a0908',
     accent: '#ffd166',
     accentWarm: '#ffe6a0',
-    panel: 'rgba(40, 29, 64, 0.88)',
-    row: 'rgba(62, 48, 98, 0.92)',
-    rowPlay: 'rgba(86, 58, 112, 0.95)',
-    rowActive: 'rgba(104, 82, 168, 0.98)',
-    shadeLeft: 'rgba(24, 14, 36, 0.45)',
-    shadeRight: 'rgba(24, 14, 36, 0.12)',
-    key: '#3f3160',
-    keyEdge: '#150f24',
+    panel: 'rgba(10, 9, 8, 0.72)',
+    row: 'rgba(18, 16, 14, 0.82)',
+    rowPlay: 'rgba(40, 32, 14, 0.9)',
+    rowActive: 'rgba(92, 74, 30, 0.96)',
+    shadeLeft: 'rgba(6, 5, 4, 0.62)',
+    shadeRight: 'rgba(6, 5, 4, 0.22)',
+    key: '#2a2724',
+    keyEdge: '#0d0c0b',
   },
 
   /** The Greek letters painted on the basement wall. */
